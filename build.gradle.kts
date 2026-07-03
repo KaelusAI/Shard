@@ -121,7 +121,10 @@ tasks.jar { archiveClassifier.set("thin") }
 
 tasks.shadowJar {
   archiveBaseName.set(rootProject.name)
-  archiveClassifier.set(if (BuildConfig.shadePE) "" else "unbundled")
+  archiveClassifier.set("")
+  if (!BuildConfig.shadePE) {
+    archiveFileName.set("${rootProject.name}-${project.version}.unbundled.jar")
+  }
 
   eachFile {
     if (path == "META-INF/services/org.flywaydb.core.extensibility.Plugin") {
