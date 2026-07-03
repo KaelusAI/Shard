@@ -47,7 +47,7 @@ class DataSession(val uuid: UUID, val player: String, val status: String) {
     if (recordedTicks.isEmpty()) {
       return
     }
-    writer.append(TickData.getHeader()).append('\n')
+    writer.append(TickData.HEADER).append('\n')
     val cheatingStatus =
       when {
         status.startsWith("CHEAT") -> "CHEAT"

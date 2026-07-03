@@ -79,7 +79,6 @@ dependencies {
   implementation(kotlin("stdlib"))
   implementation("it.unimi.dsi:fastutil:8.5.15")
   implementation("org.jetbrains:annotations:26.1.0")
-  implementation("com.google.flatbuffers:flatbuffers-java:25.2.10")
   implementation("org.spongepowered:configurate-yaml:4.2.0")
   implementation("ru.vyarus:yaml-config-updater:1.4.4")
   implementation("io.insert-koin:koin-core:4.2.0")
@@ -156,7 +155,6 @@ tasks.shadowJar {
   relocate("org.incendo", "ac.shard.libs.incendo")
   relocate("io.leangen.geantyref", "ac.shard.libs.geantyref")
   relocate("it.unimi.dsi.fastutil", "ac.shard.libs.fastutil")
-  relocate("com.google.flatbuffers", "ac.shard.libs.flatbuffers")
   relocate("com.fasterxml.jackson", "ac.shard.libs.jackson")
   relocate("com.zaxxer", "ac.shard.libs.hikari")
   relocate("org.slf4j", "ac.shard.libs.slf4j")
@@ -219,7 +217,6 @@ detekt {
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
   jvmTarget = "17"
-  exclude("**/flatbuffers/**")
   exclude("**/build/**")
 }
 

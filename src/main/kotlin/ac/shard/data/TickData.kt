@@ -17,51 +17,12 @@
  */
 package ac.shard.data
 
-import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.player.ShardPlayer
-import kotlin.math.abs
 import kotlin.math.roundToLong
 
 class TickData(shardPlayer: ShardPlayer) {
-  val deltaYaw: Float
-  val deltaPitch: Float
-  val accelYaw: Float
-  val accelPitch: Float
-  val jerkPitch: Float
-  val jerkYaw: Float
-  val gcdErrorYaw: Float
-  val gcdErrorPitch: Float
-
-  init {
-    val aimProcessor =
-      requireNotNull(shardPlayer.checkManager.getCheck(AimProcessor::class.java)) {
-        "AimProcessor is not available for TickData"
-      }
-
-    deltaYaw = shardPlayer.movement.yaw - shardPlayer.movement.lastYaw
-    deltaPitch = shardPlayer.movement.pitch - shardPlayer.movement.lastPitch
-
-    accelYaw = aimProcessor.currentYawAccel
-    accelPitch = aimProcessor.currentPitchAccel
-
-    jerkYaw = accelYaw - aimProcessor.lastYawAccel
-    jerkPitch = accelPitch - aimProcessor.lastPitchAccel
-
-    gcdErrorYaw =
-      if (aimProcessor.modeX > 0) {
-        val errorX = kotlin.math.abs(deltaYaw.toDouble() % aimProcessor.modeX)
-        kotlin.math.min(errorX, aimProcessor.modeX - errorX).toFloat()
-      } else {
-        0f
-      }
-    gcdErrorPitch =
-      if (aimProcessor.modeY > 0) {
-        val errorY = kotlin.math.abs(deltaPitch.toDouble() % aimProcessor.modeY)
-        kotlin.math.min(errorY, aimProcessor.modeY - errorY).toFloat()
-      } else {
-        0f
-      }
-  }
+  val deltaYaw: Float = shardPlayer.movement.yaw - shardPlayer.movement.lastYaw
+  val deltaPitch: Float = shardPlayer.movement.pitch - shardPlayer.movement.lastPitch
 
   fun toCsv(status: String): String {
     return buildString { appendCsv(this, status) }
@@ -74,26 +35,10 @@ class TickData(shardPlayer: ShardPlayer) {
     appendFixed6(out, deltaYaw)
     out.append(',')
     appendFixed6(out, deltaPitch)
-    out.append(',')
-    appendFixed6(out, accelYaw)
-    out.append(',')
-    appendFixed6(out, accelPitch)
-    out.append(',')
-    appendFixed6(out, jerkYaw)
-    out.append(',')
-    appendFixed6(out, jerkPitch)
-    out.append(',')
-    appendFixed6(out, gcdErrorYaw)
-    out.append(',')
-    appendFixed6(out, gcdErrorPitch)
   }
 
   companion object {
-    @JvmStatic
-    fun getHeader(): String {
-      return "is_cheating,delta_yaw,delta_pitch,accel_yaw,accel_pitch,jerk_yaw,jerk_pitch," +
-        "gcd_error_yaw,gcd_error_pitch"
-    }
+    const val HEADER = "is_cheating,delta_yaw,delta_pitch"
 
     private const val SCALE = 1_000_000L
 

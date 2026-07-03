@@ -23,7 +23,6 @@ import ac.shard.ai.AiResponseParser
 import ac.shard.ai.AiSerializer
 import ac.shard.ai.AiService
 import ac.shard.ai.DefaultAiService
-import ac.shard.ai.FlatBuffersAiSerializer
 import ac.shard.ai.JacksonAiResponseParser
 import ac.shard.alert.AlertManager
 import ac.shard.api.ShardApi
@@ -148,7 +147,7 @@ private fun coreModule(plugin: Shard) = module {
 }
 
 private fun aiModule() = module {
-  singleOf(::FlatBuffersAiSerializer).bind<AiSerializer>()
+  singleOf(::AiSerializer)
   singleOf(::JacksonAiResponseParser).bind<AiResponseParser>()
   singleOf(::DefaultAiService).bind<AiService>()
 }
