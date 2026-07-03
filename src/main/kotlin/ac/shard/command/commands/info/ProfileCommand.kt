@@ -23,7 +23,6 @@
 package ac.shard.command.commands.info
 
 import ac.shard.checks.impl.ai.AiCheck
-import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.command.ShardCommand
 import ac.shard.config.LocaleManager
 import ac.shard.player.PlayerDataManager
@@ -67,7 +66,6 @@ class ProfileCommand(
         }
 
     val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java)
-    val aimProcessor = shardPlayer.checkManager.getCheck(AimProcessor::class.java)
 
     val sessionMillis = System.currentTimeMillis() - shardPlayer.joinTime
     var totalPlayTicks = 0L
@@ -94,10 +92,6 @@ class ProfileCommand(
       TimeUtil.formatDuration(sessionMillis, localeManager),
       "total_playtime",
       TimeUtil.formatDuration(totalPlayMillis, localeManager),
-      "sens_x",
-      if (aimProcessor != null) String.format("%.2f", aimProcessor.sensitivityX * 200) else "N/A",
-      "sens_y",
-      if (aimProcessor != null) String.format("%.2f", aimProcessor.sensitivityY * 200) else "N/A",
       "ai_buffer",
       if (aiCheck != null) String.format("%.2f", aiCheck.buffer) else "N/A",
       "ai_probs_90",

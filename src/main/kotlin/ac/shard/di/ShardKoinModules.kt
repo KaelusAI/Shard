@@ -44,7 +44,6 @@ import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.checks.impl.ai.DataCollectorCheck
 import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
-import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.checks.impl.misc.ClientBrand
 import ac.shard.command.CommandManager
 import ac.shard.command.CommandRegister
@@ -189,7 +188,6 @@ private fun infoCommandsModule() = module {
 }
 
 private fun checkModule() = module {
-  single<CheckFactory>(named("aim")) { CheckFactory { player -> AimProcessor(player) } }
   single<CheckFactory>(named("action")) { CheckFactory { player -> ActionManager(player, get()) } }
   single<CheckFactory>(named("ai")) {
     CheckFactory { player ->

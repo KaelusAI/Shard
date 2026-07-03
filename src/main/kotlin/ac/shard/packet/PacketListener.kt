@@ -25,7 +25,6 @@ package ac.shard.packet
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.player.TransactionStamp
-import ac.shard.utils.update.RotationUpdate
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.event.PacketListenerAbstract
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
@@ -273,19 +272,6 @@ class PacketListener(private val playerDataManager: PlayerDataManager) : PacketL
     if (packet.hasRotationChanged() && !ignoreRotation) {
       val newYaw = packet.location.yaw
       val newPitch = packet.location.pitch
-      val deltaYaw = newYaw - movement.yaw
-      val deltaPitch = newPitch - movement.pitch
-
-      val update: RotationUpdate = shardPlayer.rotationUpdate
-
-      update.from.yaw = movement.yaw
-      update.from.pitch = movement.pitch
-      update.to.yaw = newYaw
-      update.to.pitch = newPitch
-      update.deltaYaw = deltaYaw
-      update.deltaPitch = deltaPitch
-
-      shardPlayer.checkManager.onRotationUpdate(update)
 
       movement.lastYaw = movement.yaw
       movement.lastPitch = movement.pitch

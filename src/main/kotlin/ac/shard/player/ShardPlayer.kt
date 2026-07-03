@@ -35,11 +35,9 @@ import ac.shard.player.state.TransactionTracker
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
-import ac.shard.utils.data.HeadRotation
 import ac.shard.utils.data.PacketStateData
 import ac.shard.utils.latency.ILatencyUtils
 import ac.shard.utils.latency.LatencyUtils
-import ac.shard.utils.update.RotationUpdate
 import com.github.retrooper.packetevents.protocol.player.ClientVersion
 import com.github.retrooper.packetevents.protocol.player.GameMode
 import com.github.retrooper.packetevents.protocol.player.User
@@ -70,7 +68,6 @@ constructor(
 ) {
   val uuid: UUID = player.uniqueId
   val packetStateData: PacketStateData = PacketStateData()
-  val rotationUpdate: RotationUpdate = RotationUpdate(HeadRotation(), HeadRotation(), 0f, 0f)
   val joinTime: Long = System.currentTimeMillis()
 
   var entityId: Int = 0

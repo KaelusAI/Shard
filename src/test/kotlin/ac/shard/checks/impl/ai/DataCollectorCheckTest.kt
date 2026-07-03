@@ -19,7 +19,6 @@ package ac.shard.checks.impl.ai
 
 import ac.shard.Shard
 import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.config.ConfigManager
 import ac.shard.data.DataSession
 import ac.shard.entity.CompensatedEntities
@@ -78,9 +77,7 @@ class DataCollectorCheckTest {
     val player = mockk<Player>(relaxed = true)
     every { player.name } returns "TestPlayer"
 
-    val aimProcessor = mockk<AimProcessor>(relaxed = true)
     val checkManager = mockk<CheckManager>(relaxed = true)
-    every { checkManager.getCheck(AimProcessor::class.java) } returns aimProcessor
 
     val self = mockk<PacketEntitySelf>(relaxed = true)
     every { self.riding } returns if (riding) mockk(relaxed = true) else null

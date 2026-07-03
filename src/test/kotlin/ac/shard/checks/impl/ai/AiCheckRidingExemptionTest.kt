@@ -22,7 +22,6 @@ import ac.shard.ai.AiResult
 import ac.shard.ai.AiService
 import ac.shard.alert.AlertManager
 import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
 import ac.shard.debug.DebugManager
@@ -103,9 +102,7 @@ class AiCheckRidingExemptionTest {
     val player = mockk<Player>(relaxed = true)
     every { player.name } returns "TestPlayer"
 
-    val aimProcessor = mockk<AimProcessor>(relaxed = true)
     val checkManager = mockk<CheckManager>(relaxed = true)
-    every { checkManager.getCheck(AimProcessor::class.java) } returns aimProcessor
 
     val ridingHolder = arrayOfNulls<PacketEntity>(1)
     if (riding) {

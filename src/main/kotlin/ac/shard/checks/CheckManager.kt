@@ -23,13 +23,10 @@
 package ac.shard.checks
 
 import ac.shard.checks.type.PacketCheck
-import ac.shard.checks.type.RotationCheck
 import ac.shard.player.ShardPlayer
-import ac.shard.utils.update.RotationUpdate
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
 
 class CheckManager(private val player: ShardPlayer, checkFactories: Set<CheckFactory>) {
-  private val rotationChecks = ArrayList<RotationCheck>()
   private val packetChecks = ArrayList<PacketCheck>()
   private val checks = HashMap<Class<out ICheck>, ICheck>()
 
@@ -45,10 +42,6 @@ class CheckManager(private val player: ShardPlayer, checkFactories: Set<CheckFac
   private fun registerCheck(check: ICheck) {
     checks[check.javaClass] = check
 
-    if (check is RotationCheck) {
-      rotationChecks.add(check)
-    }
-
     if (check is PacketCheck) {
       packetChecks.add(check)
     }
@@ -59,15 +52,6 @@ class CheckManager(private val player: ShardPlayer, checkFactories: Set<CheckFac
       if (check is Reloadable) {
         check.reload()
       }
-    }
-  }
-
-  fun onRotationUpdate(update: RotationUpdate) {
-    if (checksDisabled()) {
-      return
-    }
-    for (check in rotationChecks) {
-      check.process(update)
     }
   }
 

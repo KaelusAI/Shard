@@ -84,7 +84,6 @@ profile:
     - " <color:#00b4db>Client:</color> <white><version></white> <gray>(<brand>)</gray>"
     - " <color:#00b4db>Session Time:</color> <white><session_time></white>"
     - " <color:#00b4db>Total Playtime:</color> <white><total_playtime></white>"
-    - " <color:#00b4db>Sensitivity:</color> <white><sens_x>%</white> / <white><sens_y>%</white>"
     - " <color:#ff416c>AI Buffer:</color> <white><ai_buffer></white>"
     - " <color:#ff416c>AI Probs >90%:</color> <white><ai_probs_90></white>"
 

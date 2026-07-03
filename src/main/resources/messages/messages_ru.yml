@@ -84,7 +84,6 @@ profile:
     - " <color:#00b4db>Клиент:</color> <white><version></white> <gray>(<brand>)</gray>"
     - " <color:#00b4db>Время сессии:</color> <white><session_time></white>"
     - " <color:#00b4db>Общее время игры:</color> <white><total_playtime></white>"
-    - " <color:#00b4db>Чувствительность:</color> <white><sens_x>%</white> / <white><sens_y>%</white>"
     - " <color:#ff416c>AI буфер:</color> <white><ai_buffer></white>"
     - " <color:#ff416c>AI вер-ть >90%:</color> <white><ai_probs_90></white>"
 
