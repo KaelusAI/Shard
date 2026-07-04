@@ -37,8 +37,10 @@ class Shard : JavaPlugin() {
   override fun onLoad() {
     migrateLegacyDataFolder()
     packetEventsLoadFailure = runCatching { packetEventsLoader.load() }.exceptionOrNull()
-    runCatching { ShardFlags.register(logger) }
-      .onFailure { logger.log(Level.WARNING, "Failed to register WorldGuard flags", it) }
+    if (server.pluginManager.getPlugin("WorldGuard") != null) {
+      runCatching { ShardFlags.register(logger) }
+        .onFailure { logger.log(Level.WARNING, "Failed to register WorldGuard flags", it) }
+    }
   }
 
   override fun onEnable() {

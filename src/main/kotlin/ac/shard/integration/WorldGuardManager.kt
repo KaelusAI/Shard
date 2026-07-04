@@ -19,68 +19,34 @@ package ac.shard.integration
 
 import ac.shard.config.ConfigManager
 import ac.shard.region.RegionProvider
-import com.sk89q.worldedit.bukkit.BukkitAdapter
-import com.sk89q.worldedit.math.BlockVector3
-import com.sk89q.worldguard.WorldGuard
-import com.sk89q.worldguard.protection.ApplicableRegionSet
-import com.sk89q.worldguard.protection.flags.StateFlag
-import java.util.Locale
 import java.util.logging.Logger
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 
 class WorldGuardManager(private val logger: Logger, private val configManager: ConfigManager) :
   RegionProvider {
-  private val worldGuardLoaded = Bukkit.getPluginManager().isPluginEnabled("WorldGuard")
-  private val worldGuardInstance: WorldGuard? =
-    if (worldGuardLoaded) WorldGuard.getInstance() else null
+  private val query: WorldGuardRegionQuery? = createQuery()
 
   init {
-    if (worldGuardLoaded) {
+    if (query != null) {
       logger.info("WorldGuard hook enabled.")
     } else {
       logger.info("WorldGuard not found, hook disabled.")
     }
   }
 
-  override fun isPlayerInDisabledRegion(player: Player): Boolean {
-    if (!worldGuardLoaded) {
-      return false
+  private fun createQuery(): WorldGuardRegionQuery? {
+    if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null) {
+      return null
     }
-    val worldGuard = worldGuardInstance ?: return false
-    val container = worldGuard.platform.regionContainer
-    val regions = container.get(BukkitAdapter.adapt(player.world)) ?: return false
-
-    val set =
-      regions.getApplicableRegions(
-        BlockVector3.at(player.location.x, player.location.y, player.location.z)
-      )
-
-    queryFlag(set)?.let {
-      return it
-    }
-    return matchLegacyDisabledList(player, set)
-  }
-
-  private fun queryFlag(set: ApplicableRegionSet): Boolean? {
-    val flag = ShardFlags.checks ?: return null
-    return when (set.queryState(null, flag)) {
-      StateFlag.State.DENY -> true
-      StateFlag.State.ALLOW -> false
-      null -> null
+    return try {
+      WorldGuardRegionQuery(configManager)
+    } catch (error: NoClassDefFoundError) {
+      logger.warning("WorldGuard detected but its API is unavailable: ${error.message}")
+      null
     }
   }
 
-  private fun matchLegacyDisabledList(player: Player, set: ApplicableRegionSet): Boolean {
-    val disabledRegions = configManager.aiDisabledRegions
-    val playerRegions = set.regions.filterNot { it.id.equals("__global__", ignoreCase = true) }
-    val topRegion = playerRegions.maxByOrNull { it.priority }
-    if (disabledRegions.isEmpty() || topRegion == null) {
-      return false
-    }
-    val worldName = player.world.name.lowercase(Locale.ROOT)
-    val regionId = topRegion.id.lowercase(Locale.ROOT)
-    return regionId in disabledRegions["*"].orEmpty() ||
-      regionId in disabledRegions[worldName].orEmpty()
-  }
+  override fun isPlayerInDisabledRegion(player: Player): Boolean =
+    query?.isPlayerInDisabledRegion(player) ?: false
 }

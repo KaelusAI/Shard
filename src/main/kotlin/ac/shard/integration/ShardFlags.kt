@@ -32,10 +32,7 @@ object ShardFlags {
     private set
 
   fun register(logger: Logger) {
-    if (
-      !Bukkit.getPluginManager().isPluginEnabled("WorldGuard") ||
-        Bukkit.getPluginManager().getPlugin("WorldGuard") == null
-    ) {
+    if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null) {
       return
     }
 
