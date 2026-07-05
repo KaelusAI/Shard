@@ -34,6 +34,8 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 import ru.vyarus.yaml.updater.YamlUpdater
 
 class ConfigManager(private val plugin: Shard, private val credentialsStore: CredentialsStore) {
+  private val aiParamsStore = AiParamsStore(plugin)
+
   var config: ConfigView = ConfigView(CommentedConfigurationNode.root())
     private set
 
@@ -55,7 +57,11 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   private var telemetryEnabled = true
 
+  @Volatile
   var aiSequence: Int = 0
+    private set
+
+  @Volatile
   var aiStep: Int = 0
     private set
 
@@ -154,6 +160,26 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   fun reloadConfig() {
     loadConfigs()
+  }
+
+  @Synchronized
+  fun updateAiParams(sequence: Int?, step: Int?) {
+    var changed = false
+    if (sequence != null && sequence >= MIN_AI_SEQUENCE && sequence != aiSequence) {
+      plugin.logger.info("[Config] AI sequence $aiSequence -> $sequence (from server)")
+      aiSequence = sequence
+      changed = true
+    }
+    if (step != null && step >= MIN_AI_STEP && step != aiStep) {
+      plugin.logger.info("[Config] AI step $aiStep -> $step (from server)")
+      aiStep = step
+      changed = true
+    }
+    if (changed) persistAiParams()
+  }
+
+  private fun persistAiParams() {
+    aiParamsStore.write(aiSequence, aiStep)
   }
 
   fun isAiEnabled(): Boolean = aiEnabled
@@ -263,8 +289,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
     connectPanelUrl = config.getString("connect.panel-url", "https://app.shard.ac")
     telemetryEnabled = config.getBoolean("telemetry.enabled", true)
-    aiSequence = config.getInt("ai.sequence", 40)
-    aiStep = config.getInt("ai.step", 10)
+    aiSequence = aiParamsStore.readSequence() ?: config.getInt("ai.sequence", 40)
+    aiStep = aiParamsStore.readStep() ?: config.getInt("ai.step", 10)
     aiContinuous = config.getBoolean("ai.continuous", false)
 
     aiFlag = config.getDouble("ai.buffer.flag", 50.0)
@@ -386,6 +412,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   }
 
   private companion object {
+    const val MIN_AI_SEQUENCE = 1
+    const val MIN_AI_STEP = 1
     const val MILLIS_PER_SEC = 1000L
     const val MILLIS_PER_HOUR = 3_600_000L
     const val DEFAULT_BUFFER_TTL_HOURS = 48L

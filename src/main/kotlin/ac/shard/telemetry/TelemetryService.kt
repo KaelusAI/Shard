@@ -114,7 +114,7 @@ class TelemetryService(
         if (response.statusCode() !in HTTP_OK_MIN..HTTP_OK_MAX) {
           null
         } else {
-          readUsedPercent(response.body())?.also { quota = QuotaSnapshot(it) }
+          applyServerState(response.body(), applyParams = false)
         }
       }
       .onFailure { plugin.logger.fine("[Telemetry] quota fetch failed: ${it.message}") }
@@ -151,7 +151,9 @@ class TelemetryService(
           .build()
       val response = client.send(request, HttpResponse.BodyHandlers.ofString())
       val ok = response.statusCode() in HTTP_OK_MIN..HTTP_OK_MAX
-      if (ok) quota = readUsedPercent(response.body())?.let { QuotaSnapshot(it) }
+      if (ok) {
+        applyServerState(response.body(), applyParams = true)
+      }
       mark(ok)
     } catch (e: Exception) {
       if (beat.punishments > 0) punishmentDelta.add(beat.punishments)
@@ -159,13 +161,20 @@ class TelemetryService(
     }
   }
 
-  private fun readUsedPercent(body: String?): Int? =
-    runCatching {
-        if (body.isNullOrBlank()) return@runCatching null
-        val used = mapper.readTree(body).path("quota_used_percent")
-        if (used.isMissingNode || used.isNull) null else used.asInt()
-      }
-      .getOrNull()
+  private fun applyServerState(body: String?, applyParams: Boolean): Int? {
+    val root = if (body.isNullOrBlank()) null else runCatching { mapper.readTree(body) }.getOrNull()
+    if (root == null) return null
+    fun intOrNull(field: String): Int? =
+      root.path(field).let { if (it.isMissingNode || it.isNull) null else it.asInt() }
+    val used = intOrNull("quota_used_percent")
+    if (used != null) quota = QuotaSnapshot(used)
+    if (applyParams) {
+      val seq = intOrNull("sequence")
+      val step = intOrNull("step")
+      if (seq != null || step != null) configManager.updateAiParams(seq, step)
+    }
+    return used
+  }
 
   private fun deviceUrl(path: String): String? {
     val inference = configManager.aiServerUrl.trim().trimEnd('/')

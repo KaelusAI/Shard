@@ -55,7 +55,6 @@ class AiCheck(
   private val debugManager: DebugManager,
   private val scheduler: SchedulerService,
 ) : AbstractCheck(shardPlayer), PacketCheck, Reloadable {
-  private var step: Int = 0
   private var aiEnabled = false
 
   @Volatile private var ring: TickRingBuffer = TickRingBuffer(configManager.aiSequence)
@@ -95,7 +94,6 @@ class AiCheck(
       ring = TickRingBuffer(configManager.aiSequence)
     }
 
-    step = configManager.aiStep
     flag = configManager.aiFlag
     bufferResetOnFlag = configManager.aiResetOnFlag
     bufferMultiplier = configManager.aiBufferMultiplier
@@ -139,7 +137,7 @@ class AiCheck(
     val movement = shardPlayer.movement
     r.push(movement.yaw - movement.lastYaw, movement.pitch - movement.lastPitch)
 
-    if (r.canSend(step)) {
+    if (r.canSend(configManager.aiStep)) {
       trySendWindow(r)
       r.markSent()
     }
@@ -287,22 +285,11 @@ class AiCheck(
 
     val cause = (error as? java.util.concurrent.CompletionException)?.cause ?: error
 
-    val newSequence = (cause as? AiServiceException)?.newSequence
-    if (newSequence != null) {
-      if (newSequence < MIN_SEQUENCE) {
-        plugin.logger.warning(
-          "[AiCheck] Ignored invalid sequence length $newSequence (allowed: >= $MIN_SEQUENCE)"
-        )
-        return null
-      }
-
-      if (configManager.aiSequence != newSequence) {
-        val oldSequence = configManager.aiSequence
-        plugin.logger.info(
-          "[AiCheck] Received new sequence length $newSequence (old: $oldSequence)"
-        )
-        configManager.aiSequence = newSequence
-        ring = TickRingBuffer(newSequence)
+    val ex = cause as? AiServiceException
+    if (ex != null && (ex.newSequence != null || ex.newStep != null)) {
+      configManager.updateAiParams(ex.newSequence, ex.newStep)
+      if (ring.capacity != maxOf(configManager.aiSequence, TickRingBuffer.MIN_SEQUENCE)) {
+        ring = TickRingBuffer(configManager.aiSequence)
       }
       return null
     }
@@ -355,7 +342,6 @@ class AiCheck(
   companion object {
     private const val CHEAT_PROBABILITY = 0.90
     private const val LEGIT_PROBABILITY = 0.10
-    private const val MIN_SEQUENCE = 1
     private const val FEATURES_PER_TICK = 2
   }
 }

@@ -17,5 +17,5 @@
  */
 package ac.shard.ai
 
-class AiServiceException(cause: Throwable, val newSequence: Int?) :
+class AiServiceException(cause: Throwable, val newSequence: Int?, val newStep: Int?) :
   RuntimeException(cause.message, cause)
