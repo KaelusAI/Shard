@@ -17,15 +17,9 @@
  */
 package ac.shard.entity
 
-import ac.shard.entity.types.PacketEntityArmorStand
-import ac.shard.entity.types.PacketEntityHorse
-import ac.shard.entity.types.PacketEntityPlayer
 import ac.shard.entity.types.PacketEntitySelf
-import ac.shard.entity.types.PacketEntityTrackXRot
-import ac.shard.entity.types.PacketEntityUnHittable
 import ac.shard.player.ShardPlayer
 import com.github.retrooper.packetevents.protocol.entity.type.EntityType
-import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap
 import java.util.UUID
 
@@ -34,21 +28,7 @@ class CompensatedEntities(private val player: ShardPlayer) {
   val self: PacketEntitySelf = PacketEntitySelf(player)
 
   fun addEntity(entityId: Int, uuid: UUID, type: EntityType) {
-    val packetEntity =
-      when {
-        type == EntityTypes.PLAYER -> PacketEntityPlayer(player, uuid)
-        EntityTypes.isTypeInstanceOf(type, EntityTypes.ABSTRACT_HORSE) ->
-          PacketEntityHorse(player, uuid, type)
-        EntityTypes.isTypeInstanceOf(type, EntityTypes.BOAT) || type == EntityTypes.CHICKEN ->
-          PacketEntityTrackXRot(player, uuid, type)
-        EntityTypes.isTypeInstanceOf(type, EntityTypes.ABSTRACT_ARROW) ||
-          type == EntityTypes.FIREWORK_ROCKET ||
-          type == EntityTypes.ITEM -> PacketEntityUnHittable(player, uuid, type)
-        type == EntityTypes.ARMOR_STAND -> PacketEntityArmorStand(player, uuid, type)
-        else -> PacketEntity(player, uuid, type)
-      }
-
-    entityMap.put(entityId, packetEntity)
+    entityMap.put(entityId, PacketEntity(player, uuid, type))
   }
 
   fun getEntity(entityId: Int): PacketEntity? {

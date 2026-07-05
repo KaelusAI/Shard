@@ -21,28 +21,17 @@ import ac.shard.player.ShardPlayer
 import com.github.retrooper.packetevents.protocol.entity.type.EntityType
 import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
 import java.util.UUID
-import java.util.concurrent.CopyOnWriteArrayList
 
 open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: EntityType) {
-  val isLivingEntity: Boolean = EntityTypes.isTypeInstanceOf(type, EntityTypes.LIVINGENTITY)
   val isPlayer: Boolean = type == EntityTypes.PLAYER
-  val isBoat: Boolean = EntityTypes.isTypeInstanceOf(type, EntityTypes.BOAT)
 
   @Volatile var riding: PacketEntity? = null
-  private val passengers: MutableList<PacketEntity> = CopyOnWriteArrayList()
-
-  fun inVehicle(): Boolean = riding != null
 
   fun mount(vehicle: PacketEntity) {
-    if (riding != null) {
-      eject()
-    }
-    vehicle.passengers.add(this)
     riding = vehicle
   }
 
   fun eject() {
-    riding?.passengers?.remove(this)
     riding = null
   }
 }
