@@ -26,6 +26,7 @@ import ac.shard.connect.CredentialsStore
 import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.http.HttpClient
@@ -114,7 +115,7 @@ class TelemetryService(
         if (response.statusCode() !in HTTP_OK_MIN..HTTP_OK_MAX) {
           null
         } else {
-          readUsedPercent(response.body())?.also { quota = QuotaSnapshot(it) }
+          applyServerState(response.body(), applyParams = false)
         }
       }
       .onFailure { plugin.logger.fine("[Telemetry] quota fetch failed: ${it.message}") }
@@ -151,7 +152,9 @@ class TelemetryService(
           .build()
       val response = client.send(request, HttpResponse.BodyHandlers.ofString())
       val ok = response.statusCode() in HTTP_OK_MIN..HTTP_OK_MAX
-      if (ok) quota = readUsedPercent(response.body())?.let { QuotaSnapshot(it) }
+      if (ok) {
+        applyServerState(response.body(), applyParams = true)
+      }
       mark(ok)
     } catch (e: Exception) {
       if (beat.punishments > 0) punishmentDelta.add(beat.punishments)
@@ -159,13 +162,23 @@ class TelemetryService(
     }
   }
 
-  private fun readUsedPercent(body: String?): Int? =
-    runCatching {
-        if (body.isNullOrBlank()) return@runCatching null
-        val used = mapper.readTree(body).path("quota_used_percent")
-        if (used.isMissingNode || used.isNull) null else used.asInt()
+  private fun applyServerState(body: String?, applyParams: Boolean): Int? {
+    val root = if (body.isNullOrBlank()) null else runCatching { mapper.readTree(body) }.getOrNull()
+    if (root == null) return null
+    fun field(name: String): JsonNode? =
+      root.path(name).takeUnless { it.isMissingNode || it.isNull }
+    val used = field("quota_used_percent")?.asInt()
+    if (used != null) quota = QuotaSnapshot(used)
+    if (applyParams) {
+      val seq = field("sequence")?.asInt()
+      val step = field("step")?.asInt()
+      val model = field("model")?.asText()
+      if (seq != null || step != null || model != null) {
+        configManager.updateAiParams(seq, step, model)
       }
-      .getOrNull()
+    }
+    return used
+  }
 
   private fun deviceUrl(path: String): String? {
     val inference = configManager.aiServerUrl.trim().trimEnd('/')

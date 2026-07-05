@@ -59,8 +59,9 @@ class DefaultAiService(
       cause is AIServer.RequestException && cause.code == AIServer.ResponseCode.INVALID_SEQUENCE
     ) {
       val sequence = sequenceFromDetails(cause.details) ?: parseSequence(cause.responseBody)
-      if (sequence != null) {
-        return CompletableFuture.failedFuture(AiServiceException(cause, sequence))
+      val step = stepFromDetails(cause.details) ?: parseStep(cause.responseBody)
+      if (sequence != null || step != null) {
+        return CompletableFuture.failedFuture(AiServiceException(cause, sequence, step))
       }
     }
 
@@ -73,6 +74,22 @@ class DefaultAiService(
       is String -> value.toIntOrNull()
       else -> null
     }
+
+  private fun stepFromDetails(details: Map<String, Any?>?): Int? =
+    when (val value = details?.get("expected_step")) {
+      is Number -> value.toInt()
+      is String -> value.toIntOrNull()
+      else -> null
+    }
+
+  internal fun parseStep(body: String?): Int? {
+    if (body.isNullOrBlank()) return null
+    return runCatching { OBJECT_MAPPER.readTree(body) }
+      .getOrNull()
+      ?.get("details")
+      ?.takeIf { it.isObject }
+      ?.let { details -> parseSequenceNode(details.get("expected_step")) }
+  }
 
   internal fun parseSequence(body: String?): Int? {
     if (body.isNullOrBlank()) return null

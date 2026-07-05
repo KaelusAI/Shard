@@ -12,10 +12,6 @@ ai:
   enabled: true
   # URL for the AI inference API.
   server: "https://api.shard.ac/v1/inference"
-  # The number of ticks to send in a sequence to the AI.
-  sequence: 40
-  # The number of ticks to wait before sending the next sequence.
-  step: 10
   # When true, sequences are recorded and sent continuously without requiring combat (hits).
   continuous: false
   buffer:

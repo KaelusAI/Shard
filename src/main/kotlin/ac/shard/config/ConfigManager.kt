@@ -34,6 +34,8 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 import ru.vyarus.yaml.updater.YamlUpdater
 
 class ConfigManager(private val plugin: Shard, private val credentialsStore: CredentialsStore) {
+  private val modelStore = ModelStore(plugin)
+
   var config: ConfigView = ConfigView(CommentedConfigurationNode.root())
     private set
 
@@ -55,8 +57,16 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   private var telemetryEnabled = true
 
+  @Volatile
   var aiSequence: Int = 0
+    private set
+
+  @Volatile
   var aiStep: Int = 0
+    private set
+
+  @Volatile
+  var aiModel: String? = null
     private set
 
   var aiContinuous: Boolean = false
@@ -154,6 +164,27 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   fun reloadConfig() {
     loadConfigs()
+  }
+
+  @Synchronized
+  fun updateAiParams(sequence: Int?, step: Int?, model: String? = null) {
+    var changed = false
+    if (sequence != null && sequence >= MIN_AI_SEQUENCE && sequence != aiSequence) {
+      plugin.logger.info("[Config] AI sequence $aiSequence -> $sequence (from server)")
+      aiSequence = sequence
+      changed = true
+    }
+    if (step != null && step >= MIN_AI_STEP && step != aiStep) {
+      plugin.logger.info("[Config] AI step $aiStep -> $step (from server)")
+      aiStep = step
+      changed = true
+    }
+    if (!model.isNullOrBlank() && model != aiModel) {
+      plugin.logger.info("[Config] AI model $aiModel -> $model (from server)")
+      aiModel = model
+      changed = true
+    }
+    if (changed) modelStore.write(aiSequence, aiStep, aiModel)
   }
 
   fun isAiEnabled(): Boolean = aiEnabled
@@ -263,8 +294,9 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
     connectPanelUrl = config.getString("connect.panel-url", "https://app.shard.ac")
     telemetryEnabled = config.getBoolean("telemetry.enabled", true)
-    aiSequence = config.getInt("ai.sequence", 40)
-    aiStep = config.getInt("ai.step", 10)
+    aiSequence = modelStore.readSequence() ?: DEFAULT_AI_SEQUENCE
+    aiStep = modelStore.readStep() ?: DEFAULT_AI_STEP
+    aiModel = modelStore.readModel()
     aiContinuous = config.getBoolean("ai.continuous", false)
 
     aiFlag = config.getDouble("ai.buffer.flag", 50.0)
@@ -386,6 +418,10 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   }
 
   private companion object {
+    const val MIN_AI_SEQUENCE = 1
+    const val MIN_AI_STEP = 1
+    const val DEFAULT_AI_SEQUENCE = 40
+    const val DEFAULT_AI_STEP = 10
     const val MILLIS_PER_SEC = 1000L
     const val MILLIS_PER_HOUR = 3_600_000L
     const val DEFAULT_BUFFER_TTL_HOURS = 48L
