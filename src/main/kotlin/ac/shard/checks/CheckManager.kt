@@ -59,8 +59,8 @@ class CheckManager(private val player: ShardPlayer, checkFactories: Set<CheckFac
     if (checksDisabled()) {
       return
     }
-    for (check in packetChecks) {
-      check.onPacketReceive(event)
+    for (i in packetChecks.indices) {
+      packetChecks[i].onPacketReceive(event)
     }
   }
 
