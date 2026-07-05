@@ -22,7 +22,6 @@ import ac.shard.ai.AiService
 import ac.shard.alert.AlertManager
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
-import ac.shard.data.TickData
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
@@ -35,7 +34,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import java.lang.reflect.Field
-import java.util.ArrayDeque
 import java.util.logging.Logger
 import org.bukkit.entity.Player
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -147,13 +145,13 @@ class AiCheckDuplicatePacketTest {
     val logger: Logger,
   ) {
     fun tickSequenceSize(): Int {
-      @Suppress("UNCHECKED_CAST") val ticks = ticksField.get(check) as ArrayDeque<TickData>
-      return ticks.size
+      val ring = ringField.get(check) as TickRingBuffer
+      return ring.count
     }
   }
 
   private companion object {
-    val ticksField: Field =
-      AiCheck::class.java.getDeclaredField("ticks").apply { isAccessible = true }
+    val ringField: Field =
+      AiCheck::class.java.getDeclaredField("ring").apply { isAccessible = true }
   }
 }

@@ -17,12 +17,10 @@
  */
 package ac.shard.ai
 
-import ac.shard.data.TickData
 import ac.shard.server.AIServer
 import ac.shard.server.AIServerProvider
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 
 class DefaultAiService(
@@ -33,11 +31,11 @@ class DefaultAiService(
   override val isEnabled: Boolean
     get() = transportProvider.get() != null
 
-  override fun request(ticks: Array<TickData>, count: Int): CompletableFuture<AiResult> {
+  override fun request(features: FloatArray, count: Int): CompletableFuture<AiResult> {
     val transport: AiTransport =
       transportProvider.get() ?: return CompletableFuture.completedFuture(AiResult.disabledResult())
 
-    val payload: ByteBuffer = serializer.serialize(ticks, count)
+    val payload: ByteArray = serializer.serialize(features, count)
     return transport.send(payload).thenApply(this::parse).exceptionallyCompose(this::handleError)
   }
 

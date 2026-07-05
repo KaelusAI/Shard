@@ -31,7 +31,6 @@ import ac.shard.checks.Reloadable
 import ac.shard.checks.type.PacketCheck
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
-import ac.shard.data.TickData
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
@@ -42,8 +41,6 @@ import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying
-import java.util.ArrayDeque
-import java.util.Arrays
 import java.util.concurrent.atomic.AtomicReference
 
 @CheckData(name = "AI (Aim)")
@@ -60,9 +57,9 @@ class AiCheck(
 ) : AbstractCheck(shardPlayer), PacketCheck, Reloadable {
   private var step: Int = 0
   private var aiEnabled = false
-  private var ticks: ArrayDeque<TickData> = ArrayDeque()
-  private val snapshotBuffer: AtomicReference<Array<TickData?>?> = AtomicReference()
-  private var ticksStep = 0
+
+  @Volatile private var ring: TickRingBuffer = TickRingBuffer(configManager.aiSequence)
+  private val snapshotBuffer: AtomicReference<FloatArray?> = AtomicReference()
 
   var buffer: Double = 0.0
     private set
@@ -94,8 +91,8 @@ class AiCheck(
   override fun reload() {
     aiEnabled = aiService.isEnabled
 
-    if (ticks.isEmpty() || ticks.size != configManager.aiSequence) {
-      ticks = ArrayDeque(configManager.aiSequence)
+    if (ring.capacity != maxOf(configManager.aiSequence, TickRingBuffer.MIN_SEQUENCE)) {
+      ring = TickRingBuffer(configManager.aiSequence)
     }
 
     step = configManager.aiStep
@@ -110,14 +107,15 @@ class AiCheck(
     if (!aiEnabled) return
     if (!WrapperPlayClientPlayerFlying.isFlying(event.packetType)) return
     val shardPlayer = shardPlayer
-
-    val sequence = configManager.aiSequence
+    val r = ring
 
     if (shardPlayer.packetStateData.lastPacketWasOnePointSeventeenDuplicate) {
-      debugManager.log(
-        DebugCategory.PACKET_DUPLICATION,
-        "Mojang failed IQ Test for: ${shardPlayer.player.name}.",
-      )
+      if (debugManager.isEnabled(DebugCategory.PACKET_DUPLICATION)) {
+        debugManager.log(
+          DebugCategory.PACKET_DUPLICATION,
+          "Mojang failed IQ Test for: ${shardPlayer.player.name}.",
+        )
+      }
       return
     }
 
@@ -129,33 +127,25 @@ class AiCheck(
     }
 
     if (shardPlayer.compensatedEntities.self.riding != null) {
-      ticks.clear()
-      ticksStep = 0
+      r.reset()
       return
     }
 
-    if (!configManager.aiContinuous && shardPlayer.combat.ticksSinceAttack > sequence) {
-      if (ticks.isNotEmpty()) {
-        ticks.clear()
-      }
-      ticksStep = 0
+    if (!configManager.aiContinuous && shardPlayer.combat.ticksSinceAttack > r.capacity) {
+      r.reset()
       return
     }
 
-    ticks.addLast(TickData(shardPlayer))
-    ticksStep++
+    val movement = shardPlayer.movement
+    r.push(movement.yaw - movement.lastYaw, movement.pitch - movement.lastPitch)
 
-    while (ticks.size > sequence) {
-      ticks.removeFirst()
-    }
-
-    if (ticks.size == sequence && ticksStep >= step) {
-      trySendWindow()
-      ticksStep = 0
+    if (r.canSend(step)) {
+      trySendWindow(r)
+      r.markSent()
     }
   }
 
-  private fun trySendWindow() {
+  private fun trySendWindow(r: TickRingBuffer) {
     if (
       configManager.isAiWorldGuardEnabled() &&
         regionProvider.isPlayerInDisabledRegion(shardPlayer.player)
@@ -166,41 +156,34 @@ class AiCheck(
       )
       return
     }
-    sendData()
+    sendData(r)
   }
 
-  private fun sendData() {
-    if (ticks.isEmpty() || !aiEnabled) {
+  private fun sendData(r: TickRingBuffer) {
+    val count = r.count
+    if (count == 0 || !aiEnabled) {
       return
     }
 
-    val shardPlayer = shardPlayer
-    val count = ticks.size
-    val snapshot = borrowSnapshot(count)
-    var index = 0
-    for (tick in ticks) {
-      snapshot[index++] = tick
-    }
+    val floatCount = count * FEATURES_PER_TICK
+    val snapshot = borrowSnapshot(floatCount)
+    r.snapshotInto(snapshot)
 
+    val shardPlayer = shardPlayer
     val player = shardPlayer.player
     val playerName = player.name
 
     scheduler.runAsync {
       try {
-        @Suppress("UNCHECKED_CAST") val requestTicks = snapshot as Array<TickData>
-        aiService
-          .request(requestTicks, count)
-          .thenAcceptAsync({ parsed -> onResponse(parsed) }) { runnable ->
-            scheduler.runSync(player, runnable)
-          }
-          .exceptionally { error ->
-            scheduler.runSync(player, Runnable { onError(error) })
-            null
-          }
+        aiService.request(snapshot, count).whenCompleteAsync({ parsed, error ->
+          if (error != null) onError(error) else onResponse(parsed)
+        }) { runnable ->
+          scheduler.runSync(player, runnable)
+        }
       } catch (e: Exception) {
         plugin.logger.warning("[AiCheck] Failed to send data for $playerName: ${e.message}")
       } finally {
-        releaseSnapshot(snapshot, count)
+        releaseSnapshot(snapshot)
       }
     }
   }
@@ -319,7 +302,7 @@ class AiCheck(
           "[AiCheck] Received new sequence length $newSequence (old: $oldSequence)"
         )
         configManager.aiSequence = newSequence
-        ticks = ArrayDeque(newSequence)
+        ring = TickRingBuffer(newSequence)
       }
       return null
     }
@@ -357,16 +340,15 @@ class AiCheck(
       else -> null
     }
 
-  private fun borrowSnapshot(size: Int): Array<TickData?> {
+  private fun borrowSnapshot(size: Int): FloatArray {
     val buffer = snapshotBuffer.getAndSet(null)
     if (buffer == null || buffer.size < size) {
-      return arrayOfNulls(size)
+      return FloatArray(size)
     }
     return buffer
   }
 
-  private fun releaseSnapshot(buffer: Array<TickData?>, used: Int) {
-    Arrays.fill(buffer, 0, used, null)
+  private fun releaseSnapshot(buffer: FloatArray) {
     snapshotBuffer.set(buffer)
   }
 
@@ -374,5 +356,6 @@ class AiCheck(
     private const val CHEAT_PROBABILITY = 0.90
     private const val LEGIT_PROBABILITY = 0.10
     private const val MIN_SEQUENCE = 1
+    private const val FEATURES_PER_TICK = 2
   }
 }

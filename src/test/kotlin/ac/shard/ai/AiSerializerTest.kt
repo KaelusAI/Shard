@@ -17,9 +17,7 @@
  */
 package ac.shard.ai
 
-import ac.shard.data.TickData
-import io.mockk.every
-import io.mockk.mockk
+import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
@@ -28,47 +26,45 @@ class AiSerializerTest {
 
   private val serializer = AiSerializer()
 
-  private fun mockTick(dYaw: Float, dPitch: Float): TickData = mockk {
-    every { deltaYaw } returns dYaw
-    every { deltaPitch } returns dPitch
-  }
-
   @Test
   fun `serialize single tick writes two little-endian floats`() {
-    val buffer =
-      serializer.serialize(arrayOf(mockTick(1.5f, -2.0f)), 1).order(ByteOrder.LITTLE_ENDIAN)
+    val bytes = serializer.serialize(floatArrayOf(1.5f, -2.0f), 1)
+    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
-    assertEquals(8, buffer.remaining())
+    assertEquals(8, bytes.size)
     assertEquals(1.5f, buffer.getFloat(0))
     assertEquals(-2.0f, buffer.getFloat(4))
   }
 
   @Test
   fun `serialize multiple ticks preserves order`() {
-    val ticks = arrayOf(mockTick(1.0f, 2.0f), mockTick(3.0f, 4.0f), mockTick(5.0f, 6.0f))
-    val buffer = serializer.serialize(ticks, 3).order(ByteOrder.LITTLE_ENDIAN)
+    val features = floatArrayOf(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f)
+    val bytes = serializer.serialize(features, 3)
+    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
-    assertEquals(24, buffer.remaining())
-    val expected = floatArrayOf(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f)
-    for (i in expected.indices) {
-      assertEquals(expected[i], buffer.getFloat(i * 4))
+    assertEquals(24, bytes.size)
+    for (i in features.indices) {
+      assertEquals(features[i], buffer.getFloat(i * 4))
     }
   }
 
   @Test
   fun `serialize uses count not array length`() {
-    val ticks = arrayOf(mockTick(10.0f, 0f), mockTick(20.0f, 0f), mockTick(30.0f, 0f))
-    val buffer = serializer.serialize(ticks, 2).order(ByteOrder.LITTLE_ENDIAN)
+    val features = floatArrayOf(10.0f, 0f, 20.0f, 0f, 30.0f, 0f)
+    val bytes = serializer.serialize(features, 2)
+    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
-    assertEquals(16, buffer.remaining())
+    assertEquals(16, bytes.size)
     assertEquals(10.0f, buffer.getFloat(0))
     assertEquals(20.0f, buffer.getFloat(8))
   }
 
   @Test
   fun `serialize is reusable across calls`() {
-    val buf1 = serializer.serialize(arrayOf(mockTick(100.0f, 0f)), 1).order(ByteOrder.LITTLE_ENDIAN)
-    val buf2 = serializer.serialize(arrayOf(mockTick(200.0f, 0f)), 1).order(ByteOrder.LITTLE_ENDIAN)
+    val bytes1 = serializer.serialize(floatArrayOf(100.0f, 0f), 1)
+    val bytes2 = serializer.serialize(floatArrayOf(200.0f, 0f), 1)
+    val buf1 = ByteBuffer.wrap(bytes1).order(ByteOrder.LITTLE_ENDIAN)
+    val buf2 = ByteBuffer.wrap(bytes2).order(ByteOrder.LITTLE_ENDIAN)
 
     assertEquals(100.0f, buf1.getFloat(0))
     assertEquals(200.0f, buf2.getFloat(0))

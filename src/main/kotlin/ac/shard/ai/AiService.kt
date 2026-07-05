@@ -17,11 +17,10 @@
  */
 package ac.shard.ai
 
-import ac.shard.data.TickData
 import java.util.concurrent.CompletableFuture
 
 interface AiService {
   val isEnabled: Boolean
 
-  fun request(ticks: Array<TickData>, count: Int): CompletableFuture<AiResult>
+  fun request(features: FloatArray, count: Int): CompletableFuture<AiResult>
 }

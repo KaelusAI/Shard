@@ -17,9 +17,8 @@
  */
 package ac.shard.ai
 
-import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 
 interface AiTransport {
-  fun send(payload: ByteBuffer): CompletableFuture<String>
+  fun send(payload: ByteArray): CompletableFuture<String>
 }

@@ -20,7 +20,6 @@ package ac.shard.server
 import ac.shard.Shard
 import ac.shard.ai.AiBatchTransport
 import ac.shard.ai.AiTransport
-import ac.shard.ai.snapshot
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -39,14 +38,14 @@ class AIServer(
 ) : AiTransport, AiBatchTransport {
   private val serverUri: URI = URI.create(url)
 
-  override fun send(payload: ByteBuffer): CompletableFuture<String> {
+  override fun send(payload: ByteArray): CompletableFuture<String> {
     if (apiCooldown.isWaiting()) {
       return CompletableFuture.failedFuture(
         RequestException(ResponseCode.WAITING, "Server is in backoff.")
       )
     }
 
-    return sendRequest(payload.snapshot(), batch = false)
+    return sendRequest(payload, batch = false)
   }
 
   override fun sendBatch(items: List<ByteArray>): CompletableFuture<String> {

@@ -23,7 +23,6 @@ import ac.shard.server.AIServer
 import ac.shard.server.ShardError
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
@@ -45,14 +44,13 @@ class BatchingAiTransport(
   @Volatile private var timerTask: TaskHandle? = null
   @Volatile private var stopped = false
 
-  override fun send(payload: ByteBuffer): CompletableFuture<String> {
+  override fun send(payload: ByteArray): CompletableFuture<String> {
     val future = CompletableFuture<String>()
     if (stopped) {
       future.completeExceptionally(InterruptedException("BatchingAiTransport stopped"))
       return future
     }
-    val data = payload.snapshot()
-    queue.add(PendingItem(data, future))
+    queue.add(PendingItem(payload, future))
     val newSize = queueSize.incrementAndGet()
 
     when {
@@ -162,7 +160,7 @@ class BatchingAiTransport(
   }
 
   private fun recoverInvalidSequence(item: PendingItem) {
-    singleTransport.send(ByteBuffer.wrap(item.payload)).whenComplete { body, error ->
+    singleTransport.send(item.payload).whenComplete { body, error ->
       if (body != null) {
         item.future.complete(body)
       } else {

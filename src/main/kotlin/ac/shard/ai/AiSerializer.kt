@@ -17,20 +17,18 @@
  */
 package ac.shard.ai
 
-import ac.shard.data.TickData
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class AiSerializer {
-  fun serialize(ticks: Array<TickData>, count: Int): ByteBuffer {
-    val buffer = ByteBuffer.allocate(count * BYTES_PER_TICK).order(ByteOrder.LITTLE_ENDIAN)
-    for (i in 0 until count) {
-      val tick = ticks[i]
-      buffer.putFloat(tick.deltaYaw)
-      buffer.putFloat(tick.deltaPitch)
+  fun serialize(features: FloatArray, count: Int): ByteArray {
+    val bytes = ByteArray(count * BYTES_PER_TICK)
+    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+    val floatCount = count * FEATURES_PER_TICK
+    for (i in 0 until floatCount) {
+      buffer.putFloat(features[i])
     }
-    buffer.flip()
-    return buffer
+    return bytes
   }
 
   private companion object {

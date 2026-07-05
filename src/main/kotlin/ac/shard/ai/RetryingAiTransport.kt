@@ -17,17 +17,15 @@
  */
 package ac.shard.ai
 
-import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 
 class RetryingAiTransport(
   private val delegate: AiTransport,
   private val retryExecutor: RetryExecutor,
 ) : AiTransport {
-  override fun send(payload: ByteBuffer): CompletableFuture<String> {
-    val snapshot = payload.snapshot()
+  override fun send(payload: ByteArray): CompletableFuture<String> {
     return retryExecutor.execute(
-      operation = { delegate.send(ByteBuffer.wrap(snapshot)) },
+      operation = { delegate.send(payload) },
       shouldRetry = InferenceRetryPolicy::shouldRetry,
     )
   }
