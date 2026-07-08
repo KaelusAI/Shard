@@ -33,6 +33,7 @@ connect:
   status-key: "<gray> Ключ: <white><key></white></gray>"
   status-server-url: "<gray> Инференс: <white><url></white></gray>"
   status-quota: "<gray> Использование: <white><used>%/100%</white></gray>"
+  status-model: "<gray> Модель: <white><model></white></gray>"
   status-quota-unavailable: "<gray> Использование: <white>неизвестно</white></gray>"
   status-not-linked: "<prefix> <gray>Этот сервер не привязан. Запустите</gray> <white>/shard connect</white><gray>.</gray>"
   link-success: "<prefix> <color:#a8ff78>Привязано!</color> <gray>Сервер привязан к</gray> <white><server></white><gray>.</gray>"

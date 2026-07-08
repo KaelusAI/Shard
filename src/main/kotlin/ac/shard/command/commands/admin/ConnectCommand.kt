@@ -266,6 +266,10 @@ class ConnectCommand(
       "url",
       configManager.aiServerUrl,
     )
+    val model = configManager.aiModel
+    if (model != null) {
+      MessageUtil.sendMessage(native, Message.CONNECT_STATUS_MODEL, "model", model)
+    }
     val cached = telemetryService.quotaSnapshot
     if (cached != null) {
       MessageUtil.sendMessage(
