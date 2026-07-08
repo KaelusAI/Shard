@@ -35,8 +35,10 @@ class AIServer(
   url: String,
   private val apiKey: String,
   private val apiCooldown: ApiCooldown,
+  private val instanceId: String,
 ) : AiTransport, AiBatchTransport {
   private val serverUri: URI = URI.create(url)
+  private val userAgent: String = "Shard/" + plugin.description.version
 
   override fun send(payload: ByteArray): CompletableFuture<String> {
     if (apiCooldown.isWaiting()) {
@@ -63,8 +65,9 @@ class AIServer(
     val builder =
       HttpRequest.newBuilder(serverUri)
         .header("Content-Type", "application/octet-stream")
-        .header("User-Agent", "Shard/" + plugin.description.version)
+        .header("User-Agent", userAgent)
         .header("X-API-Key", apiKey)
+        .header("X-Instance-Id", instanceId)
         .header("Accept", "application/json")
         .POST(HttpRequest.BodyPublishers.ofByteArray(body))
         .timeout(if (batch) BATCH_REQUEST_TIMEOUT else REQUEST_TIMEOUT)

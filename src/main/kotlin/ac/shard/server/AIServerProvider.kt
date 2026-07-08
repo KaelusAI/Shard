@@ -24,6 +24,7 @@ import ac.shard.ai.RetryExecutor
 import ac.shard.ai.RetryingAiBatchTransport
 import ac.shard.ai.RetryingAiTransport
 import ac.shard.config.ConfigManager
+import ac.shard.connect.CredentialsStore
 import ac.shard.scheduler.SchedulerService
 import java.util.function.Supplier
 
@@ -31,6 +32,7 @@ class AIServerProvider(
   private val plugin: Shard,
   private val configManager: ConfigManager,
   private val scheduler: SchedulerService,
+  private val credentialsStore: CredentialsStore,
 ) : Supplier<AiTransport?> {
   @Volatile private var currentTransport: AiTransport? = null
   @Volatile private var batchingTransport: BatchingAiTransport? = null
@@ -85,7 +87,7 @@ class AIServerProvider(
       }
       ServerState.READY -> {
         plugin.logger.info("[AiCheck] AI Check loaded.")
-        AIServer(plugin, url, key, apiCooldown!!)
+        AIServer(plugin, url, key, apiCooldown!!, credentialsStore.instanceId())
       }
     }
   }
