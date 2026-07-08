@@ -51,6 +51,7 @@ enum class Message(val path: String) {
   CONNECT_STATUS_SERVER_URL("connect.status-server-url"),
   CONNECT_STATUS_QUOTA("connect.status-quota"),
   CONNECT_STATUS_QUOTA_UNAVAILABLE("connect.status-quota-unavailable"),
+  CONNECT_STATUS_MODEL("connect.status-model"),
   CONNECT_STATUS_NOT_LINKED("connect.status-not-linked"),
   CONNECT_LINK_SUCCESS("connect.link-success"),
   CONNECT_LINK_INVALID("connect.link-invalid"),

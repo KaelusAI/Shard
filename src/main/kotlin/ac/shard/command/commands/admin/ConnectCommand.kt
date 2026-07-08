@@ -274,6 +274,9 @@ class ConnectCommand(
         "used",
         cached.usedPercent.toString(),
       )
+      if (cached.model != null) {
+        MessageUtil.sendMessage(native, Message.CONNECT_STATUS_MODEL, "model", cached.model)
+      }
     } else {
       val sender = context.sender()
       val uuid = sender.uniqueId
@@ -283,6 +286,10 @@ class ConnectCommand(
         notify(uuid, isConsole) {
           if (pct != null) {
             MessageUtil.sendMessage(it, Message.CONNECT_STATUS_QUOTA, "used", pct.toString())
+            val model = telemetryService.quotaSnapshot?.model
+            if (model != null) {
+              MessageUtil.sendMessage(it, Message.CONNECT_STATUS_MODEL, "model", model)
+            }
           } else {
             MessageUtil.sendMessage(it, Message.CONNECT_STATUS_QUOTA_UNAVAILABLE)
           }

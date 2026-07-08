@@ -26,6 +26,7 @@ import ac.shard.connect.CredentialsStore
 import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.net.URI
 import java.net.http.HttpClient
@@ -164,13 +165,13 @@ class TelemetryService(
   private fun applyServerState(body: String?, applyParams: Boolean): Int? {
     val root = if (body.isNullOrBlank()) null else runCatching { mapper.readTree(body) }.getOrNull()
     if (root == null) return null
-    fun intOrNull(field: String): Int? =
-      root.path(field).let { if (it.isMissingNode || it.isNull) null else it.asInt() }
-    val used = intOrNull("quota_used_percent")
-    if (used != null) quota = QuotaSnapshot(used)
+    fun field(name: String): JsonNode? =
+      root.path(name).takeUnless { it.isMissingNode || it.isNull }
+    val used = field("quota_used_percent")?.asInt()
+    if (used != null) quota = QuotaSnapshot(used, field("model")?.asText())
     if (applyParams) {
-      val seq = intOrNull("sequence")
-      val step = intOrNull("step")
+      val seq = field("sequence")?.asInt()
+      val step = field("step")?.asInt()
       if (seq != null || step != null) configManager.updateAiParams(seq, step)
     }
     return used
@@ -204,4 +205,4 @@ class TelemetryService(
   }
 }
 
-data class QuotaSnapshot(val usedPercent: Int)
+data class QuotaSnapshot(val usedPercent: Int, val model: String? = null)
