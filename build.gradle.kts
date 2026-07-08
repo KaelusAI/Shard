@@ -17,7 +17,7 @@ BuildConfig.init(project)
 
 group = "ac.shard"
 
-version = "1.0"
+version = "1.1"
 
 val packetEventsSpigot = "com.github.retrooper:packetevents-spigot:2.13.0"
 
