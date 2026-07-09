@@ -198,6 +198,8 @@ class PunishmentManager(
           message,
           "player",
           playerName,
+          "uuid",
+          shardPlayer.uuid.toString(),
           "check_name",
           checkName,
           "vl",
@@ -217,6 +219,7 @@ class PunishmentManager(
     val formattedCmd =
       trimmed
         .replace("<player>", playerName)
+        .replace("<uuid>", shardPlayer.uuid.toString())
         .replace("<check_name>", checkName)
         .replace("<vl>", vl.toString())
         .replace("<verbose>", verbose)

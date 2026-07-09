@@ -2,6 +2,7 @@
 # <vl> - violations
 # <verbose> - extra information
 # <player> - player name
+# <uuid> - player UUID
 # [alert] - special command to alert
 # [broadcast] message - special command to broadcast message to all players on the server
 # [reset] - special command to reset the check violations in check group
