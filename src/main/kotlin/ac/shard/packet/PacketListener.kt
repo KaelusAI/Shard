@@ -194,6 +194,13 @@ class PacketListener(private val playerDataManager: PlayerDataManager) : PacketL
       updatePlayerState(shardPlayer, WrapperPlayClientPlayerFlying(event))
     }
 
+    if (
+      WrapperPlayClientPlayerFlying.isFlying(event.packetType) &&
+        !shardPlayer.packetStateData.shouldIgnoreFlyingTick
+    ) {
+      shardPlayer.combat.ticksSinceAttack = shardPlayer.combat.ticksSinceAttack + 1
+    }
+
     shardPlayer.checkManager.onPacketReceive(event)
 
     resetFlags(shardPlayer)

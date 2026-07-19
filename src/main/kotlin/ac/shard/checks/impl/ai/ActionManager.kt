@@ -21,22 +21,14 @@ import ac.shard.checks.AbstractCheck
 import ac.shard.checks.CheckData
 import ac.shard.checks.CheckFactory
 import ac.shard.checks.type.PacketCheck
-import ac.shard.config.ConfigManager
 import ac.shard.entity.PacketEntity
 import ac.shard.player.ShardPlayer
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
 import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying
 
 @CheckData(name = "ActionManager_Internal")
-class ActionManager(player: ShardPlayer, configManager: ConfigManager) :
-  AbstractCheck(player), PacketCheck {
-  init {
-    val sequence = configManager.aiSequence
-    player.combat.ticksSinceAttack = sequence + 1
-  }
-
+class ActionManager(player: ShardPlayer) : AbstractCheck(player), PacketCheck {
   interface Factory : CheckFactory {
     override fun create(player: ShardPlayer): ActionManager
   }
@@ -52,8 +44,6 @@ class ActionManager(player: ShardPlayer, configManager: ConfigManager) :
           shardPlayer.combat.ticksSinceAttack = 0
         }
       }
-    } else if (WrapperPlayClientPlayerFlying.isFlying(event.packetType)) {
-      shardPlayer.combat.ticksSinceAttack = shardPlayer.combat.ticksSinceAttack + 1
     }
   }
 }

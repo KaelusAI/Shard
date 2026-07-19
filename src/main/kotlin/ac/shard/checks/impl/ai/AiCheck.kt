@@ -107,20 +107,17 @@ class AiCheck(
     val shardPlayer = shardPlayer
     val r = ring
 
-    if (shardPlayer.packetStateData.lastPacketWasOnePointSeventeenDuplicate) {
-      if (debugManager.isEnabled(DebugCategory.PACKET_DUPLICATION)) {
+    val packetStateData = shardPlayer.packetStateData
+    if (packetStateData.shouldIgnoreFlyingTick) {
+      if (
+        packetStateData.lastPacketWasOnePointSeventeenDuplicate &&
+          debugManager.isEnabled(DebugCategory.PACKET_DUPLICATION)
+      ) {
         debugManager.log(
           DebugCategory.PACKET_DUPLICATION,
           "Mojang failed IQ Test for: ${shardPlayer.player.name}.",
         )
       }
-      return
-    }
-
-    if (
-      shardPlayer.packetStateData.lastPacketWasTeleport ||
-        shardPlayer.packetStateData.lastPacketWasServerRotation
-    ) {
       return
     }
 

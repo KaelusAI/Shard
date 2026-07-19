@@ -188,7 +188,7 @@ private fun infoCommandsModule() = module {
 }
 
 private fun checkModule() = module {
-  single<CheckFactory>(named("action")) { CheckFactory { player -> ActionManager(player, get()) } }
+  single<CheckFactory>(named("action")) { CheckFactory { player -> ActionManager(player) } }
   single<CheckFactory>(named("ai")) {
     CheckFactory { player ->
       AiCheck(player, get(), get(), get(), get(), get(), get(), get(), get())

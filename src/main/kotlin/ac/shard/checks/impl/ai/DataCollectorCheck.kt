@@ -44,13 +44,13 @@ class DataCollectorCheck(
     val shardPlayer = shardPlayer
     val session: DataSession = dataCollectorManager.getSession(shardPlayer.uuid) ?: return
     if (WrapperPlayClientPlayerFlying.isFlying(event.packetType)) {
-      if (
-        shardPlayer.packetStateData.lastPacketWasTeleport ||
-          shardPlayer.packetStateData.lastPacketWasServerRotation
-      ) {
+      val packetStateData = shardPlayer.packetStateData
+      if (packetStateData.lastPacketWasTeleport || packetStateData.lastPacketWasServerRotation) {
         plugin.logger.info(
           "Skipping server-side rotation packet in data collection for player: ${shardPlayer.player.name}"
         )
+      }
+      if (packetStateData.shouldIgnoreFlyingTick) {
         return
       }
 
@@ -61,8 +61,7 @@ class DataCollectorCheck(
   }
 
   private fun shouldRecord(shardPlayer: ShardPlayer): Boolean =
-    !shardPlayer.packetStateData.lastPacketWasOnePointSeventeenDuplicate &&
-      shardPlayer.compensatedEntities.self.riding == null &&
+    shardPlayer.compensatedEntities.self.riding == null &&
       (configManager.aiContinuous ||
         shardPlayer.combat.ticksSinceAttack <= configManager.aiSequence)
 }

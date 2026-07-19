@@ -30,4 +30,10 @@ class PacketStateData {
   var lastPacketWasServerRotation: Boolean = false
   var lastPacketWasOnePointSeventeenDuplicate: Boolean = false
   var duplicatePacketFilterPosition: Vector3d = Vector3d(0.0, 0.0, 0.0)
+
+  val shouldIgnoreFlyingTick: Boolean
+    get() =
+      lastPacketWasOnePointSeventeenDuplicate ||
+        lastPacketWasTeleport ||
+        lastPacketWasServerRotation
 }
