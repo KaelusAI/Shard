@@ -15,24 +15,24 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.monitor
+package ac.shard.monitor.core
 
 import java.util.Locale
 
-enum class MonitorChatStyle {
-  DIGEST,
-  VERDICT;
+enum class MonitorMode {
+  COMPACT,
+  FULL;
 
   companion object {
     @JvmStatic
-    fun fromConfig(value: String?): MonitorChatStyle {
+    fun fromConfig(value: String?): MonitorMode {
       if (value == null) {
-        return DIGEST
+        return COMPACT
       }
       return try {
         valueOf(value.trim().uppercase(Locale.ROOT))
-      } catch (_: IllegalArgumentException) {
-        DIGEST
+      } catch (e: IllegalArgumentException) {
+        COMPACT
       }
     }
   }

@@ -15,25 +15,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.monitor
+package ac.shard.monitor.core
 
-import java.util.Locale
-
-enum class MonitorMode {
-  COMPACT,
-  FULL;
-
-  companion object {
-    @JvmStatic
-    fun fromConfig(value: String?): MonitorMode {
-      if (value == null) {
-        return COMPACT
-      }
-      return try {
-        valueOf(value.trim().uppercase(Locale.ROOT))
-      } catch (e: IllegalArgumentException) {
-        COMPACT
-      }
-    }
-  }
-}
+data class MonitorSettings(
+  var mode: MonitorMode,
+  var theme: MonitorTheme,
+  var showPing: Boolean,
+  var showDmg: Boolean,
+  var showTrend: Boolean,
+  var showName: MonitorNameMode,
+  var output: MonitorOutputKind = MonitorOutputKind.ACTIONBAR,
+  var chatStyle: MonitorChatStyle = MonitorChatStyle.DIGEST,
+)

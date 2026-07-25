@@ -20,10 +20,10 @@ package ac.shard.database
 import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.connect.CredentialsStore
-import ac.shard.monitor.MonitorMode
-import ac.shard.monitor.MonitorNameMode
-import ac.shard.monitor.MonitorSettings
-import ac.shard.monitor.MonitorTheme
+import ac.shard.monitor.core.MonitorMode
+import ac.shard.monitor.core.MonitorNameMode
+import ac.shard.monitor.core.MonitorSettings
+import ac.shard.monitor.core.MonitorTheme
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

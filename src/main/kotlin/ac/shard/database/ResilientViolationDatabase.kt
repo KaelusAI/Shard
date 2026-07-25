@@ -17,7 +17,7 @@
  */
 package ac.shard.database
 
-import ac.shard.monitor.MonitorSettings
+import ac.shard.monitor.core.MonitorSettings
 import ac.shard.player.ShardPlayer
 import java.sql.SQLException
 import java.util.UUID

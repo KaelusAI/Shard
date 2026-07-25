@@ -26,7 +26,7 @@ import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
-import ac.shard.monitor.MonitorSettingsService
+import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.core.ScoreboardSlotObserver
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener

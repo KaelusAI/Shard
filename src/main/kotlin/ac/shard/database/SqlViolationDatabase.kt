@@ -23,12 +23,12 @@
 package ac.shard.database
 
 import ac.shard.config.ConfigManager
-import ac.shard.monitor.MonitorChatStyle
-import ac.shard.monitor.MonitorMode
-import ac.shard.monitor.MonitorNameMode
-import ac.shard.monitor.MonitorOutputKind
-import ac.shard.monitor.MonitorSettings
-import ac.shard.monitor.MonitorTheme
+import ac.shard.monitor.core.MonitorChatStyle
+import ac.shard.monitor.core.MonitorMode
+import ac.shard.monitor.core.MonitorNameMode
+import ac.shard.monitor.core.MonitorOutputKind
+import ac.shard.monitor.core.MonitorSettings
+import ac.shard.monitor.core.MonitorTheme
 import ac.shard.player.ShardPlayer
 import java.time.Instant
 import java.time.LocalDateTime
