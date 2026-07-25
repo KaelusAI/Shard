@@ -23,11 +23,11 @@ import ac.shard.command.CommandRegister
 import ac.shard.command.ShardCommand
 import ac.shard.command.requirements.PlayerSenderRequirement
 import ac.shard.config.ConfigManager
-import ac.shard.monitor.MonitorMode
-import ac.shard.monitor.MonitorNameMode
-import ac.shard.monitor.MonitorSettings
-import ac.shard.monitor.MonitorSettingsService
-import ac.shard.monitor.MonitorTheme
+import ac.shard.monitor.core.MonitorMode
+import ac.shard.monitor.core.MonitorNameMode
+import ac.shard.monitor.core.MonitorSettings
+import ac.shard.monitor.core.MonitorSettingsService
+import ac.shard.monitor.core.MonitorTheme
 import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer

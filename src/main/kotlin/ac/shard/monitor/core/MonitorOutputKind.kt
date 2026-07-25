@@ -15,25 +15,27 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.monitor
+package ac.shard.monitor.core
 
 import java.util.Locale
 
-enum class MonitorTheme {
-  CALM,
-  VIVID,
-  MINIMAL;
+enum class MonitorOutputKind {
+  ACTIONBAR,
+  BOSSBAR,
+  SIDEBAR,
+  CHAT,
+  TABLIST;
 
   companion object {
     @JvmStatic
-    fun fromConfig(value: String?): MonitorTheme {
+    fun fromConfig(value: String?): MonitorOutputKind {
       if (value == null) {
-        return CALM
+        return ACTIONBAR
       }
       return try {
         valueOf(value.trim().uppercase(Locale.ROOT))
-      } catch (e: IllegalArgumentException) {
-        CALM
+      } catch (_: IllegalArgumentException) {
+        ACTIONBAR
       }
     }
   }

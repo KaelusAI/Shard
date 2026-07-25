@@ -75,9 +75,9 @@ import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
 import ac.shard.integration.WorldGuardManager
-import ac.shard.monitor.MonitorSettingsService
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.core.ScoreboardSlotObserver
 import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.monitor.view.MonitorViewService

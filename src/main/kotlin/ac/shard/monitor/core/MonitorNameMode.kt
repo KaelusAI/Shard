@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Shard.  If not, see <https://www.gnu.org/licenses/>.
  */
-package ac.shard.monitor
+package ac.shard.monitor.core
 
 import java.util.Locale
 

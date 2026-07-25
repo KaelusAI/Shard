@@ -18,7 +18,7 @@
 package ac.shard.database
 
 import ac.shard.config.ConfigManager
-import ac.shard.monitor.MonitorSettings
+import ac.shard.monitor.core.MonitorSettings
 import ac.shard.player.ShardPlayer
 import java.time.Instant
 import java.util.UUID
