@@ -95,6 +95,7 @@ constructor(
     adventure.close()
     coroutines.close()
     databaseManager.shutdown()
+    runCatching { telemetryService.sendFarewell() }
   }
 
   fun reload() {

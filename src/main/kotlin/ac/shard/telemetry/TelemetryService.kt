@@ -34,10 +34,11 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.LongAdder
 import org.bukkit.Bukkit
 
-@Suppress("TooGenericExceptionCaught")
+@Suppress("TooGenericExceptionCaught", "TooManyFunctions")
 class TelemetryService(
   private val plugin: Shard,
   private val configManager: ConfigManager,
@@ -54,6 +55,7 @@ class TelemetryService(
   private var startedAtMs: Long = 0L
   private var instanceId: String = ""
 
+  @Volatile private var stopping = false
   @Volatile private var lastOk: Boolean? = null
   @Volatile private var quota: QuotaSnapshot? = null
 
@@ -76,9 +78,29 @@ class TelemetryService(
   }
 
   fun stop() {
+    stopping = true
     runCatching { eventBus.unregisterAll(this) }
     runCatching { handle?.cancel() }
     handle = null
+  }
+
+  fun sendFarewell() {
+    val key = configManager.aiApiKey
+    if (!configManager.isTelemetryEnabled() || !keyValid(key) || instanceId.isEmpty()) {
+      return
+    }
+    val url = deviceUrl("heartbeat") ?: return
+    val beat = Beat(online = 0, suspicious = 0, tps = null, punishments = punishmentDelta.sum())
+    try {
+      client
+        .sendAsync(
+          buildRequest(url, key, beat, stopping = true, FAREWELL_TIMEOUT),
+          HttpResponse.BodyHandlers.discarding(),
+        )
+        .get(FAREWELL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+    } catch (e: Exception) {
+      plugin.logger.fine("[Telemetry] farewell beat failed: ${e.message}")
+    }
   }
 
   private fun tick() {
@@ -128,29 +150,40 @@ class TelemetryService(
       check != null && check.buffer > SUSPICIOUS_BUFFER
     }
 
+  private fun buildRequest(
+    url: String,
+    key: String,
+    beat: Beat,
+    stopping: Boolean,
+    timeout: Duration,
+  ): HttpRequest {
+    val body =
+      buildMap<String, Any?> {
+        put("instance_id", instanceId)
+        configManager.telemetryGroupId?.let { put("group_id", it) }
+        put("online", beat.online)
+        put("suspicious", beat.suspicious)
+        put("tps", beat.tps)
+        put("plugin_version", plugin.description.version)
+        put("uptime_seconds", (System.currentTimeMillis() - startedAtMs) / MILLIS_PER_SECOND)
+        if (beat.punishments > 0) put("punishments", beat.punishments)
+        if (stopping) put("stopping", true)
+      }
+    return HttpRequest.newBuilder(URI.create(url))
+      .header("Content-Type", "application/json")
+      .header("Accept", "application/json")
+      .header("X-API-Key", key)
+      .header("User-Agent", "Shard/" + plugin.description.version)
+      .timeout(timeout)
+      .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
+      .build()
+  }
+
   private fun send(key: String, beat: Beat) {
+    if (stopping) return
     val url = deviceUrl("heartbeat") ?: return
     try {
-      val body =
-        buildMap<String, Any?> {
-          put("instance_id", instanceId)
-          configManager.telemetryGroupId?.let { put("group_id", it) }
-          put("online", beat.online)
-          put("suspicious", beat.suspicious)
-          put("tps", beat.tps)
-          put("plugin_version", plugin.description.version)
-          put("uptime_seconds", (System.currentTimeMillis() - startedAtMs) / MILLIS_PER_SECOND)
-          if (beat.punishments > 0) put("punishments", beat.punishments)
-        }
-      val request =
-        HttpRequest.newBuilder(URI.create(url))
-          .header("Content-Type", "application/json")
-          .header("Accept", "application/json")
-          .header("X-API-Key", key)
-          .header("User-Agent", "Shard/" + plugin.description.version)
-          .timeout(REQUEST_TIMEOUT)
-          .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-          .build()
+      val request = buildRequest(url, key, beat, stopping = false, REQUEST_TIMEOUT)
       val response = client.send(request, HttpResponse.BodyHandlers.ofString())
       val ok = response.statusCode() in HTTP_OK_MIN..HTTP_OK_MAX
       if (ok) {
@@ -206,6 +239,7 @@ class TelemetryService(
     const val HTTP_OK_MAX = 299
     val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(10)
     val REQUEST_TIMEOUT: Duration = Duration.ofSeconds(15)
+    val FAREWELL_TIMEOUT: Duration = Duration.ofSeconds(2)
   }
 }
 
