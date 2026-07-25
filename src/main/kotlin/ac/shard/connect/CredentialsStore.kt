@@ -39,9 +39,13 @@ class CredentialsStore(private val plugin: Shard) {
 
   private val instanceFile = File(plugin.dataFolder, INSTANCE_FILE)
 
+  private val cachedInstanceId: String by lazy { readOrCreateInstanceId() }
+
   fun isLinked(): Boolean = file.exists()
 
-  fun instanceId(): String {
+  fun instanceId(): String = cachedInstanceId
+
+  private fun readOrCreateInstanceId(): String {
     runCatching {
       if (instanceFile.exists()) {
         val node = YamlConfigurationLoader.builder().path(instanceFile.toPath()).build().load()
