@@ -78,6 +78,8 @@ import ac.shard.integration.WorldGuardManager
 import ac.shard.monitor.MonitorSettingsService
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.ScoreboardSlotObserver
+import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.platform.scheduler.PlatformScheduler
@@ -129,6 +131,8 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::CrossServerSuspiciousService)
   single { ComponentCache() }
   singleOf(::MonitorSampler)
+  singleOf(::ScoreboardSlotRegistry)
+  singleOf(::ScoreboardSlotObserver)
   singleOf(::MonitorSettingsService)
   singleOf(::MonitorViewService)
   singleOf(::ExemptManager)

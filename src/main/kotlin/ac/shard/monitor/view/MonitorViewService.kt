@@ -21,6 +21,7 @@ import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.PacketEvents
 import java.util.UUID
@@ -37,16 +38,15 @@ class MonitorViewService(
   scheduler: SchedulerService,
   componentCache: ComponentCache,
   sampler: MonitorSampler,
+  slotRegistry: ScoreboardSlotRegistry,
 ) : Listener {
-  private val coordinator = ViewSessionCoordinator(plugin, scheduler, componentCache, sampler)
+  private val coordinator =
+    ViewSessionCoordinator(plugin, scheduler, componentCache, sampler, slotRegistry)
   private val trackingObserver =
     ViewTrackingObserver(scheduler, coordinator) { viewerId ->
       resolveActiveViewViewer(viewerId, coordinator)
     }
-  private val conflictObserver =
-    ViewConflictObserver(scheduler, coordinator, coordinator.belowNameConflicts) { viewerId ->
-      resolveActiveViewViewer(viewerId, coordinator)
-    }
+  private val teamConflictObserver = ViewTeamConflictObserver(coordinator)
 
   @Volatile private var runtimeConfig = ViewRuntimeConfig.from(configManager.monitorConfig)
   private var packetHooksRegistered = false
@@ -60,7 +60,7 @@ class MonitorViewService(
       return
     }
     PacketEvents.getAPI().eventManager.registerListener(trackingObserver)
-    PacketEvents.getAPI().eventManager.registerListener(conflictObserver)
+    PacketEvents.getAPI().eventManager.registerListener(teamConflictObserver)
     packetHooksRegistered = true
   }
 

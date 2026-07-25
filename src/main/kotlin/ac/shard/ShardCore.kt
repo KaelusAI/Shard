@@ -26,6 +26,7 @@ import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
+import ac.shard.monitor.core.ScoreboardSlotObserver
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.player.PlayerDataManager
@@ -57,6 +58,7 @@ constructor(
   private val debugManager: DebugManager,
   private val packetListener: PacketListener,
   private val monitorViewService: MonitorViewService,
+  private val slotObserver: ScoreboardSlotObserver,
   private val damageEvent: DamageEvent,
   private val shardApi: ShardApi,
   private val adventure: BukkitAudiences,
@@ -117,6 +119,7 @@ constructor(
 
   private fun initializePacketRuntime() {
     PacketEvents.getAPI().eventManager.registerListener(packetListener)
+    PacketEvents.getAPI().eventManager.registerListener(slotObserver)
     monitorViewService.start()
     PacketEvents.getAPI().init()
   }

@@ -19,41 +19,31 @@ package ac.shard.monitor.view
 
 import ac.shard.Shard
 import ac.shard.monitor.core.ScoreboardPacketBridge
+import ac.shard.monitor.core.SlotLossReason
+import ac.shard.monitor.core.SlotLostCallback
 import java.util.UUID
 import org.bukkit.entity.Player
 
-internal class ViewBelowNameConflictCoordinator(
+internal class ViewSlotGuard(
   private val plugin: Shard,
   private val tracker: ViewTargetTracker,
   private val bridge: ScoreboardPacketBridge,
   private val sessionProvider: (UUID) -> ViewSession?,
-) {
-  fun reassertDisplay(
-    viewerId: UUID,
-    conflictingObjective: String,
-    viewerResolver: (UUID) -> Player?,
-  ) {
-    val session = sessionProvider(viewerId)?.takeIf(ViewSession::usesBelowName)
-    val viewer = viewerResolver(viewerId)
-    val objectiveName = session?.belowObjectiveName
-    if (session != null && viewer != null && objectiveName != null) {
-      logFirstConflict(session, viewer, conflictingObjective)
-      bridge.displayObjective(viewer, objectiveName, session.config.slot)
-      tracker.refreshTrackedTargets(viewer, session)
+) : SlotLostCallback {
+  override fun onSlotLost(viewer: Player, reason: SlotLossReason, foreignObjective: String) {
+    val session = sessionProvider(viewer.uniqueId)?.takeIf(ViewSession::usesBelowName) ?: return
+    val objectiveName = session.belowObjectiveName ?: return
+    when (reason) {
+      SlotLossReason.DISPLACED -> {
+        logFirstConflict(session, viewer, foreignObjective)
+        bridge.displayObjective(viewer, objectiveName, session.config.slot)
+      }
+      SlotLossReason.OBJECTIVE_REMOVED -> {
+        session.targetTeams.values.forEach(TargetTeamState::invalidateBelowName)
+        bridge.createObjective(viewer, session.config.objectiveSpec(objectiveName))
+      }
     }
-  }
-
-  fun recreateObjective(viewerId: UUID, objectiveName: String, viewerResolver: (UUID) -> Player?) {
-    val session = sessionProvider(viewerId)
-    val viewer = viewerResolver(viewerId)
-    val shouldRecreate =
-      session != null && session.usesBelowName() && session.belowObjectiveName == objectiveName
-
-    if (shouldRecreate && viewer != null) {
-      session.targetTeams.values.forEach(TargetTeamState::invalidateBelowName)
-      bridge.createObjective(viewer, session.config.objectiveSpec(objectiveName))
-      tracker.refreshTrackedTargets(viewer, session)
-    }
+    tracker.refreshTrackedTargets(viewer, session)
   }
 
   private fun logFirstConflict(session: ViewSession, viewer: Player, conflictingObjective: String) {

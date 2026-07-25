@@ -17,27 +17,33 @@
  */
 package ac.shard.monitor.view
 
-import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.event.PacketSendEvent
+import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import java.util.UUID
 import kotlin.test.Test
 
-class ViewConflictObserverTest {
+class ViewTeamConflictObserverTest {
+  @Test
+  fun `a non-team packet never reaches the session lookup`() {
+    val coordinator = mockk<ViewSessionCoordinator>(relaxed = true)
+    val event = mockk<PacketSendEvent>()
+    every { event.packetType } returns PacketType.Play.Server.SYSTEM_CHAT_MESSAGE
+
+    ViewTeamConflictObserver(coordinator).onPacketSend(event)
+
+    verify(exactly = 0) { coordinator.session(any()) }
+  }
+
   @Test
   fun `send event without bukkit player is ignored`() {
-    val scheduler = mockk<SchedulerService>(relaxed = true)
     val coordinator = mockk<ViewSessionCoordinator>(relaxed = true)
-    val belowNameConflicts = mockk<ViewBelowNameConflictCoordinator>(relaxed = true)
     val event = mockk<PacketSendEvent>()
+    every { event.packetType } returns PacketType.Play.Server.TEAMS
     every { event.getPlayer<Any>() } returns Any()
 
-    val observer =
-      ViewConflictObserver(scheduler, coordinator, belowNameConflicts) { _: UUID -> null }
-
-    observer.onPacketSend(event)
+    ViewTeamConflictObserver(coordinator).onPacketSend(event)
 
     verify(exactly = 0) { coordinator.session(any()) }
   }

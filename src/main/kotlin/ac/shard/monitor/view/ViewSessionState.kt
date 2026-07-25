@@ -23,6 +23,7 @@ import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.platform.scheduler.TaskHandle
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import org.bukkit.entity.Player
 
 internal class ViewSession(
@@ -107,11 +108,11 @@ internal class TargetTeamState(val teamName: String) {
   var lastTargetName: String = ""
 
   private var cyclesSinceRebind: Int = 0
-  private var pendingRebind: Boolean = false
+  private val pendingRebind = AtomicBoolean(false)
   private val pingSampler = PingSampler()
 
   fun markRebindNeeded() {
-    pendingRebind = true
+    pendingRebind.set(true)
   }
 
   fun invalidateBelowName() {
@@ -203,7 +204,7 @@ internal class TargetTeamState(val teamName: String) {
       apply(rendered)
       created = true
       cyclesSinceRebind = 0
-      pendingRebind = false
+      pendingRebind.set(false)
       lastTargetName = targetName
       return
     }
@@ -213,7 +214,7 @@ internal class TargetTeamState(val teamName: String) {
       teamBridge.createTeam(viewer, teamName, targetName, rendered)
       apply(rendered)
       cyclesSinceRebind = 0
-      pendingRebind = false
+      pendingRebind.set(false)
       lastTargetName = targetName
       return
     }
@@ -227,10 +228,9 @@ internal class TargetTeamState(val teamName: String) {
       cyclesSinceRebind++
     }
 
-    if (pendingRebind || cyclesSinceRebind >= rebindCycles) {
+    if (pendingRebind.getAndSet(false) || cyclesSinceRebind >= rebindCycles) {
       teamBridge.rebindEntity(viewer, teamName, targetName)
       cyclesSinceRebind = 0
-      pendingRebind = false
     }
 
     lastTargetName = targetName
