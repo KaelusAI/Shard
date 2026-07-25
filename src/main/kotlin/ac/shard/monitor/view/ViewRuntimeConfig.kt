@@ -18,6 +18,7 @@
 package ac.shard.monitor.view
 
 import ac.shard.config.ConfigView
+import ac.shard.monitor.core.ObjectiveSpec
 import ac.shard.monitor.core.fillTemplate
 import ac.shard.monitor.core.ticksToCycles
 import java.util.UUID
@@ -41,6 +42,15 @@ internal data class ViewRuntimeConfig(
   val usesPing: Boolean,
   val slot: Int = BELOW_NAME_DISPLAY_SLOT,
 ) {
+  fun objectiveSpec(objectiveName: String): ObjectiveSpec =
+    ObjectiveSpec(
+      name = objectiveName,
+      slot = slot,
+      title = belowTitle,
+      legacyTitleFallback = LEGACY_BELOW_TITLE,
+      blankScoreText = defaultBelowText,
+    )
+
   companion object {
     fun from(config: ConfigView): ViewRuntimeConfig {
       val updateTicks = config.getLong("view.update", DEFAULT_UPDATE_TICKS).coerceAtLeast(1L)
@@ -122,6 +132,7 @@ internal const val DEFAULT_RESYNC_TICKS = 100L
 internal const val DEFAULT_PING_REFRESH_TICKS = 20L
 internal const val DEFAULT_PING_BUCKET_MS = 10
 internal const val BELOW_NAME_DISPLAY_SLOT = 2
+internal const val LEGACY_BELOW_TITLE = "% AI"
 internal const val DEFAULT_VIEW_POSITION = "BELOW_NAME"
 internal const val DEFAULT_BELOW_TITLE = ""
 internal const val DEFAULT_FALLBACK_PROB = "--"

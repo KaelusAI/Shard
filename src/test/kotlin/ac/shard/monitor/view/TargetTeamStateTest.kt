@@ -18,6 +18,8 @@
 package ac.shard.monitor.view
 
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.ScoreDisplay
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.player.PlayerDataManager
 import io.mockk.every
 import io.mockk.mockk
@@ -30,7 +32,7 @@ class TargetTeamStateTest {
   @Test
   fun `recreated below-name objective resends unchanged entry`() {
     val viewer = mockk<Player>(relaxed = true)
-    val belowNameBridge = mockk<ViewBelowNamePacketBridge>(relaxed = true)
+    val belowNameBridge = mockk<ScoreboardPacketBridge>(relaxed = true)
     every { belowNameBridge.supportsFancyText(viewer) } returns true
 
     val state = TargetTeamState("slv_test")
@@ -41,14 +43,20 @@ class TargetTeamStateTest {
     state.updateBelowName(viewer, "svw_test", "Target", rendered, belowNameBridge)
 
     verify(exactly = 2) {
-      belowNameBridge.updateEntry(viewer, "svw_test", "Target", rendered.below, 95)
+      belowNameBridge.updateEntry(
+        viewer,
+        "svw_test",
+        "Target",
+        95,
+        ScoreDisplay(entryDisplay = null, scoreText = rendered.below),
+      )
     }
   }
 
   @Test
   fun `below-name entry falls back to placeholder when target has no ai data`() {
     val viewer = mockk<Player>(relaxed = true)
-    val belowNameBridge = mockk<ViewBelowNamePacketBridge>(relaxed = true)
+    val belowNameBridge = mockk<ScoreboardPacketBridge>(relaxed = true)
     every { belowNameBridge.supportsFancyText(viewer) } returns true
 
     val state = TargetTeamState("slv_test")
@@ -59,7 +67,13 @@ class TargetTeamStateTest {
     state.updateBelowName(viewer, "svw_test", "Target", noData, belowNameBridge)
 
     verify(exactly = 1) {
-      belowNameBridge.updateEntry(viewer, "svw_test", "Target", noData.below, 0)
+      belowNameBridge.updateEntry(
+        viewer,
+        "svw_test",
+        "Target",
+        0,
+        ScoreDisplay(entryDisplay = null, scoreText = noData.below),
+      )
     }
   }
 

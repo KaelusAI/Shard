@@ -18,13 +18,14 @@
 package ac.shard.monitor.view
 
 import ac.shard.Shard
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import java.util.UUID
 import org.bukkit.entity.Player
 
 internal class ViewBelowNameConflictCoordinator(
   private val plugin: Shard,
   private val tracker: ViewTargetTracker,
-  private val belowNameBridge: ViewBelowNamePacketBridge,
+  private val bridge: ScoreboardPacketBridge,
   private val sessionProvider: (UUID) -> ViewSession?,
 ) {
   fun reassertDisplay(
@@ -37,7 +38,7 @@ internal class ViewBelowNameConflictCoordinator(
     val objectiveName = session?.belowObjectiveName
     if (session != null && viewer != null && objectiveName != null) {
       logFirstConflict(session, viewer, conflictingObjective)
-      belowNameBridge.displayObjective(viewer, objectiveName)
+      bridge.displayObjective(viewer, objectiveName, session.config.slot)
       tracker.refreshTrackedTargets(viewer, session)
     }
   }
@@ -50,12 +51,7 @@ internal class ViewBelowNameConflictCoordinator(
 
     if (shouldRecreate && viewer != null) {
       session.targetTeams.values.forEach(TargetTeamState::invalidateBelowName)
-      belowNameBridge.createObjective(
-        viewer,
-        objectiveName,
-        session.config.belowTitle,
-        session.config.defaultBelowText,
-      )
+      bridge.createObjective(viewer, session.config.objectiveSpec(objectiveName))
       tracker.refreshTrackedTargets(viewer, session)
     }
   }

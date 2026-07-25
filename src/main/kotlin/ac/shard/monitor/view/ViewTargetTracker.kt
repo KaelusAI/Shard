@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import java.util.HashSet
 import java.util.UUID
 import org.bukkit.Bukkit
@@ -25,7 +26,7 @@ import org.bukkit.entity.Player
 internal class ViewTargetTracker(
   private val tagRenderer: ViewTagRenderer,
   private val teamBridge: ViewTeamPacketBridge,
-  private val belowNameBridge: ViewBelowNamePacketBridge,
+  private val bridge: ScoreboardPacketBridge,
 ) {
   fun trackTarget(session: ViewSession, target: Player) {
     session.updateTrackedName(target.uniqueId, target.name)
@@ -87,7 +88,7 @@ internal class ViewTargetTracker(
       viewer,
       if (session.usesBelowName()) session.belowObjectiveName else null,
       fallbackTargetName.orEmpty(),
-      belowNameBridge,
+      bridge,
       teamBridge,
     )
   }
@@ -104,7 +105,7 @@ internal class ViewTargetTracker(
         viewer,
         if (session.usesBelowName()) session.belowObjectiveName else null,
         session.targetNameFor(targetId).orEmpty(),
-        belowNameBridge,
+        bridge,
         teamBridge,
       )
     }
@@ -122,13 +123,7 @@ internal class ViewTargetTracker(
     val rendered = tagRenderer.render(target, pingDisplay, session.config)
 
     if (session.usesBelowName()) {
-      state.updateBelowName(
-        viewer,
-        session.belowObjectiveName,
-        target.name,
-        rendered,
-        belowNameBridge,
-      )
+      state.updateBelowName(viewer, session.belowObjectiveName, target.name, rendered, bridge)
     } else {
       state.updateTeam(viewer, session.config.rebindCycles, target.name, rendered, teamBridge)
     }

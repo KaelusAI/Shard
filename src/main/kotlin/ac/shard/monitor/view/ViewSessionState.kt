@@ -18,6 +18,8 @@
 package ac.shard.monitor.view
 
 import ac.shard.monitor.core.PingSampler
+import ac.shard.monitor.core.ScoreDisplay
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.platform.scheduler.TaskHandle
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -130,28 +132,27 @@ internal class TargetTeamState(val teamName: String) {
     objectiveName: String?,
     targetName: String,
     rendered: RenderedTag,
-    belowNameBridge: ViewBelowNamePacketBridge,
+    bridge: ScoreboardPacketBridge,
   ) {
     val objective = objectiveName ?: return
     val belowScore = rendered.belowScore
     if (belowScore == null) {
-      clearBelowName(viewer, objective, targetName, belowNameBridge)
+      clearBelowName(viewer, objective, targetName, bridge)
       return
     }
 
     val nameChanged = lastTargetName.isNotBlank() && lastTargetName != targetName
-    if (
-      shouldUpdateBelowName(
-        targetName,
-        rendered,
-        belowScore,
-        belowNameBridge.supportsFancyText(viewer),
-      )
-    ) {
+    if (shouldUpdateBelowName(targetName, rendered, belowScore, bridge.supportsFancyText(viewer))) {
       if (nameChanged) {
-        belowNameBridge.removeEntry(viewer, objective, lastTargetName)
+        bridge.removeEntry(viewer, objective, lastTargetName)
       }
-      belowNameBridge.updateEntry(viewer, objective, targetName, rendered.below, belowScore)
+      bridge.updateEntry(
+        viewer,
+        objective,
+        targetName,
+        belowScore,
+        ScoreDisplay(entryDisplay = null, scoreText = rendered.below),
+      )
       lastBelow = rendered.below
       lastBelowScore = belowScore
       lastTargetName = targetName
@@ -163,12 +164,12 @@ internal class TargetTeamState(val teamName: String) {
     viewer: Player,
     objective: String,
     targetName: String,
-    belowNameBridge: ViewBelowNamePacketBridge,
+    bridge: ScoreboardPacketBridge,
   ) {
     if (created) {
       val entryName = lastTargetName.ifBlank { targetName }
       if (entryName.isNotBlank()) {
-        belowNameBridge.removeEntry(viewer, objective, entryName)
+        bridge.removeEntry(viewer, objective, entryName)
       }
     }
     lastBelow = ""
@@ -239,13 +240,13 @@ internal class TargetTeamState(val teamName: String) {
     viewer: Player,
     objectiveName: String?,
     fallbackTargetName: String,
-    belowNameBridge: ViewBelowNamePacketBridge,
+    bridge: ScoreboardPacketBridge,
     teamBridge: ViewTeamPacketBridge,
   ) {
     if (objectiveName != null) {
       val entryName = lastTargetName.ifBlank { fallbackTargetName }
       if (entryName.isNotBlank()) {
-        belowNameBridge.removeEntry(viewer, objectiveName, entryName)
+        bridge.removeEntry(viewer, objectiveName, entryName)
       }
       return
     }

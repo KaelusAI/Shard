@@ -20,6 +20,7 @@ package ac.shard.monitor.view
 import ac.shard.Shard
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.scheduler.SchedulerService
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -34,12 +35,10 @@ internal class ViewSessionCoordinator(
 ) {
   private val sessions = ConcurrentHashMap<UUID, ViewSession>()
   private val teamBridge = ViewTeamPacketBridge(componentCache)
-  private val belowNameBridge = ViewBelowNamePacketBridge(componentCache)
-  private val tracker = ViewTargetTracker(ViewTagRenderer(sampler), teamBridge, belowNameBridge)
+  private val bridge = ScoreboardPacketBridge(componentCache)
+  private val tracker = ViewTargetTracker(ViewTagRenderer(sampler), teamBridge, bridge)
   internal val belowNameConflicts =
-    ViewBelowNameConflictCoordinator(plugin, tracker, belowNameBridge) { viewerId ->
-      sessions[viewerId]
-    }
+    ViewBelowNameConflictCoordinator(plugin, tracker, bridge) { viewerId -> sessions[viewerId] }
 
   fun session(viewerId: UUID): ViewSession? = sessions[viewerId]
 
@@ -63,12 +62,7 @@ internal class ViewSessionCoordinator(
     sessions[viewerId] = session
 
     if (session.usesBelowName()) {
-      belowNameBridge.createObjective(
-        viewer,
-        objectiveName!!,
-        config.belowTitle,
-        config.defaultBelowText,
-      )
+      bridge.createObjective(viewer, config.objectiveSpec(objectiveName!!))
     }
 
     tracker.bootstrapTrackedTargets(viewer, session)
@@ -140,7 +134,7 @@ internal class ViewSessionCoordinator(
     val viewer = viewerHint ?: Bukkit.getPlayer(viewerId)
     if (viewer != null && viewer.isOnline) {
       if (session.usesBelowName()) {
-        session.belowObjectiveName?.let { belowNameBridge.removeObjective(viewer, it) }
+        session.belowObjectiveName?.let { bridge.removeObjective(viewer, it) }
       } else {
         tracker.clearTrackedTargets(viewer, session)
       }
