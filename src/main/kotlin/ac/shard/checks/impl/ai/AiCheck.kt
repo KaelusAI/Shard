@@ -34,6 +34,7 @@ import ac.shard.damage.DamageProcessor
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
+import ac.shard.region.RegionCheckMode
 import ac.shard.region.RegionProvider
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServer
@@ -44,6 +45,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPl
 import java.util.concurrent.atomic.AtomicReference
 
 @CheckData(name = "AI (Aim)")
+@Suppress("TooManyFunctions")
 class AiCheck(
   shardPlayer: ShardPlayer,
   private val plugin: Shard,
@@ -141,10 +143,7 @@ class AiCheck(
   }
 
   private fun trySendWindow(r: TickRingBuffer) {
-    if (
-      configManager.isAiWorldGuardEnabled() &&
-        regionProvider.isPlayerInDisabledRegion(shardPlayer.player)
-    ) {
+    if (configManager.regionCheckMode == RegionCheckMode.SKIP_DETECTION && inDisabledRegion()) {
       debugManager.log(
         DebugCategory.WORLDGUARD,
         "Player ${shardPlayer.player.name} is in a disabled region. Skipping AI check.",
@@ -153,6 +152,10 @@ class AiCheck(
     }
     sendData(r)
   }
+
+  private fun inDisabledRegion(): Boolean =
+    configManager.isAiWorldGuardEnabled() &&
+      regionProvider.isPlayerInDisabledRegion(shardPlayer.player)
 
   private fun sendData(r: TickRingBuffer) {
     val count = r.count
@@ -255,8 +258,15 @@ class AiCheck(
 
     var flagged = false
     if (buffer > flag) {
-      flagged = true
-      flag(buildAiFlagDebug(probability, buffer))
+      if (configManager.regionCheckMode == RegionCheckMode.SKIP_PUNISHMENT && inDisabledRegion()) {
+        debugManager.log(
+          DebugCategory.WORLDGUARD,
+          "Player ${shardPlayer.player.name} is in a disabled region. Skipping punishment.",
+        )
+      } else {
+        flagged = true
+        flag(buildAiFlagDebug(probability, buffer))
+      }
       buffer = bufferResetOnFlag
     }
 

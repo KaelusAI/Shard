@@ -25,6 +25,7 @@ package ac.shard.config
 import ac.shard.Shard
 import ac.shard.connect.CredentialsStore
 import ac.shard.debug.DebugCategory
+import ac.shard.region.RegionCheckMode
 import java.io.File
 import java.util.EnumSet
 import java.util.Locale
@@ -97,6 +98,9 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   private var aiWorldGuardEnabled = false
   var aiDisabledRegions: Map<String, List<String>> = emptyMap()
+    private set
+
+  var regionCheckMode: RegionCheckMode = RegionCheckMode.SKIP_DETECTION
     private set
 
   private var bedrockExemptEnabled = false
@@ -317,6 +321,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
     aiWorldGuardEnabled = config.getBoolean("ai.worldguard.enabled", true)
     aiDisabledRegions = loadDisabledRegions()
+    regionCheckMode =
+      RegionCheckMode.fromConfig(config.getString("ai.worldguard.mode", "skip-detection"))
 
     bedrockExemptEnabled = config.getBoolean("exemptions.bedrock", true)
 
