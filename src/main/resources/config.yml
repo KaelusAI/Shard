@@ -100,6 +100,10 @@ telemetry:
   # instances show as online in the panel. Sends a small request every 30 seconds.
   # Set to false to disable all reporting.
   enabled: true
+  # Shared id for servers that should count as one. They share a single panel
+  # entry showing the total player count.
+  # The SHARD_GROUP_ID environment variable overrides this.
+  group-id: ""
 
 client-brand:
   # This means it won't broadcast their brand to operators if the brand matches the following regexes

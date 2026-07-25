@@ -134,6 +134,7 @@ class TelemetryService(
       val body =
         buildMap<String, Any?> {
           put("instance_id", instanceId)
+          configManager.telemetryGroupId?.let { put("group_id", it) }
           put("online", beat.online)
           put("suspicious", beat.suspicious)
           put("tps", beat.tps)

@@ -57,6 +57,9 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   private var telemetryEnabled = true
 
+  var telemetryGroupId: String? = null
+    private set
+
   @Volatile
   var aiSequence: Int = 0
     private set
@@ -294,6 +297,9 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
     connectPanelUrl = config.getString("connect.panel-url", "https://app.shard.ac")
     telemetryEnabled = config.getBoolean("telemetry.enabled", true)
+    telemetryGroupId =
+      System.getenv("SHARD_GROUP_ID")?.trim()?.takeIf { it.isNotBlank() }
+        ?: config.getString("telemetry.group-id", "").trim().takeIf { it.isNotBlank() }
     aiSequence = modelStore.readSequence() ?: DEFAULT_AI_SEQUENCE
     aiStep = modelStore.readStep() ?: DEFAULT_AI_STEP
     aiModel = modelStore.readModel()
