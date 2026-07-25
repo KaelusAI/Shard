@@ -26,6 +26,7 @@ import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
+import ac.shard.monitor.MonitorSettingsService
 import ac.shard.monitor.core.ScoreboardSlotObserver
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
@@ -58,6 +59,7 @@ constructor(
   private val debugManager: DebugManager,
   private val packetListener: PacketListener,
   private val monitorViewService: MonitorViewService,
+  private val monitorSettingsService: MonitorSettingsService,
   private val slotObserver: ScoreboardSlotObserver,
   private val damageEvent: DamageEvent,
   private val shardApi: ShardApi,
@@ -107,6 +109,7 @@ constructor(
     alertManager.reload()
     aiServerProvider.reload()
     playerDataManager.reloadAllPlayers()
+    monitorSettingsService.invalidateAll()
     monitorViewService.reload()
     crossServerAlertService.shutdown()
     crossServerSuspiciousService.shutdown()

@@ -17,13 +17,26 @@
  */
 package ac.shard.monitor
 
-data class MonitorSettings(
-  var mode: MonitorMode,
-  var theme: MonitorTheme,
-  var showPing: Boolean,
-  var showDmg: Boolean,
-  var showTrend: Boolean,
-  var showName: MonitorNameMode,
-  var output: MonitorOutputKind = MonitorOutputKind.ACTIONBAR,
-  var chatStyle: MonitorChatStyle = MonitorChatStyle.DIGEST,
-)
+import java.util.Locale
+
+enum class MonitorOutputKind {
+  ACTIONBAR,
+  BOSSBAR,
+  SIDEBAR,
+  CHAT,
+  TABLIST;
+
+  companion object {
+    @JvmStatic
+    fun fromConfig(value: String?): MonitorOutputKind {
+      if (value == null) {
+        return ACTIONBAR
+      }
+      return try {
+        valueOf(value.trim().uppercase(Locale.ROOT))
+      } catch (_: IllegalArgumentException) {
+        ACTIONBAR
+      }
+    }
+  }
+}

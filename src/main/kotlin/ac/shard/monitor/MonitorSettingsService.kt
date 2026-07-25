@@ -35,6 +35,14 @@ class MonitorSettingsService(
     return cache.computeIfAbsent(uuid) { loadSettings(it) }
   }
 
+  fun invalidate(uuid: UUID) {
+    cache.remove(uuid)
+  }
+
+  fun invalidateAll() {
+    cache.clear()
+  }
+
   fun updateSettings(uuid: UUID, settings: MonitorSettings) {
     cache[uuid] = settings
     saveAsync(uuid, settings)
@@ -48,7 +56,9 @@ class MonitorSettingsService(
     val showDmg = config.getBoolean("defaults.show-dmg", true)
     val showTrend = config.getBoolean("defaults.show-trend", true)
     val showName = MonitorNameMode.fromConfig(config.getString("defaults.show-name", "auto"))
-    return MonitorSettings(mode, theme, showPing, showDmg, showTrend, showName)
+    val output = MonitorOutputKind.fromConfig(config.getString("defaults.output", "actionbar"))
+    val chatStyle = MonitorChatStyle.fromConfig(config.getString("defaults.chat-style", "digest"))
+    return MonitorSettings(mode, theme, showPing, showDmg, showTrend, showName, output, chatStyle)
   }
 
   private fun loadSettings(uuid: UUID): MonitorSettings {

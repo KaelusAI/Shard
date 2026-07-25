@@ -1,0 +1,2 @@
+ALTER TABLE monitor_settings ADD COLUMN output_kind TEXT NOT NULL DEFAULT 'ACTIONBAR';
+ALTER TABLE monitor_settings ADD COLUMN chat_style TEXT NOT NULL DEFAULT 'LIVE';

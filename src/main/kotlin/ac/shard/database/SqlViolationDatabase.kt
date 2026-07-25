@@ -23,8 +23,10 @@
 package ac.shard.database
 
 import ac.shard.config.ConfigManager
+import ac.shard.monitor.MonitorChatStyle
 import ac.shard.monitor.MonitorMode
 import ac.shard.monitor.MonitorNameMode
+import ac.shard.monitor.MonitorOutputKind
 import ac.shard.monitor.MonitorSettings
 import ac.shard.monitor.MonitorTheme
 import ac.shard.player.ShardPlayer
@@ -258,6 +260,8 @@ class SqlViolationDatabase(
             row[MonitorSettingsTable.showDmg],
             row[MonitorSettingsTable.showTrend],
             showName,
+            MonitorOutputKind.fromConfig(row[MonitorSettingsTable.outputKind]),
+            MonitorChatStyle.fromConfig(row[MonitorSettingsTable.chatStyle]),
           )
         }
     }
@@ -273,6 +277,8 @@ class SqlViolationDatabase(
           it[MonitorSettingsTable.showDmg] = insertValue(MonitorSettingsTable.showDmg)
           it[MonitorSettingsTable.showTrend] = insertValue(MonitorSettingsTable.showTrend)
           it[MonitorSettingsTable.showName] = insertValue(MonitorSettingsTable.showName)
+          it[MonitorSettingsTable.outputKind] = insertValue(MonitorSettingsTable.outputKind)
+          it[MonitorSettingsTable.chatStyle] = insertValue(MonitorSettingsTable.chatStyle)
         }
       ) {
         it[uuid] = playerUUID.toString()
@@ -282,6 +288,8 @@ class SqlViolationDatabase(
         it[showDmg] = settings.showDmg
         it[showTrend] = settings.showTrend
         it[showName] = settings.showName.name
+        it[outputKind] = settings.output.name
+        it[chatStyle] = settings.chatStyle.name
       }
     }
   }
@@ -349,6 +357,8 @@ class SqlViolationDatabase(
     val showDmg: Column<Boolean> = bool("show_dmg")
     val showTrend: Column<Boolean> = bool("show_trend")
     val showName: Column<String> = varchar("show_name", 16)
+    val outputKind: Column<String> = varchar("output_kind", 16)
+    val chatStyle: Column<String> = varchar("chat_style", 16)
 
     override val primaryKey = PrimaryKey(uuid)
   }

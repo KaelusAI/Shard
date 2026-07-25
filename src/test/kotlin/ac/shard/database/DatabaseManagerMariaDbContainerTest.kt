@@ -20,8 +20,10 @@ package ac.shard.database
 import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.connect.CredentialsStore
+import ac.shard.monitor.MonitorChatStyle
 import ac.shard.monitor.MonitorMode
 import ac.shard.monitor.MonitorNameMode
+import ac.shard.monitor.MonitorOutputKind
 import ac.shard.monitor.MonitorSettings
 import ac.shard.monitor.MonitorTheme
 import io.mockk.every
@@ -60,6 +62,8 @@ class DatabaseManagerMariaDbContainerTest {
           showDmg = false,
           showTrend = true,
           showName = MonitorNameMode.AUTO,
+          output = MonitorOutputKind.SIDEBAR,
+          chatStyle = MonitorChatStyle.VERDICT,
         )
 
       try {

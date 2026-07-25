@@ -18,8 +18,10 @@
 package ac.shard.database
 
 import ac.shard.config.ConfigManager
+import ac.shard.monitor.MonitorChatStyle
 import ac.shard.monitor.MonitorMode
 import ac.shard.monitor.MonitorNameMode
+import ac.shard.monitor.MonitorOutputKind
 import ac.shard.monitor.MonitorSettings
 import ac.shard.monitor.MonitorTheme
 import io.mockk.mockk
@@ -117,6 +119,58 @@ class SqlViolationDatabaseSqliteTest {
     violationDatabase.resetViolationLevel(playerId, "default")
     assertEquals(0, violationDatabase.getViolationLevel(playerId, "default"))
     assertNotNull(violationDatabase.loadMonitorSettings(playerId))
+  }
+
+  @Test
+  fun `monitor output and chat style round-trip`() {
+    val databaseFile = Files.createTempFile("shard-sqlite-output-", ".db").toFile()
+    databaseFile.deleteOnExit()
+    val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+    migrateFreshSqlite(jdbcUrl)
+    val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
+    val violationDatabase = SqlViolationDatabase(mockk(relaxed = true), database)
+    val playerId = UUID.randomUUID()
+    val settings =
+      MonitorSettings(
+        mode = MonitorMode.FULL,
+        theme = MonitorTheme.VIVID,
+        showPing = false,
+        showDmg = true,
+        showTrend = false,
+        showName = MonitorNameMode.ALWAYS,
+        output = MonitorOutputKind.BOSSBAR,
+        chatStyle = MonitorChatStyle.VERDICT,
+      )
+
+    violationDatabase.saveMonitorSettings(playerId, settings)
+
+    val loaded = violationDatabase.loadMonitorSettings(playerId)
+    assertEquals(MonitorOutputKind.BOSSBAR, loaded?.output)
+    assertEquals(MonitorChatStyle.VERDICT, loaded?.chatStyle)
+    assertEquals(settings, loaded)
+  }
+
+  @Test
+  fun `rows written before the output columns existed load as action bar`() {
+    val databaseFile = Files.createTempFile("shard-sqlite-legacy-row-", ".db").toFile()
+    databaseFile.deleteOnExit()
+    val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+    migrateFreshSqlite(jdbcUrl)
+    val playerId = UUID.randomUUID()
+    DriverManager.getConnection(jdbcUrl).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO monitor_settings (uuid, mode, theme, show_ping, show_dmg, show_trend, " +
+            "show_name) VALUES ('$playerId', 'COMPACT', 'CALM', 1, 1, 1, 'AUTO')"
+        )
+      }
+    }
+    val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
+
+    val loaded = SqlViolationDatabase(mockk(relaxed = true), database).loadMonitorSettings(playerId)
+
+    assertEquals(MonitorOutputKind.ACTIONBAR, loaded?.output)
+    assertEquals(MonitorChatStyle.DIGEST, loaded?.chatStyle)
   }
 
   private fun migrateFreshSqlite(jdbcUrl: String) {
