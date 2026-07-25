@@ -37,6 +37,7 @@ internal data class ViewRuntimeConfig(
   val belowTemplate: String,
   val defaultBelowText: String,
   val usesPing: Boolean,
+  val slot: Int = BELOW_NAME_DISPLAY_SLOT,
 ) {
   companion object {
     fun from(config: ConfigView): ViewRuntimeConfig {
