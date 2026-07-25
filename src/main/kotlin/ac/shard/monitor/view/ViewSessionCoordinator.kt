@@ -133,7 +133,7 @@ internal class ViewSessionCoordinator(
   fun disable(viewerId: UUID, viewerHint: Player?) {
     val session = sessions.remove(viewerId) ?: return
     session.task?.cancel()
-    slotRegistry.releaseAll(viewerId)
+    slotRegistry.release(viewerId, session.config.slot)
 
     val viewer = viewerHint ?: Bukkit.getPlayer(viewerId)
     if (viewer != null && viewer.isOnline) {

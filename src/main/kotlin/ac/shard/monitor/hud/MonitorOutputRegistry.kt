@@ -15,28 +15,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.monitor.core
+package ac.shard.monitor.hud
 
-import java.util.Locale
+import ac.shard.monitor.core.MonitorOutputKind
 
-enum class MonitorOutputKind(val key: String) {
-  ACTIONBAR("actionbar"),
-  BOSSBAR("bossbar"),
-  SIDEBAR("sidebar"),
-  CHAT("chat"),
-  TABLIST("tablist");
+class MonitorOutputRegistry(outputs: List<MonitorOutput>) {
+  private val byKind: Map<MonitorOutputKind, MonitorOutput> = outputs.associateBy { it.kind }
 
-  companion object {
-    @JvmStatic
-    fun fromConfig(value: String?): MonitorOutputKind {
-      if (value == null) {
-        return ACTIONBAR
-      }
-      return try {
-        valueOf(value.trim().uppercase(Locale.ROOT))
-      } catch (_: IllegalArgumentException) {
-        ACTIONBAR
-      }
+  fun output(kind: MonitorOutputKind): MonitorOutput? = byKind[kind]
+
+  fun capacity(kind: MonitorOutputKind): Int = byKind[kind]?.capabilities?.maxTargets ?: 1
+
+  fun available(config: MonitorHudRuntimeConfig): List<MonitorOutputKind> =
+    MonitorOutputKind.entries.filter { kind ->
+      val output = byKind[kind]
+      output != null && output.isAvailable() && config.isEnabled(kind)
     }
-  }
 }

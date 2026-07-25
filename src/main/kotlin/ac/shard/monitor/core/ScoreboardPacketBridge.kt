@@ -136,7 +136,7 @@ class ScoreboardPacketBridge(private val cache: ComponentCache) {
     )
   }
 
-  private fun serverSupportsFancyText(): Boolean =
+  fun serverSupportsFancyText(): Boolean =
     PacketEvents.getAPI().serverManager.version.isNewerThanOrEquals(ServerVersion.V_1_20_3)
 
   private fun clientVersion(viewer: Player): ServerVersion =
