@@ -18,26 +18,20 @@
 package ac.shard.monitor.core
 
 import java.util.Locale
-import kotlin.math.abs
 
-private const val DECIMAL_EPSILON = 0.0000001
+enum class MonitorToken(val key: String) {
+  NAME("name"),
+  PROB("prob"),
+  TREND("trend"),
+  BUFFER("buffer"),
+  PING("ping"),
+  DMG("dmg"),
+  PROB90("prob90");
 
-internal fun formatDecimal(value: Double, decimals: Int): String {
-  val safeDecimals = decimals.coerceAtLeast(0)
-  val normalized = if (abs(value) < DECIMAL_EPSILON) 0.0 else value
-  return String.format(Locale.US, "%.${safeDecimals}f", normalized)
-}
+  companion object {
+    private val BY_KEY = entries.associateBy { it.key }
 
-internal fun formatSigned(value: Double, decimals: Int): String {
-  val normalized = if (abs(value) < DECIMAL_EPSILON) 0.0 else value
-  val sign = if (normalized < 0.0) "-" else "+"
-  return sign + formatDecimal(abs(normalized), decimals)
-}
-
-internal fun padInt(value: Int, minWidth: Int): String {
-  val raw = value.toString()
-  if (minWidth <= 0 || raw.length >= minWidth) {
-    return raw
+    fun fromConfig(value: String?): MonitorToken? =
+      value?.trim()?.lowercase(Locale.ROOT)?.let { BY_KEY[it] }
   }
-  return String.format(Locale.US, "%0${minWidth}d", value)
 }

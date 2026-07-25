@@ -92,6 +92,7 @@ internal data class ViewRuntimeConfig(
           prefixTemplate.contains(PING_PLACEHOLDER) ||
             suffixTemplate.contains(PING_PLACEHOLDER) ||
             belowTemplate.contains(PING_PLACEHOLDER),
+        slot = config.getInt("view.slot", BELOW_NAME_DISPLAY_SLOT).coerceIn(0, MAX_DISPLAY_SLOT),
       )
     }
   }
@@ -132,6 +133,7 @@ internal const val DEFAULT_RESYNC_TICKS = 100L
 internal const val DEFAULT_PING_REFRESH_TICKS = 20L
 internal const val DEFAULT_PING_BUCKET_MS = 10
 internal const val BELOW_NAME_DISPLAY_SLOT = 2
+internal const val MAX_DISPLAY_SLOT = 2
 internal const val LEGACY_BELOW_TITLE = "% AI"
 internal const val DEFAULT_VIEW_POSITION = "BELOW_NAME"
 internal const val DEFAULT_BELOW_TITLE = ""

@@ -24,3 +24,24 @@ internal fun fillTemplate(template: String, values: Map<String, String>): String
   }
   return result
 }
+
+internal fun fillTemplate(template: String, resolve: (String) -> String?): String {
+  if (!template.contains('{')) {
+    return template
+  }
+  val out = StringBuilder(template.length)
+  var index = 0
+  while (index < template.length) {
+    val open = template.indexOf('{', index)
+    val close = if (open < 0) -1 else template.indexOf('}', open + 1)
+    if (close < 0) {
+      out.append(template, index, template.length)
+      break
+    }
+    out.append(template, index, open)
+    val key = template.substring(open + 1, close)
+    out.append(resolve(key) ?: template.substring(open, close + 1))
+    index = close + 1
+  }
+  return out.toString()
+}
