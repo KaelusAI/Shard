@@ -17,24 +17,31 @@
  */
 package ac.shard.monitor.core
 
+internal const val PING_UNAVAILABLE = -1
+
 internal class PingSampler {
   private var lastBucket: Int = Int.MIN_VALUE
-  private var lastSample: String = ""
+  private var lastValue: Int = PING_UNAVAILABLE
   private var cyclesSinceRefresh: Int = Int.MAX_VALUE
 
-  fun sample(ping: Int, refreshCycles: Int, bucketMs: Int): String {
+  fun sampleValue(ping: Int, refreshCycles: Int, bucketMs: Int): Int {
     val shouldRefresh = cyclesSinceRefresh >= refreshCycles || lastBucket == Int.MIN_VALUE
     if (!shouldRefresh) {
       cyclesSinceRefresh++
-      return lastSample
+      return lastValue
     }
 
     cyclesSinceRefresh = 0
     val bucket = if (bucketMs <= 1) ping else ping / bucketMs
-    if (bucket != lastBucket || lastSample.isBlank()) {
+    if (bucket != lastBucket || lastValue == PING_UNAVAILABLE) {
       lastBucket = bucket
-      lastSample = ping.toString()
+      lastValue = ping
     }
-    return lastSample
+    return lastValue
+  }
+
+  fun sample(ping: Int, refreshCycles: Int, bucketMs: Int): String {
+    val value = sampleValue(ping, refreshCycles, bucketMs)
+    return if (value == PING_UNAVAILABLE) "" else value.toString()
   }
 }
