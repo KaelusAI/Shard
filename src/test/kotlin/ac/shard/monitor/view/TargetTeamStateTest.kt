@@ -31,7 +31,7 @@ class TargetTeamStateTest {
   fun `recreated below-name objective resends unchanged entry`() {
     val viewer = mockk<Player>(relaxed = true)
     val belowNameBridge = mockk<ViewBelowNamePacketBridge>(relaxed = true)
-    every { belowNameBridge.supportsFancyText() } returns true
+    every { belowNameBridge.supportsFancyText(viewer) } returns true
 
     val state = TargetTeamState("slv_test")
     val rendered = RenderedTag("", "", "<white>95%</white>", 95)
@@ -49,7 +49,7 @@ class TargetTeamStateTest {
   fun `below-name entry falls back to placeholder when target has no ai data`() {
     val viewer = mockk<Player>(relaxed = true)
     val belowNameBridge = mockk<ViewBelowNamePacketBridge>(relaxed = true)
-    every { belowNameBridge.supportsFancyText() } returns true
+    every { belowNameBridge.supportsFancyText(viewer) } returns true
 
     val state = TargetTeamState("slv_test")
     val withData = RenderedTag("", "", "<white>95%</white>", 95)

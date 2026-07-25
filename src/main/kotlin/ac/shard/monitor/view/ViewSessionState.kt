@@ -141,7 +141,12 @@ internal class TargetTeamState(val teamName: String) {
 
     val nameChanged = lastTargetName.isNotBlank() && lastTargetName != targetName
     if (
-      shouldUpdateBelowName(targetName, rendered, belowScore, belowNameBridge.supportsFancyText())
+      shouldUpdateBelowName(
+        targetName,
+        rendered,
+        belowScore,
+        belowNameBridge.supportsFancyText(viewer),
+      )
     ) {
       if (nameChanged) {
         belowNameBridge.removeEntry(viewer, objective, lastTargetName)

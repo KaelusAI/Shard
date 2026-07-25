@@ -94,14 +94,17 @@ internal class ViewTeamPacketBridge(private val componentCache: ComponentCache) 
 }
 
 internal class ViewBelowNamePacketBridge(private val componentCache: ComponentCache) {
-  fun supportsFancyText(): Boolean {
-    return PacketEvents.getAPI().serverManager.version.isNewerThanOrEquals(ServerVersion.V_1_20_3)
+  fun supportsFancyText(viewer: Player): Boolean {
+    val server = PacketEvents.getAPI().serverManager.version
+    val client = PacketEvents.getAPI().playerManager.getClientVersion(viewer).toServerVersion()
+    return server.isNewerThanOrEquals(ServerVersion.V_1_20_3) &&
+      client.isNewerThanOrEquals(ServerVersion.V_1_20_3)
   }
 
   fun createObjective(viewer: Player, objectiveName: String, title: String, defaultText: String) {
-    val objectiveTitle = resolveObjectiveTitle(title)
+    val objectiveTitle = resolveObjectiveTitle(viewer, title)
     val createObjective =
-      if (supportsFancyText()) {
+      if (supportsFancyText(viewer)) {
         WrapperPlayServerScoreboardObjective(
           objectiveName,
           WrapperPlayServerScoreboardObjective.ObjectiveMode.CREATE,
@@ -134,12 +137,12 @@ internal class ViewBelowNamePacketBridge(private val componentCache: ComponentCa
     text: String,
     score: Int,
   ) {
-    val wrapper = createUpdateScorePacket(objectiveName, targetName, text, score)
+    val wrapper = createUpdateScorePacket(viewer, objectiveName, targetName, text, score)
     sendPacket(viewer, wrapper)
   }
 
   fun removeEntry(viewer: Player, objectiveName: String, targetName: String) {
-    val wrapper = createRemoveScorePacket(objectiveName, targetName)
+    val wrapper = createRemoveScorePacket(viewer, objectiveName, targetName)
     sendPacket(viewer, wrapper)
   }
 
@@ -158,20 +161,21 @@ internal class ViewBelowNamePacketBridge(private val componentCache: ComponentCa
     PacketEvents.getAPI().playerManager.sendPacket(viewer, packet)
   }
 
-  private fun resolveObjectiveTitle(title: String): String {
-    if (supportsFancyText()) {
+  private fun resolveObjectiveTitle(viewer: Player, title: String): String {
+    if (supportsFancyText(viewer)) {
       return title
     }
     return title.ifBlank { DEFAULT_LEGACY_BELOW_TITLE }
   }
 
   private fun createUpdateScorePacket(
+    viewer: Player,
     objectiveName: String,
     targetName: String,
     text: String,
     score: Int,
   ): PacketWrapper<*> {
-    return if (supportsFancyText()) {
+    return if (supportsFancyText(viewer)) {
       WrapperPlayServerUpdateScore(
         targetName,
         WrapperPlayServerUpdateScore.Action.CREATE_OR_UPDATE_ITEM,
@@ -190,8 +194,12 @@ internal class ViewBelowNamePacketBridge(private val componentCache: ComponentCa
     }
   }
 
-  private fun createRemoveScorePacket(objectiveName: String, targetName: String): PacketWrapper<*> {
-    return if (supportsFancyText()) {
+  private fun createRemoveScorePacket(
+    viewer: Player,
+    objectiveName: String,
+    targetName: String,
+  ): PacketWrapper<*> {
+    return if (supportsFancyText(viewer)) {
       WrapperPlayServerResetScore(targetName, objectiveName)
     } else {
       WrapperPlayServerUpdateScore(
