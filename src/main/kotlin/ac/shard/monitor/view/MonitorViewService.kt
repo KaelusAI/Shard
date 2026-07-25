@@ -19,6 +19,7 @@ package ac.shard.monitor.view
 
 import ac.shard.Shard
 import ac.shard.config.ConfigManager
+import ac.shard.monitor.core.ComponentCache
 import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.PacketEvents
@@ -35,8 +36,10 @@ class MonitorViewService(
   playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
   scheduler: SchedulerService,
+  componentCache: ComponentCache,
 ) : Listener {
-  private val coordinator = ViewSessionCoordinator(plugin, playerDataManager, scheduler)
+  private val coordinator =
+    ViewSessionCoordinator(plugin, playerDataManager, scheduler, componentCache)
   private val trackingObserver =
     ViewTrackingObserver(scheduler, coordinator) { viewerId ->
       resolveActiveViewViewer(viewerId, coordinator)

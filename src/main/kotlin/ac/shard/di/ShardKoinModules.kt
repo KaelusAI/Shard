@@ -76,6 +76,7 @@ import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
 import ac.shard.integration.WorldGuardManager
 import ac.shard.monitor.MonitorSettingsService
+import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.platform.scheduler.PlatformScheduler
@@ -125,6 +126,7 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::RedisManager)
   singleOf(::CrossServerAlertService)
   singleOf(::CrossServerSuspiciousService)
+  single { ComponentCache() }
   singleOf(::MonitorSettingsService)
   singleOf(::MonitorViewService)
   singleOf(::ExemptManager)

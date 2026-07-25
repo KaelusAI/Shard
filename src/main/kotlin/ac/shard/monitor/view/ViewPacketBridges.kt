@@ -17,7 +17,7 @@
  */
 package ac.shard.monitor.view
 
-import ac.shard.utils.MessageUtil
+import ac.shard.monitor.core.ComponentCache
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.manager.server.ServerVersion
 import com.github.retrooper.packetevents.protocol.score.ScoreFormat
@@ -27,12 +27,11 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerRe
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerScoreboardObjective
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTeams
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUpdateScore
-import java.util.concurrent.ConcurrentHashMap
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 
-internal class ViewTeamPacketBridge(private val componentCache: ViewComponentCache) {
+internal class ViewTeamPacketBridge(private val componentCache: ComponentCache) {
   fun createTeam(viewer: Player, teamName: String, playerName: String, rendered: RenderedTag) {
     val wrapper =
       WrapperPlayServerTeams(
@@ -94,7 +93,7 @@ internal class ViewTeamPacketBridge(private val componentCache: ViewComponentCac
   }
 }
 
-internal class ViewBelowNamePacketBridge(private val componentCache: ViewComponentCache) {
+internal class ViewBelowNamePacketBridge(private val componentCache: ComponentCache) {
   fun supportsFancyText(): Boolean {
     return PacketEvents.getAPI().serverManager.version.isNewerThanOrEquals(ServerVersion.V_1_20_3)
   }
@@ -206,22 +205,3 @@ internal class ViewBelowNamePacketBridge(private val componentCache: ViewCompone
 }
 
 private const val DEFAULT_LEGACY_BELOW_TITLE = "% AI"
-
-internal class ViewComponentCache(private val maxSize: Int = 256) {
-  private val cache = ConcurrentHashMap<String, Component>()
-
-  fun component(raw: String): Component {
-    val cached = cache[raw]
-    if (cached != null) {
-      return cached
-    }
-
-    if (cache.size >= maxSize) {
-      cache.clear()
-    }
-
-    val parsed = MessageUtil.deserializeRaw(raw)
-    val existing = cache.putIfAbsent(raw, parsed)
-    return existing ?: parsed
-  }
-}

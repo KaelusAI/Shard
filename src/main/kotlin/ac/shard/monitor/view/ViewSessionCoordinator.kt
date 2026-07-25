@@ -18,6 +18,7 @@
 package ac.shard.monitor.view
 
 import ac.shard.Shard
+import ac.shard.monitor.core.ComponentCache
 import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import java.util.UUID
@@ -29,9 +30,9 @@ internal class ViewSessionCoordinator(
   private val plugin: Shard,
   playerDataManager: PlayerDataManager,
   private val scheduler: SchedulerService,
+  componentCache: ComponentCache,
 ) {
   private val sessions = ConcurrentHashMap<UUID, ViewSession>()
-  private val componentCache = ViewComponentCache()
   private val teamBridge = ViewTeamPacketBridge(componentCache)
   private val belowNameBridge = ViewBelowNamePacketBridge(componentCache)
   private val tracker =

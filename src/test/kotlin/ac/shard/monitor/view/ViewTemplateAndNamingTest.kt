@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.monitor.core.fillTemplate
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,27 +27,27 @@ import kotlin.test.assertTrue
 class ViewTemplateAndNamingTest {
   @Test
   fun `unknown placeholder is left literal`() {
-    assertEquals("[{oops}]", renderViewTemplate("[{oops}]", mapOf("prob" to "50")))
+    assertEquals("[{oops}]", fillTemplate("[{oops}]", mapOf("prob" to "50")))
   }
 
   @Test
   fun `repeated placeholder is replaced everywhere`() {
-    assertEquals("50/50", renderViewTemplate("{prob}/{prob}", mapOf("prob" to "50")))
+    assertEquals("50/50", fillTemplate("{prob}/{prob}", mapOf("prob" to "50")))
   }
 
   @Test
   fun `adjacent placeholders do not bleed into each other`() {
     val values = mapOf("prob" to "50", "buffer" to "7")
 
-    assertEquals("507", renderViewTemplate("{prob}{buffer}", values))
+    assertEquals("507", fillTemplate("{prob}{buffer}", values))
   }
 
   @Test
   fun `a substituted value is rescanned by later keys`() {
     val values = linkedMapOf("prob" to "{buffer}", "buffer" to "7")
 
-    assertEquals("7", renderViewTemplate("{prob}", values))
-    assertEquals("{buffer}", renderViewTemplate("{prob}", linkedMapOf("prob" to "{buffer}")))
+    assertEquals("7", fillTemplate("{prob}", values))
+    assertEquals("{buffer}", fillTemplate("{prob}", linkedMapOf("prob" to "{buffer}")))
   }
 
   @Test

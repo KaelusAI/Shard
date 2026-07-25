@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.monitor.core.PingSampler
 import ac.shard.platform.scheduler.TaskHandle
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -105,9 +106,7 @@ internal class TargetTeamState(val teamName: String) {
 
   private var cyclesSinceRebind: Int = 0
   private var pendingRebind: Boolean = false
-  private var lastPingBucket: Int = Int.MIN_VALUE
-  private var lastPingSample: String = ""
-  private var cyclesSincePingRefresh: Int = Int.MAX_VALUE
+  private val pingSampler = PingSampler()
 
   fun markRebindNeeded() {
     pendingRebind = true
@@ -123,24 +122,7 @@ internal class TargetTeamState(val teamName: String) {
     if (!config.usesPing) {
       return ""
     }
-
-    val shouldRefresh =
-      cyclesSincePingRefresh >= config.pingRefreshCycles || lastPingBucket == Int.MIN_VALUE
-    val pingSample =
-      if (!shouldRefresh) {
-        cyclesSincePingRefresh++
-        lastPingSample
-      } else {
-        cyclesSincePingRefresh = 0
-        val bucket = if (config.pingBucketMs <= 1) ping else ping / config.pingBucketMs
-        if (bucket != lastPingBucket || lastPingSample.isBlank()) {
-          lastPingBucket = bucket
-          lastPingSample = ping.toString()
-        }
-        lastPingSample
-      }
-
-    return pingSample
+    return pingSampler.sample(ping, config.pingRefreshCycles, config.pingBucketMs)
   }
 
   fun updateBelowName(

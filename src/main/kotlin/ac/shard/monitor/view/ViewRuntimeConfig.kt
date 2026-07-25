@@ -18,6 +18,8 @@
 package ac.shard.monitor.view
 
 import ac.shard.config.ConfigView
+import ac.shard.monitor.core.fillTemplate
+import ac.shard.monitor.core.ticksToCycles
 import java.util.UUID
 
 internal data class ViewRuntimeConfig(
@@ -68,7 +70,7 @@ internal data class ViewRuntimeConfig(
         suffixTemplate = suffixTemplate,
         belowTemplate = belowTemplate,
         defaultBelowText =
-          renderViewTemplate(
+          fillTemplate(
             belowTemplate,
             mapOf(
               "prob" to config.getString("view.fallback.prob", DEFAULT_FALLBACK_PROB),
@@ -81,10 +83,6 @@ internal data class ViewRuntimeConfig(
             suffixTemplate.contains(PING_PLACEHOLDER) ||
             belowTemplate.contains(PING_PLACEHOLDER),
       )
-    }
-
-    private fun ticksToCycles(ticks: Long, updateTicks: Long): Int {
-      return ((ticks + updateTicks - 1L) / updateTicks).coerceAtLeast(1L).toInt()
     }
   }
 }
@@ -141,11 +139,3 @@ internal const val DEFAULT_BELOW_TEMPLATE =
   "<dark_gray>[</dark_gray><white>{prob}%</white><dark_gray> • </dark_gray>" +
     "<yellow>{buffer}</yellow><dark_gray> • </dark_gray>" +
     "<aqua>{ping}ms</aqua><dark_gray>]</dark_gray>"
-
-internal fun renderViewTemplate(template: String, values: Map<String, String>): String {
-  var result = template
-  for ((key, value) in values) {
-    result = result.replace("{$key}", value)
-  }
-  return result
-}

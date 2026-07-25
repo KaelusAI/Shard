@@ -18,9 +18,9 @@
 package ac.shard.monitor.view
 
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.monitor.core.fillTemplate
+import ac.shard.monitor.core.formatDecimal
 import ac.shard.player.PlayerDataManager
-import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.roundToInt
 import org.bukkit.entity.Player
 
@@ -79,18 +79,11 @@ internal class ViewTagRenderer(private val playerDataManager: PlayerDataManager)
   }
 
   private fun applyTemplate(template: String, values: Map<String, String>): String {
-    return renderViewTemplate(template, values)
-  }
-
-  private fun formatDecimal(value: Double, decimals: Int): String {
-    val safeDecimals = decimals.coerceAtLeast(0)
-    val normalized = if (abs(value) < DECIMAL_EPSILON) 0.0 else value
-    return String.format(Locale.US, "%.${safeDecimals}f", normalized)
+    return fillTemplate(template, values)
   }
 
   private companion object {
     const val ZERO_BELOW_SCORE = 0
     const val PERCENT_MULTIPLIER = 100.0
-    const val DECIMAL_EPSILON = 0.0000001
   }
 }
