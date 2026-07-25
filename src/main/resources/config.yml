@@ -38,7 +38,7 @@ ai:
     # Enable WorldGuard region checking?
     enabled: true
     # Regions where the AI check is disabled, grouped by world name.
-    # Use "*" to disable a region in all worlds.
+    # Use "*" to disable a region in all worlds, "__global__" for a whole world.
     # Example:
     #   disabled-regions:
     #     "*":

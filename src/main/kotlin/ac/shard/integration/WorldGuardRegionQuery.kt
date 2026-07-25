@@ -52,14 +52,21 @@ internal class WorldGuardRegionQuery(private val configManager: ConfigManager) {
 
   private fun matchLegacyDisabledList(player: Player, set: ApplicableRegionSet): Boolean {
     val disabledRegions = configManager.aiDisabledRegions
-    val playerRegions = set.regions.filterNot { it.id.equals("__global__", ignoreCase = true) }
-    val topRegion = playerRegions.maxByOrNull { it.priority }
-    if (disabledRegions.isEmpty() || topRegion == null) {
+    if (disabledRegions.isEmpty()) {
       return false
     }
     val worldName = player.world.name.lowercase(Locale.ROOT)
-    val regionId = topRegion.id.lowercase(Locale.ROOT)
-    return regionId in disabledRegions["*"].orEmpty() ||
-      regionId in disabledRegions[worldName].orEmpty()
+    val anyWorld = disabledRegions["*"].orEmpty()
+    val thisWorld = disabledRegions[worldName].orEmpty()
+    // __global__ never appears in getApplicableRegions(), so listing it means the whole world.
+    return listed(GLOBAL_REGION_ID, anyWorld, thisWorld) ||
+      set.regions.any { listed(it.id.lowercase(Locale.ROOT), anyWorld, thisWorld) }
+  }
+
+  private fun listed(regionId: String, anyWorld: List<String>, thisWorld: List<String>): Boolean =
+    regionId in anyWorld || regionId in thisWorld
+
+  private companion object {
+    const val GLOBAL_REGION_ID = "__global__"
   }
 }

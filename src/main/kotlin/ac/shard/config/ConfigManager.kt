@@ -27,6 +27,7 @@ import ac.shard.connect.CredentialsStore
 import ac.shard.debug.DebugCategory
 import java.io.File
 import java.util.EnumSet
+import java.util.Locale
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import org.spongepowered.configurate.CommentedConfigurationNode
@@ -384,8 +385,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     val mapRegions = config.getStringListMap("ai.worldguard.disabled-regions")
     if (mapRegions.isNotEmpty()) {
       return mapRegions
-        .mapKeys { it.key.lowercase() }
-        .mapValues { entry -> entry.value.map { it.lowercase() } }
+        .mapKeys { it.key.lowercase(Locale.ROOT) }
+        .mapValues { entry -> entry.value.map { it.lowercase(Locale.ROOT) } }
     }
 
     return parseLegacyDisabledRegions()
@@ -401,7 +402,7 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     )
     val result = mutableMapOf<String, MutableList<String>>()
     for (entry in legacyList) {
-      val lower = entry.lowercase()
+      val lower = entry.lowercase(Locale.ROOT)
       if (lower.contains(":")) {
         val parts = lower.split(":", limit = 2)
         val regionName = parts[0]
