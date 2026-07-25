@@ -20,8 +20,8 @@ package ac.shard.command.commands.info
 import ac.shard.command.CommandRegister
 import ac.shard.command.ShardCommand
 import ac.shard.command.requirements.PlayerSenderRequirement
-import ac.shard.monitor.MonitorViewService
-import ac.shard.monitor.VIEW_PERMISSION
+import ac.shard.monitor.view.MonitorViewService
+import ac.shard.monitor.view.VIEW_PERMISSION
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil

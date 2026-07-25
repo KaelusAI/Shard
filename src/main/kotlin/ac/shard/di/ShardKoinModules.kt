@@ -76,7 +76,7 @@ import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
 import ac.shard.integration.WorldGuardManager
 import ac.shard.monitor.MonitorSettingsService
-import ac.shard.monitor.MonitorViewService
+import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.platform.scheduler.PlatformScheduler
 import ac.shard.platform.scheduler.PlatformSchedulerFactory

@@ -26,7 +26,7 @@ import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
-import ac.shard.monitor.MonitorViewService
+import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.player.PlayerDataManager
 import ac.shard.redis.CrossServerAlertService
