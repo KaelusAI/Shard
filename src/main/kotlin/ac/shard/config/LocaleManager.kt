@@ -58,8 +58,9 @@ class LocaleManager(private val plugin: Shard, private val configManager: Config
   private fun saveDefaultLocale(locale: String) {
     val dir = File(plugin.dataFolder, "messages")
     val file = File(dir, "messages_$locale.yml")
-    if (!file.exists()) {
-      plugin.saveResource("messages/messages_$locale.yml", false)
+    val resourcePath = "messages/messages_$locale.yml"
+    if (!file.exists() && plugin.getResource(resourcePath) != null) {
+      plugin.saveResource(resourcePath, false)
     }
   }
 
