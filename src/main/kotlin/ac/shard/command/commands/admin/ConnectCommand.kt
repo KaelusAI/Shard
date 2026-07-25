@@ -27,6 +27,7 @@ import ac.shard.connect.LinkResult
 import ac.shard.connect.PollResult
 import ac.shard.connect.RevokeResult
 import ac.shard.connect.StartResult
+import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.server.AIServerProvider
@@ -58,6 +59,7 @@ class ConnectCommand(
   private val aiServerProvider: AIServerProvider,
   private val scheduler: SchedulerService,
   private val telemetryService: TelemetryService,
+  private val playerDataManager: PlayerDataManager,
 ) : ShardCommand {
 
   private val active = AtomicReference<ConnectSession?>(null)
@@ -363,6 +365,7 @@ class ConnectCommand(
     scheduler.runSync {
       configManager.reloadConfig()
       aiServerProvider.reload()
+      playerDataManager.reloadAllPlayers()
     }
   }
 
