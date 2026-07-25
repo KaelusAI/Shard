@@ -19,7 +19,7 @@ package ac.shard.monitor.view
 
 import ac.shard.Shard
 import ac.shard.monitor.core.ComponentCache
-import ac.shard.player.PlayerDataManager
+import ac.shard.monitor.core.MonitorSampler
 import ac.shard.scheduler.SchedulerService
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -28,15 +28,14 @@ import org.bukkit.entity.Player
 
 internal class ViewSessionCoordinator(
   private val plugin: Shard,
-  playerDataManager: PlayerDataManager,
   private val scheduler: SchedulerService,
   componentCache: ComponentCache,
+  sampler: MonitorSampler,
 ) {
   private val sessions = ConcurrentHashMap<UUID, ViewSession>()
   private val teamBridge = ViewTeamPacketBridge(componentCache)
   private val belowNameBridge = ViewBelowNamePacketBridge(componentCache)
-  private val tracker =
-    ViewTargetTracker(ViewTagRenderer(playerDataManager), teamBridge, belowNameBridge)
+  private val tracker = ViewTargetTracker(ViewTagRenderer(sampler), teamBridge, belowNameBridge)
   internal val belowNameConflicts =
     ViewBelowNameConflictCoordinator(plugin, tracker, belowNameBridge) { viewerId ->
       sessions[viewerId]

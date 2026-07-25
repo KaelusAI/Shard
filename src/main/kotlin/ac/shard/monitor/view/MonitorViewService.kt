@@ -20,7 +20,7 @@ package ac.shard.monitor.view
 import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.ComponentCache
-import ac.shard.player.PlayerDataManager
+import ac.shard.monitor.core.MonitorSampler
 import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.PacketEvents
 import java.util.UUID
@@ -33,13 +33,12 @@ import org.bukkit.event.server.PluginDisableEvent
 
 class MonitorViewService(
   private val plugin: Shard,
-  playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
   scheduler: SchedulerService,
   componentCache: ComponentCache,
+  sampler: MonitorSampler,
 ) : Listener {
-  private val coordinator =
-    ViewSessionCoordinator(plugin, playerDataManager, scheduler, componentCache)
+  private val coordinator = ViewSessionCoordinator(plugin, scheduler, componentCache, sampler)
   private val trackingObserver =
     ViewTrackingObserver(scheduler, coordinator) { viewerId ->
       resolveActiveViewViewer(viewerId, coordinator)

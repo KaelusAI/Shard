@@ -13,11 +13,20 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.player.state
+package ac.shard.monitor.core
 
-class CombatState(initialTicksSinceAttack: Int) {
-  var ticksSinceAttack: Int = initialTicksSinceAttack
-  @Volatile var damageMultiplier: Double = 1.0
-}
+import java.util.UUID
+
+data class MonitorSample(
+  val targetId: UUID,
+  val targetName: String,
+  val dataPresent: Boolean,
+  val aiActive: Boolean,
+  val probability: Double,
+  val buffer: Double,
+  val rawPing: Int,
+  val damageMultiplier: Double,
+  val prob90: Int,
+)

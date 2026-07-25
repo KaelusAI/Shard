@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.monitor.core.MonitorSampler
 import ac.shard.player.PlayerDataManager
 import io.mockk.every
 import io.mockk.mockk
@@ -89,7 +90,7 @@ class TargetTeamStateTest {
 
     every { playerDataManager.getPlayer(target) } returns null
 
-    val rendered = ViewTagRenderer(playerDataManager).render(target, state, config)
+    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
 
     assertEquals("<white>--</white>", rendered.below)
     assertEquals(0, rendered.belowScore)

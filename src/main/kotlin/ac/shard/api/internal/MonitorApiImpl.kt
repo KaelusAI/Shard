@@ -19,23 +19,28 @@ package ac.shard.api.internal
 
 import ac.shard.api.model.MonitorSnapshot
 import ac.shard.api.service.MonitorApi
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.monitor.core.MonitorSampler
 import ac.shard.player.PlayerDataManager
 import java.util.Optional
 import java.util.UUID
 
-class MonitorApiImpl(private val playerDataManager: PlayerDataManager) : MonitorApi {
+class MonitorApiImpl(
+  private val playerDataManager: PlayerDataManager,
+  private val sampler: MonitorSampler,
+) : MonitorApi {
   override fun getSnapshot(playerId: UUID): Optional<MonitorSnapshot> {
     val shardPlayer = playerDataManager.getPlayer(playerId) ?: return Optional.empty()
-    val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java) ?: return Optional.empty()
-    val ping = shardPlayer.player.ping
+    val sample = sampler.sample(shardPlayer.player)
+    if (!sample.aiActive) {
+      return Optional.empty()
+    }
     return Optional.of(
       MonitorSnapshot(
-        aiCheck.lastProbability,
-        aiCheck.buffer,
-        ping,
-        shardPlayer.combat.damageMultiplier,
-        aiCheck.prob90,
+        sample.probability,
+        sample.buffer,
+        sample.rawPing,
+        sample.damageMultiplier,
+        sample.prob90,
       )
     )
   }

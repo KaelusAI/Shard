@@ -17,58 +17,35 @@
  */
 package ac.shard.monitor.view
 
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.fillTemplate
 import ac.shard.monitor.core.formatDecimal
-import ac.shard.player.PlayerDataManager
 import kotlin.math.roundToInt
 import org.bukkit.entity.Player
 
-internal class ViewTagRenderer(private val playerDataManager: PlayerDataManager) {
-  fun render(target: Player, state: TargetTeamState, config: ViewRuntimeConfig): RenderedTag {
-    val shardTarget = playerDataManager.getPlayer(target)
-    if (shardTarget == null) {
-      val fallbackValues =
-        mapOf(
-          "prob" to config.fallbackProb,
-          "buffer" to config.fallbackBuffer,
-          "ping" to state.resolvePingDisplay(target.ping, config),
-        )
-      return RenderedTag(
-        applyTemplate(config.prefixTemplate, fallbackValues),
-        applyTemplate(config.suffixTemplate, fallbackValues),
-        applyTemplate(config.belowTemplate, fallbackValues),
-        ZERO_BELOW_SCORE,
-      )
-    }
-    val aiCheck = shardTarget.checkManager.getCheck(AiCheck::class.java)
-
+internal class ViewTagRenderer(private val sampler: MonitorSampler) {
+  fun render(target: Player, pingDisplay: String, config: ViewRuntimeConfig): RenderedTag {
+    val sample = sampler.sample(target)
     val probabilityValue =
-      if (aiCheck == null) {
-        config.fallbackProb
+      if (sample.aiActive) {
+        formatDecimal(sample.probability * PERCENT_MULTIPLIER, config.probDecimals)
       } else {
-        formatDecimal(aiCheck.lastProbability * PERCENT_MULTIPLIER, config.probDecimals)
+        config.fallbackProb
+      }
+    val bufferValue =
+      if (sample.aiActive) {
+        formatDecimal(sample.buffer, config.bufferDecimals)
+      } else {
+        config.fallbackBuffer
       }
     val belowScore =
-      if (aiCheck == null) {
+      if (sample.aiActive) {
+        (sample.probability * PERCENT_MULTIPLIER).roundToInt().coerceAtLeast(ZERO_BELOW_SCORE)
+      } else {
         ZERO_BELOW_SCORE
-      } else {
-        (aiCheck.lastProbability * PERCENT_MULTIPLIER).roundToInt().coerceAtLeast(ZERO_BELOW_SCORE)
       }
 
-    val bufferValue =
-      if (aiCheck == null) {
-        config.fallbackBuffer
-      } else {
-        formatDecimal(aiCheck.buffer, config.bufferDecimals)
-      }
-
-    val values =
-      mapOf(
-        "prob" to probabilityValue,
-        "buffer" to bufferValue,
-        "ping" to state.resolvePingDisplay(target.ping, config),
-      )
+    val values = mapOf("prob" to probabilityValue, "buffer" to bufferValue, "ping" to pingDisplay)
 
     return RenderedTag(
       applyTemplate(config.prefixTemplate, values),

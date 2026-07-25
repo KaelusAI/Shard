@@ -19,6 +19,7 @@ package ac.shard.monitor.view
 
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.monitor.core.MonitorSampler
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import io.mockk.every
@@ -53,7 +54,7 @@ class ViewTagRendererFallbackTest {
     val target = mockk<org.bukkit.entity.Player>(relaxed = true)
     every { playerDataManager.getPlayer(target) } returns null
 
-    val rendered = ViewTagRenderer(playerDataManager).render(target, TargetTeamState("t"), config)
+    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
 
     assertEquals("--|??", rendered.prefix)
     assertEquals("--", rendered.below)
@@ -68,9 +69,10 @@ class ViewTagRendererFallbackTest {
     val checkManager = mockk<CheckManager>()
     every { playerDataManager.getPlayer(target) } returns shardPlayer
     every { shardPlayer.checkManager } returns checkManager
+    every { shardPlayer.combat } returns mockk(relaxed = true)
     every { checkManager.getCheck(AiCheck::class.java) } returns null
 
-    val rendered = ViewTagRenderer(playerDataManager).render(target, TargetTeamState("t"), config)
+    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
 
     assertEquals("--|??", rendered.prefix)
     assertEquals("--", rendered.below)
@@ -86,11 +88,13 @@ class ViewTagRendererFallbackTest {
     val aiCheck = mockk<AiCheck>()
     every { playerDataManager.getPlayer(target) } returns shardPlayer
     every { shardPlayer.checkManager } returns checkManager
+    every { shardPlayer.combat } returns mockk(relaxed = true)
     every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
     every { aiCheck.lastProbability } returns 0.954
     every { aiCheck.buffer } returns 12.5
+    every { aiCheck.prob90 } returns 0
 
-    val rendered = ViewTagRenderer(playerDataManager).render(target, TargetTeamState("t"), config)
+    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
 
     assertEquals("95|12.50", rendered.prefix)
     assertEquals("95", rendered.below)

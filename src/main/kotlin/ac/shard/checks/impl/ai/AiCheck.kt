@@ -62,6 +62,7 @@ class AiCheck(
   @Volatile private var ring: TickRingBuffer = TickRingBuffer(configManager.aiSequence)
   private val snapshotBuffer: AtomicReference<FloatArray?> = AtomicReference()
 
+  @Volatile
   var buffer: Double = 0.0
     private set
 
@@ -70,10 +71,11 @@ class AiCheck(
     buffer = kotlin.math.max(buffer, sanitized)
   }
 
+  @Volatile
   var lastProbability: Double = 0.0
     private set
 
-  var prob90: Int = 0
+  @Volatile var prob90: Int = 0
 
   private var flag = 0.0
   private var bufferResetOnFlag = 0.0
