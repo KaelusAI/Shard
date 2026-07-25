@@ -30,15 +30,16 @@ import ru.vyarus.yaml.updater.YamlUpdater
 
 class ConfigMigrationsTest {
 
-  private fun bundledTemplate(): File =
+  private fun bundledTemplate(name: String = "config.yml"): File =
     File(
-      this::class.java.classLoader.getResource("config.yml")?.toURI()
-        ?: error("bundled config.yml is missing from test classpath")
+      this::class.java.classLoader.getResource(name)?.toURI()
+        ?: error("bundled $name is missing from test classpath")
     )
 
-  private fun runMigration(file: File) {
-    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(ConfigMigrations.readVersion(file))
-    YamlUpdater.create(file, bundledTemplate()).backup(false).deleteProps(drops).update()
+  private fun runMigration(file: File, name: String = "config.yml") {
+    val version = ConfigMigrations.readVersion(file, name)
+    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(version, name)
+    YamlUpdater.create(file, bundledTemplate(name)).backup(false).deleteProps(drops).update()
   }
 
   private val legacyUserConfig =
@@ -213,5 +214,63 @@ class ConfigMigrationsTest {
     // The user's `continuous: true` must survive the merge, not be replaced with template default.
     assertContains(merged, "continuous: true")
     assertFalse(merged.contains("continuous: false"))
+  }
+
+  @Test
+  fun `monitor merge keeps user values and lists while adding new keys`(@TempDir tempDir: Path) {
+    val userFile = tempDir.resolve("monitor.yml").toFile()
+    userFile.writeText(
+      """
+      update: 5
+      view:
+        template:
+          prefix: "MYPREFIX"
+      modes:
+        compact: [prob, name]
+      """
+        .trimIndent() + "\n"
+    )
+    assertEquals(0, ConfigMigrations.readVersion(userFile, "monitor.yml"))
+
+    runMigration(userFile, "monitor.yml")
+
+    val merged = userFile.readText()
+    assertContains(merged, "update: 5")
+    assertContains(merged, """prefix: "MYPREFIX"""")
+    assertContains(merged, "compact: [prob, name]")
+    assertContains(merged, "config-version: ${ConfigMigrations.MONITOR_LATEST_VERSION}")
+    assertContains(merged, "per-player: true")
+    assertContains(merged, "theme:")
+    val versionLines = merged.lineSequence().count { it.trim().startsWith("config-version:") }
+    assertEquals(1, versionLines)
+  }
+
+  @Test
+  fun `a second monitor merge changes nothing`(@TempDir tempDir: Path) {
+    val userFile = tempDir.resolve("monitor.yml").toFile()
+    userFile.writeText("update: 5\n")
+    runMigration(userFile, "monitor.yml")
+    val first = userFile.readText()
+
+    runMigration(userFile, "monitor.yml")
+
+    assertEquals(first, userFile.readText())
+  }
+
+  @Test
+  fun `monitor and config versions are tracked separately`() {
+    assertEquals(ConfigMigrations.LATEST_VERSION, ConfigMigrations.latestVersion("config.yml"))
+    assertEquals(
+      ConfigMigrations.MONITOR_LATEST_VERSION,
+      ConfigMigrations.latestVersion("monitor.yml"),
+    )
+    assertTrue(
+      ConfigMigrations.forcedDropsForUpgradeFrom(
+          ConfigMigrations.MONITOR_LATEST_VERSION,
+          "monitor.yml",
+        )
+        .isEmpty()
+    )
+    assertContains(ConfigMigrations.forcedDropsForUpgradeFrom(0, "monitor.yml"), "config-version")
   }
 }

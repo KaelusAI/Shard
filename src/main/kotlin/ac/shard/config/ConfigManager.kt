@@ -216,7 +216,7 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
     config = loadConfig("config.yml", migrate = true)
     punishments = loadConfig("punishments.yml")
-    monitorConfig = loadConfig("monitor.yml")
+    monitorConfig = loadConfig("monitor.yml", migrate = true)
 
     loadValues()
   }
@@ -243,8 +243,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   private fun runMigration(file: File, fileName: String) {
     val updateStream = javaClass.classLoader.getResourceAsStream(fileName) ?: return
 
-    val currentVersion = ConfigMigrations.readVersion(file)
-    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(currentVersion)
+    val currentVersion = ConfigMigrations.readVersion(file, fileName)
+    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(currentVersion, fileName)
 
     val report =
       runCatching {
