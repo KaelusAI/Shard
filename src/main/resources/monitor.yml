@@ -29,6 +29,8 @@ defaults:
   show-dmg: true
   show-trend: true
   show-name: auto         # auto | always | never
+  output: actionbar       # actionbar | bossbar | sidebar | chat | tablist
+  chat-style: digest      # digest | verdict
 behavior:
   keep-length: true
   show-neutral-when-hidden: true
