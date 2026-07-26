@@ -28,6 +28,7 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 class LocaleManager(private val plugin: Shard, private val configManager: ConfigManager) {
   private var messagesConfig: ConfigView = ConfigView(CommentedConfigurationNode.root())
   private var defaultMessages: ConfigView? = null
+  private var defaultLocaleMessages: ConfigView? = null
 
   init {
     reload()
@@ -52,6 +53,12 @@ class LocaleManager(private val plugin: Shard, private val configManager: Config
     }
 
     messagesConfig = loadMessages(messagesFile)
+    defaultLocaleMessages =
+      if ("en".equals(locale, ignoreCase = true)) {
+        null
+      } else {
+        loadDefaultsFromJar("messages/messages_$locale.yml")
+      }
     defaultMessages = loadDefaultsFromJar("messages/messages_en.yml")
   }
 
@@ -103,9 +110,19 @@ class LocaleManager(private val plugin: Shard, private val configManager: Config
   private fun resolveNode(key: Message): ConfigurationNode {
     val path = key.path
     val node = messagesConfig.node(path)
-    if (node.empty() && defaultMessages != null) {
-      return defaultMessages!!.node(path)
+    if (!node.empty()) {
+      return node
     }
-    return node
+    return firstPresent(path, defaultLocaleMessages, defaultMessages) ?: node
+  }
+
+  private fun firstPresent(path: String, vararg sources: ConfigView?): ConfigurationNode? {
+    for (source in sources) {
+      val candidate = source?.node(path) ?: continue
+      if (!candidate.empty()) {
+        return candidate
+      }
+    }
+    return null
   }
 }
