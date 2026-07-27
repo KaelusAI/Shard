@@ -1,58 +1,92 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, for example v1.2'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Create Release
+    name: Verify & Publish
     runs-on: ubuntu-latest
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: version
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "number=${tag#v}" >> "$GITHUB_OUTPUT"
+          case "$tag" in
+            *-rc*|*-beta*|*-alpha*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Check code style
+        run: ./gradlew spotlessCheck
+
+      - name: Run Detekt
+        run: ./gradlew detekt
+
+      - name: Run tests
+        run: ./gradlew test
+
+      - name: Run container-backed tests
+        run: ./gradlew --no-daemon containerTest
 
       - name: Build shaded JAR
-        run: ./gradlew shadowJar
+        run: ./gradlew shadowJar -PshardVersion=${{ steps.version.outputs.number }}
 
       - name: Resolve shaded JAR path
         id: shaded-jar
-        run: echo "path=$(./gradlew -q printShadowJarPath)" >> "$GITHUB_OUTPUT"
+        run: |
+          path=$(./gradlew -q printShadowJarPath \
+            -PshardVersion=${{ steps.version.outputs.number }})
+          echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Build unbundled JAR
-        run: ./gradlew shadowJar -PshadePE=false
+        run: |
+          ./gradlew shadowJar -PshadePE=false \
+            -PshardVersion=${{ steps.version.outputs.number }}
 
       - name: Resolve unbundled JAR path
         id: unbundled-jar
-        run: echo "path=$(./gradlew -q printShadowJarPath -PshadePE=false)" >> "$GITHUB_OUTPUT"
-
-      - name: Generate tag
-        id: tag
-        run: echo "tag=v$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: |
+          path=$(./gradlew -q printShadowJarPath -PshadePE=false \
+            -PshardVersion=${{ steps.version.outputs.number }})
+          echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          tag_name: "${{ steps.tag.outputs.tag }}"
-          name: "${{ steps.tag.outputs.tag }}"
-          body: |
-            Automatic release from commit ${{ github.event.workflow_run.head_sha }}.
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          generate_release_notes: true
           files: |
             ${{ steps.shaded-jar.outputs.path }}
             ${{ steps.unbundled-jar.outputs.path }}
