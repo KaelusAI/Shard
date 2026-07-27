@@ -21,6 +21,7 @@ import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.MonitorTargetsService
 import ac.shard.monitor.hud.TargetChange
+import ac.shard.monitor.hud.outputCapacity
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import org.bukkit.entity.Player
@@ -75,8 +76,8 @@ private fun replyAdded(
     total.toString(),
   )
   val session = hudService.session(viewer.uniqueId) ?: return
-  val narrowest = session.outputs.minByOrNull { it.capabilities.maxTargets } ?: return
-  val shown = narrowest.capabilities.maxTargets
+  val narrowest = session.outputs.minByOrNull { outputCapacity(it, session.config) } ?: return
+  val shown = outputCapacity(narrowest, session.config)
   if (total > shown) {
     MessageUtil.sendMessage(
       viewer,

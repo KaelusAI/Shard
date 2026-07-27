@@ -77,12 +77,12 @@ internal fun withinLimits(
   return roomForSession && roomOnTarget
 }
 
+internal fun outputCapacity(output: MonitorOutput, config: MonitorHudRuntimeConfig): Int {
+  val declared = output.capabilities.maxTargets
+  val configured =
+    if (output.kind == MonitorOutputKind.BOSSBAR) config.bossBar.maxBars else declared
+  return minOf(declared, configured).coerceAtLeast(1)
+}
+
 internal fun effectiveCapacity(outputs: List<MonitorOutput>, config: MonitorHudRuntimeConfig): Int =
-  outputs
-    .minOfOrNull { output ->
-      val declared = output.capabilities.maxTargets
-      val configured =
-        if (output.kind == MonitorOutputKind.BOSSBAR) config.bossBar.maxBars else declared
-      minOf(declared, configured)
-    }
-    ?.coerceAtLeast(1) ?: 1
+  outputs.maxOfOrNull { outputCapacity(it, config) } ?: 1

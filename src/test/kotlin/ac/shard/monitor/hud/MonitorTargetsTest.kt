@@ -79,12 +79,13 @@ class MonitorTargetsTest {
     yaml: String = "",
     outputs: List<MonitorOutput> = listOf(RoomyOutput(room)),
     stored: MonitorOutputKind = MonitorOutputKind.ACTIONBAR,
+    storedOutputs: Set<MonitorOutputKind> = setOf(stored),
   ): MonitorHudService {
     val loader = YamlConfigurationLoader.builder().source { yaml.reader().buffered() }.build()
     every { configManager.monitorConfig } returns ConfigView(loader.load())
     every { localeManager.getRawMessage(any()) } returns "text"
-    every { settingsService.getSettings(any()) } returns settings(stored)
-    every { settingsService.defaults() } returns settings(stored)
+    every { settingsService.getSettings(any()) } returns settings(storedOutputs)
+    every { settingsService.defaults() } returns settings(storedOutputs)
     every { scheduler.runTimer(any<Player>(), any(), any(), any()) } returns mockk(relaxed = true)
     every { scheduler.runSync(any<Player>(), any()) } answers
       {
@@ -104,7 +105,7 @@ class MonitorTargetsTest {
     )
   }
 
-  private fun settings(output: MonitorOutputKind = MonitorOutputKind.ACTIONBAR) =
+  private fun settings(outputs: Set<MonitorOutputKind> = setOf(MonitorOutputKind.ACTIONBAR)) =
     MonitorSettings(
       mode = MonitorMode.COMPACT,
       theme = MonitorTheme.CALM,
@@ -112,7 +113,7 @@ class MonitorTargetsTest {
       showDmg = true,
       showTrend = true,
       showName = MonitorNameMode.AUTO,
-      outputs = setOf(output),
+      outputs = outputs,
     )
 
   private fun player(name: String, id: UUID = UUID.randomUUID()): Player {
@@ -270,6 +271,26 @@ class MonitorTargetsTest {
     assertEquals(2, targets.clear(viewer))
 
     assertNull(hud.session(viewerId))
+  }
+
+  @Test
+  fun `capacity follows the roomiest output, not the narrowest`() {
+    val hud =
+      hud(
+        yaml = "outputs:\n  sidebar:\n    enabled: true\n",
+        outputs =
+          listOf(
+            RoomyOutput(1, MonitorOutputKind.ACTIONBAR),
+            RoomyOutput(4, MonitorOutputKind.SIDEBAR),
+          ),
+        storedOutputs = setOf(MonitorOutputKind.ACTIONBAR, MonitorOutputKind.SIDEBAR),
+      )
+    val targets = targetsService(hud)
+    val viewer = player("Admin", viewerId)
+    hud.start(viewer, player("Steve"))
+
+    assertEquals(4, targets.capacity(viewerId))
+    assertEquals(TargetChange.APPLIED, targets.add(viewer, player("Alex")))
   }
 
   @Test
