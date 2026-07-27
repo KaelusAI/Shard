@@ -81,17 +81,16 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
     settings: MonitorSettings,
     builder: MonitorFrameBuilder,
   ) {
-    val frames =
-      samples.mapNotNull { sample ->
-        targets.state(sample.targetId)?.let { state ->
-          state.advance(
-            sample,
-            spec.config.behavior.pingRefreshCycles,
-            spec.config.behavior.pingBucketMs,
-          )
-          frameFor(state, sample, settings, builder)
-        }
+    val frames = samples.mapNotNull { sample ->
+      targets.state(sample.targetId)?.let { state ->
+        state.advance(
+          sample,
+          spec.config.behavior.pingRefreshCycles,
+          spec.config.behavior.pingBucketMs,
+        )
+        frameFor(state, sample, settings, builder)
       }
+    }
     if (frames.isEmpty()) {
       return
     }

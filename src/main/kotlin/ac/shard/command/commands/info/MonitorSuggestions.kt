@@ -41,18 +41,17 @@ internal object MonitorSuggestions {
   fun outputs(
     hudService: MonitorHudService,
     registry: MonitorOutputRegistry,
-  ): SuggestionProvider<Sender> =
-    SuggestionProvider.blocking { context, _ ->
-      val sender = context.sender()
-      val config = hudService.runtimeConfig
-      MonitorOutputKind.entries
-        .filter { kind ->
-          config.isEnabled(kind) &&
-            registry.isSupported(kind) &&
-            sender.nativeSender.hasPermission(kind.permission)
-        }
-        .map { Suggestion.suggestion(it.key) }
-    }
+  ): SuggestionProvider<Sender> = SuggestionProvider.blocking { context, _ ->
+    val sender = context.sender()
+    val config = hudService.runtimeConfig
+    MonitorOutputKind.entries
+      .filter { kind ->
+        config.isEnabled(kind) &&
+          registry.isSupported(kind) &&
+          sender.nativeSender.hasPermission(kind.permission)
+      }
+      .map { Suggestion.suggestion(it.key) }
+  }
 
   fun watched(targets: MonitorTargetsService): SuggestionProvider<Sender> =
     SuggestionProvider.blocking { context, _ ->

@@ -41,8 +41,9 @@ class MonitorOutputSelector(
     current: Set<MonitorOutputKind>,
   ): Set<MonitorOutputKind>? {
     val requested = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-    val kinds =
-      requested.map { name -> MonitorOutputKind.entries.firstOrNull { it.key.equals(name, true) } }
+    val kinds = requested.map { name ->
+      MonitorOutputKind.entries.firstOrNull { it.key.equals(name, true) }
+    }
     if (kinds.isEmpty() || kinds.any { it == null }) {
       MessageUtil.sendMessage(
         player,

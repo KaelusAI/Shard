@@ -77,24 +77,23 @@ class LogsCommand(
           maxPages.toString(),
         )
 
-      val entries =
-        violations.map { violation ->
-          MessageUtil.getMessage(
-            Message.LOGS_ENTRY,
-            "server",
-            violation.serverName,
-            "player",
-            violation.playerName,
-            "check",
-            violation.checkName,
-            "vl",
-            violation.vl.toString(),
-            "verbose",
-            violation.verbose,
-            "timeago",
-            TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
-          )
-        }
+      val entries = violations.map { violation ->
+        MessageUtil.getMessage(
+          Message.LOGS_ENTRY,
+          "server",
+          violation.serverName,
+          "player",
+          violation.playerName,
+          "check",
+          violation.checkName,
+          "vl",
+          violation.vl.toString(),
+          "verbose",
+          violation.verbose,
+          "timeago",
+          TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
+        )
+      }
 
       scheduler.runSync {
         sender.sendMessage(header)
