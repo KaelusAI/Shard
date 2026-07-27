@@ -2,10 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:MonitorCommand.kt$MonitorCommand$kotlin.math.abs(probability - session.lastProbability) &lt; 0.0001 &amp;&amp; kotlin.math.abs(buffer - session.lastBuffer) &lt; 0.01 &amp;&amp; ping == session.lastPing &amp;&amp; kotlin.math.abs(dmgMultiplier - session.lastDmgMultiplier) &lt; 0.0001 &amp;&amp; kotlin.math.abs(trend - session.lastTrend) &lt; 0.0001 &amp;&amp; settingsHash == session.lastSettingsHash &amp;&amp; session.lastSentComponent != null</ID>
-    <ID>ComplexCondition:MonitorCommand.kt$MonitorCommand$onlineViewer == null || !onlineViewer.isOnline || onlineTarget == null || !onlineTarget.isOnline</ID>
     <ID>ComplexCondition:PacketListener.kt$PacketListener$!player.packetStateData.lastPacketWasTeleport &amp;&amp; flying.hasPositionChanged() &amp;&amp; flying.hasRotationChanged() &amp;&amp; ((flying.isOnGround == player.packetStateData.packetPlayerOnGround &amp;&amp; (player.user.clientVersion.isNewerThanOrEquals(ClientVersion.V_1_17) &amp;&amp; player.packetStateData.lastClaimedPosition.distanceSquared(location.position) &lt; threshold * threshold)) || inVehicle)</ID>
-    <ID>CyclomaticComplexMethod:MonitorCommand.kt$MonitorCommand$private fun buildPart( part: String, viewer: Player, target: Player, probability: Double, buffer: Double, ping: Int, dmgMultiplier: Double, trend: Double, settings: MonitorSettings, ): Component?</ID>
     <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$override fun onPacketSend(event: PacketSendEvent)</ID>
     <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$private fun checkTeleportQueue( player: ShardPlayer, flying: WrapperPlayClientPlayerFlying, ): Boolean</ID>
     <ID>EmptyInitBlock:ShardPlayer.kt$ShardPlayer${}</ID>
@@ -43,14 +40,9 @@
     <ID>LongMethod:AiCheck.kt$AiCheck$private fun onResponse(parsed: AiResult)</ID>
     <ID>LongMethod:ConfigManager.kt$ConfigManager$private fun loadValues()</ID>
     <ID>LongMethod:PlayerDataManagerTest.kt$PlayerDataManagerTest$private fun createFixture(): Fixture</ID>
-    <ID>LargeClass:MonitorCommand.kt$MonitorCommand : ShardCommandListener</ID>
-    <ID>LongMethod:MonitorCommand.kt$MonitorCommand$override fun register(manager: CommandManager&lt;Sender>)</ID>
-    <ID>LongMethod:MonitorCommand.kt$MonitorCommand$private fun buildPart( part: String, viewer: Player, target: Player, probability: Double, buffer: Double, ping: Int, dmgMultiplier: Double, trend: Double, settings: MonitorSettings, ): Component?</ID>
     <ID>LongParameterList:AiCheck.kt$AiCheck$( shardPlayer: ShardPlayer, private val plugin: Shard, private val aiService: AiService, private val configManager: ConfigManager, private val regionProvider: RegionProvider, private val alertManager: AlertManager, private val damageProcessor: DamageProcessor, private val debugManager: DebugManager, private val scheduler: SchedulerService, )</ID>
     <ID>LongParameterList:AiPredictionEvent.kt$AiPredictionEvent$( val playerId: UUID, val playerName: String, val checkName: String, val probability: Double, val bufferBefore: Double, val bufferAfter: Double, val damageMultiplier: Double, val prob90: Int, val flagged: Boolean, )</ID>
     <ID>LongParameterList:EntityScheduler.kt$EntityScheduler$( entity: Entity, plugin: Plugin, task: Runnable, retired: Runnable?, initialDelayTicks: Long, periodTicks: Long, )</ID>
-    <ID>LongParameterList:MonitorCommand.kt$MonitorCommand$( part: String, viewer: Player, target: Player, probability: Double, buffer: Double, ping: Int, dmgMultiplier: Double, trend: Double, settings: MonitorSettings, )</ID>
-    <ID>LongParameterList:MonitorCommand.kt$MonitorCommand$( viewer: Player, target: Player, probability: Double, buffer: Double, ping: Int, dmgMultiplier: Double, trend: Double, settings: MonitorSettings, )</ID>
     <ID>LongParameterList:PlayerDataManager.kt$PlayerDataManager$( private val plugin: Shard, private val alertManager: AlertManager, private val dataCollectorManager: DataCollectorManager, private val configManager: ConfigManager, private val aiServerProvider: AIServerProvider, private val exemptManager: ExemptManager, private val scheduler: SchedulerService, private val checkManagerFactory: CheckManager.Factory, private val punishmentManagerFactory: PunishmentManager.Factory, )</ID>
     <ID>LongParameterList:PunishmentManager.kt$PunishmentManager$( group: PunishGroup, vl: Int, verbose: String, command: String, playerName: String, checkName: String, )</ID>
     <ID>LongParameterList:PunishmentManager.kt$PunishmentManager$( group: PunishGroup, vl: Int, verbose: String, commands: List&lt;String>, playerName: String, checkName: String, )</ID>
@@ -108,10 +100,6 @@
     <ID>MagicNumber:FoliaRegionScheduler.kt$FoliaRegionScheduler$4</ID>
     <ID>MagicNumber:HistoryCommand.kt$HistoryCommand$10</ID>
     <ID>MagicNumber:LogsCommand.kt$LogsCommand$10</ID>
-    <ID>MagicNumber:MonitorCommand.kt$MonitorCommand$0.0001</ID>
-    <ID>MagicNumber:MonitorCommand.kt$MonitorCommand$0.01</ID>
-    <ID>MagicNumber:MonitorCommand.kt$MonitorCommand$100.0</ID>
-    <ID>MagicNumber:MonitorCommand.kt$MonitorCommand$12</ID>
     <ID>MagicNumber:PacketListener.kt$PacketListener$1.0E-7</ID>
     <ID>MagicNumber:PlatformScheduler.kt$PlatformScheduler.Companion$50</ID>
     <ID>MagicNumber:PlatformScheduler.kt$PlatformScheduler.Companion$50L</ID>
@@ -126,6 +114,7 @@
     <ID>MagicNumber:ShardPlayer.kt$ShardPlayer$0.0002</ID>
     <ID>MagicNumber:ShardPlayer.kt$ShardPlayer$0.03</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.MonitorSettingsTable$16</ID>
+    <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.MonitorSettingsTable$64</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.MonitorSettingsTable$36</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.PlayerLogins$36</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.Punishments$255</ID>
@@ -168,7 +157,6 @@
     <ID>ReturnCount:ExemptManager.kt$ExemptManager$fun isExempt(player: Player?): Boolean</ID>
     <ID>ReturnCount:LogsCommand.kt$LogsCommand$private fun parseTime(timeArg: String?): Long</ID>
     <ID>ReturnCount:MonitorApiImpl.kt$MonitorApiImpl$override fun getSnapshot(playerId: UUID): Optional&lt;MonitorSnapshot></ID>
-    <ID>ReturnCount:MonitorCommand.kt$MonitorCommand$private fun parseToggle(raw: String?): Boolean?</ID>
     <ID>ReturnCount:PacketListener.kt$PacketListener$override fun onPacketReceive(event: PacketReceiveEvent)</ID>
     <ID>ReturnCount:PacketListener.kt$PacketListener$private fun checkRotationQueue( player: ShardPlayer, flying: WrapperPlayClientPlayerFlying, ): Boolean</ID>
     <ID>ReturnCount:PacketListener.kt$PacketListener$private fun checkTeleportQueue( player: ShardPlayer, flying: WrapperPlayClientPlayerFlying, ): Boolean</ID>
@@ -200,7 +188,6 @@
     <ID>TooManyFunctions:BatchingAiTransport.kt$BatchingAiTransport : AiTransport</ID>
     <ID>TooManyFunctions:ConfigManager.kt$ConfigManager</ID>
     <ID>TooManyFunctions:MessageUtil.kt$MessageUtil</ID>
-    <ID>TooManyFunctions:MonitorCommand.kt$MonitorCommand : ShardCommandListener</ID>
     <ID>TooManyFunctions:PacketListener.kt$PacketListener : PacketListenerAbstract</ID>
     <ID>TooManyFunctions:PunishmentManager.kt$PunishmentManager</ID>
     <ID>TooManyFunctions:SqlViolationDatabase.kt$SqlViolationDatabase : ViolationDatabase</ID>

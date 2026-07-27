@@ -21,7 +21,7 @@ import java.io.File
 
 internal object ConfigMigrations {
   const val LATEST_VERSION = 3
-  const val MONITOR_LATEST_VERSION = 1
+  const val MONITOR_LATEST_VERSION = 2
 
   private val LATEST_BY_FILE =
     mapOf("config.yml" to LATEST_VERSION, "monitor.yml" to MONITOR_LATEST_VERSION)

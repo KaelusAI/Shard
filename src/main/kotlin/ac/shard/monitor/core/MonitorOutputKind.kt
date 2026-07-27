@@ -26,7 +26,28 @@ enum class MonitorOutputKind(val key: String) {
   CHAT("chat"),
   TABLIST("tablist");
 
+  val permission: String
+    get() = "shard.monitor.output.$key"
+
   companion object {
+    private const val SEPARATOR = ","
+
+    fun parseSet(value: String?): Set<MonitorOutputKind> {
+      val parsed =
+        value
+          ?.split(SEPARATOR)
+          ?.mapNotNull { part ->
+            entries.firstOrNull {
+              it.key.equals(part.trim(), true) || it.name.equals(part.trim(), true)
+            }
+          }
+          .orEmpty()
+      return if (parsed.isEmpty()) setOf(ACTIONBAR) else LinkedHashSet(parsed)
+    }
+
+    fun store(kinds: Set<MonitorOutputKind>): String =
+      kinds.ifEmpty { setOf(ACTIONBAR) }.joinToString(SEPARATOR) { it.name }
+
     @JvmStatic
     fun fromConfig(value: String?): MonitorOutputKind {
       if (value == null) {

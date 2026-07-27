@@ -74,6 +74,9 @@ If API access is not available yet, disable the AI check for now.
 | `/shard suspicious <list\|top\|flagged>` | Review suspicious or previously flagged online players |
 | `/shard profile <player>` | Open a player's live profile |
 | `/shard monitor <player>` | Watch AI data for one player in real time |
+| `/shard monitor add\|remove\|clear` | Watch several players at once |
+| `/shard monitor output <type>` | Draw the monitor on the action bar, boss bar, sidebar, chat or tab list |
+| `/shard monitor settings` | Show and edit your monitor settings |
 | `/shard view` | Toggle observation mode for nearby players |
 | `/shard logs [page]` | View recent violations |
 | `/shard history <player> [page]` | View a player's stored violation history |

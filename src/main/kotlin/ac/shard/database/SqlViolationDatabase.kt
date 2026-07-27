@@ -260,7 +260,7 @@ class SqlViolationDatabase(
             row[MonitorSettingsTable.showDmg],
             row[MonitorSettingsTable.showTrend],
             showName,
-            MonitorOutputKind.fromConfig(row[MonitorSettingsTable.outputKind]),
+            MonitorOutputKind.parseSet(row[MonitorSettingsTable.outputKind]),
             MonitorChatStyle.fromConfig(row[MonitorSettingsTable.chatStyle]),
           )
         }
@@ -288,7 +288,7 @@ class SqlViolationDatabase(
         it[showDmg] = settings.showDmg
         it[showTrend] = settings.showTrend
         it[showName] = settings.showName.name
-        it[outputKind] = settings.output.name
+        it[outputKind] = MonitorOutputKind.store(settings.outputs)
         it[chatStyle] = settings.chatStyle.name
       }
     }
@@ -357,7 +357,7 @@ class SqlViolationDatabase(
     val showDmg: Column<Boolean> = bool("show_dmg")
     val showTrend: Column<Boolean> = bool("show_trend")
     val showName: Column<String> = varchar("show_name", 16)
-    val outputKind: Column<String> = varchar("output_kind", 16)
+    val outputKind: Column<String> = varchar("output_kind", 64)
     val chatStyle: Column<String> = varchar("chat_style", 16)
 
     override val primaryKey = PrimaryKey(uuid)

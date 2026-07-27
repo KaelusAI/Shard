@@ -74,6 +74,9 @@ AI-проверка Shard использует официальный Shard API.
 | `/shard suspicious <list\|top\|flagged>` | Показывает подозрительных игроков и онлайн-игроков с флагами |
 | `/shard profile <player>` | Открывает профиль игрока |
 | `/shard monitor <player>` | Показывает AI-данные игрока в реальном времени |
+| `/shard monitor add\|remove\|clear` | Отслеживает нескольких игроков сразу |
+| `/shard monitor output <type>` | Рисует монитор в action bar, боссбаре, сайдбаре, чате или таб-листе |
+| `/shard monitor settings` | Показывает и меняет настройки монитора |
 | `/shard view` | Переключает режим наблюдения за игроками |
 | `/shard logs [page]` | Показывает недавние нарушения |
 | `/shard history <player> [page]` | Показывает историю нарушений игрока |

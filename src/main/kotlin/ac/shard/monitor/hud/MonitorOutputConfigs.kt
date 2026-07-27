@@ -87,7 +87,7 @@ data class ChatConfig(
   val alwaysShowFlagged: Boolean,
   val cooldownMillis: Long,
   val unknownPing: String,
-  val verdictTemplate: String,
+  val liveTemplate: String,
   val flaggedTemplate: String,
 ) {
   companion object {
@@ -96,9 +96,8 @@ data class ChatConfig(
         config
           .getLong("outputs.chat.digest.interval-ticks", DEFAULT_CHAT_DIGEST_TICKS)
           .coerceAtLeast(MIN_CHAT_DIGEST_TICKS)
-      val verdictTemplate =
-        config.getString("outputs.chat.verdict.template", DEFAULT_VERDICT_TEMPLATE)
-      val flagged = config.getString("outputs.chat.verdict.flagged-template", "")
+      val liveTemplate = config.getString("outputs.chat.live.template", DEFAULT_LIVE_TEMPLATE)
+      val flagged = config.getString("outputs.chat.live.flagged-template", "")
       return ChatConfig(
         enabled = config.getBoolean("outputs.chat.enabled", false),
         digestCycles = ticksToCycles(digestTicks, updateTicks),
@@ -106,15 +105,15 @@ data class ChatConfig(
           config.getString("outputs.chat.digest.template", DEFAULT_CHAT_DIGEST_TEMPLATE),
         skipUnchanged = config.getBoolean("outputs.chat.digest.skip-unchanged", true),
         minProbability =
-          config.getDouble("outputs.chat.verdict.min-probability", 0.0).coerceIn(0.0, 1.0),
-        alwaysShowFlagged = config.getBoolean("outputs.chat.verdict.always-show-flagged", true),
+          config.getDouble("outputs.chat.live.min-probability", 0.0).coerceIn(0.0, 1.0),
+        alwaysShowFlagged = config.getBoolean("outputs.chat.live.always-show-flagged", true),
         cooldownMillis =
           config
-            .getLong("outputs.chat.verdict.cooldown-ticks", DEFAULT_VERDICT_COOLDOWN_TICKS)
+            .getLong("outputs.chat.live.cooldown-ticks", DEFAULT_LIVE_COOLDOWN_TICKS)
             .coerceAtLeast(1L) * MILLIS_PER_TICK,
-        unknownPing = config.getString("outputs.chat.verdict.unknown-ping", DEFAULT_UNKNOWN_PING),
-        verdictTemplate = verdictTemplate,
-        flaggedTemplate = flagged.ifBlank { verdictTemplate },
+        unknownPing = config.getString("outputs.chat.live.unknown-ping", DEFAULT_UNKNOWN_PING),
+        liveTemplate = liveTemplate,
+        flaggedTemplate = flagged.ifBlank { liveTemplate },
       )
     }
   }
@@ -173,12 +172,12 @@ internal const val DEFAULT_SIDEBAR_TITLE = "<gradient:#8e9eab:#eef2f3>Shard</gra
 internal const val DEFAULT_SIDEBAR_UNAVAILABLE = "<gray>no data</gray>"
 internal const val DEFAULT_CHAT_DIGEST_TICKS = 200L
 internal const val MIN_CHAT_DIGEST_TICKS = 20L
-internal const val DEFAULT_VERDICT_COOLDOWN_TICKS = 20L
+internal const val DEFAULT_LIVE_COOLDOWN_TICKS = 20L
 internal const val DEFAULT_UNKNOWN_PING = "--"
-internal const val DEFAULT_CHAT_DIGEST_TEMPLATE =
-  "<prefix> <white>{name}</white> <gray>»</gray> {headline}"
-internal const val DEFAULT_VERDICT_TEMPLATE =
-  "<prefix> <white>{name}</white> <gray>»</gray> {prob!} <gray>•</gray> {buffer!}"
+internal const val DEFAULT_CHAT_DIGEST_TEMPLATE = "<prefix> {headline}"
+internal const val DEFAULT_LIVE_TEMPLATE =
+  "<prefix> <white>{name}</white> <gray>»</gray> {prob!} <gray>•</gray> {trend!} " +
+    "<gray>•</gray> {buffer!}"
 internal const val DEFAULT_TABLIST_HEADER = "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"
 internal const val DEFAULT_TABLIST_FOOTER = "{headline}"
 internal val DEFAULT_SIDEBAR_LINES =

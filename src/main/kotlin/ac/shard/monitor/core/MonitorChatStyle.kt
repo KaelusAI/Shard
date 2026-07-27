@@ -21,7 +21,7 @@ import java.util.Locale
 
 enum class MonitorChatStyle {
   DIGEST,
-  VERDICT;
+  LIVE;
 
   companion object {
     @JvmStatic

@@ -18,6 +18,7 @@
 package ac.shard.monitor.hud
 
 import ac.shard.monitor.core.MonitorOutputKind
+import org.bukkit.entity.Player
 
 class MonitorOutputRegistry(outputs: List<MonitorOutput>) {
   private val byKind: Map<MonitorOutputKind, MonitorOutput> = outputs.associateBy { it.kind }
@@ -26,9 +27,28 @@ class MonitorOutputRegistry(outputs: List<MonitorOutput>) {
 
   fun capacity(kind: MonitorOutputKind): Int = byKind[kind]?.capabilities?.maxTargets ?: 1
 
+  fun isSupported(kind: MonitorOutputKind): Boolean = byKind[kind]?.isAvailable() ?: false
+
   fun available(config: MonitorHudRuntimeConfig): List<MonitorOutputKind> =
     MonitorOutputKind.entries.filter { kind ->
       val output = byKind[kind]
       output != null && output.isAvailable() && config.isEnabled(kind)
     }
+
+  fun usable(kind: MonitorOutputKind, viewer: Player, config: MonitorHudRuntimeConfig): Boolean =
+    byKind[kind]?.let { config.isEnabled(kind) && it.isAvailableFor(viewer) } ?: false
+
+  fun resolveAll(
+    preferred: Set<MonitorOutputKind>,
+    fallback: Set<MonitorOutputKind>,
+    viewer: Player,
+    config: MonitorHudRuntimeConfig,
+  ): List<MonitorOutput> {
+    val chosen = preferred.filter { usable(it, viewer, config) }
+    if (chosen.isNotEmpty()) {
+      return chosen.mapNotNull { byKind[it] }
+    }
+    val backup = (fallback + MonitorOutputKind.ACTIONBAR).firstOrNull { usable(it, viewer, config) }
+    return listOfNotNull(backup?.let { byKind[it] })
+  }
 }

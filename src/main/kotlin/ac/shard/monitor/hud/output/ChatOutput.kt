@@ -35,7 +35,7 @@ fun interface ChatSink {
   fun send(viewer: Player, raw: String)
 }
 
-data class VerdictSignal(
+data class LiveSignal(
   val frame: MonitorFrame,
   val flagged: Boolean,
   val probability: Double,
@@ -76,37 +76,37 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
   override fun clear(context: MonitorRenderContext) {
     val state = states.get(context) ?: return
     state.lastDigest = ""
-    state.lastVerdictAt.clear()
+    state.lastLineAt.clear()
   }
 
   override fun detach(context: MonitorRenderContext) {
     states.remove(context)
   }
 
-  fun deliverVerdict(context: MonitorRenderContext, signal: VerdictSignal): Boolean {
+  fun deliverLive(context: MonitorRenderContext, signal: LiveSignal): Boolean {
     val state = states.get(context)
-    if (state == null || !shouldDeliver(state, context, signal)) {
+    if (state == null || !shouldSendLine(state, context, signal)) {
       return false
     }
-    state.lastVerdictAt[signal.frame.targetId] = signal.nowMillis
+    state.lastLineAt[signal.frame.targetId] = signal.nowMillis
     val config = context.config.chat
-    val template = if (signal.flagged) config.flaggedTemplate else config.verdictTemplate
+    val template = if (signal.flagged) config.flaggedTemplate else config.liveTemplate
     sink.send(context.viewer, fillFrameTemplate(template, signal.frame))
     return true
   }
 
-  private fun shouldDeliver(
+  private fun shouldSendLine(
     state: ChatState,
     context: MonitorRenderContext,
-    signal: VerdictSignal,
+    signal: LiveSignal,
   ): Boolean {
-    if (state.style != MonitorChatStyle.VERDICT || !context.viewer.isOnline) {
+    if (state.style != MonitorChatStyle.LIVE || !context.viewer.isOnline) {
       return false
     }
     val config = context.config.chat
     val loudEnough =
       (signal.flagged && config.alwaysShowFlagged) || signal.probability >= config.minProbability
-    val last = state.lastVerdictAt[signal.frame.targetId] ?: 0L
+    val last = state.lastLineAt[signal.frame.targetId] ?: 0L
     return loudEnough && signal.nowMillis - last >= config.cooldownMillis
   }
 
@@ -129,7 +129,7 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
 
   internal class ChatState(val style: MonitorChatStyle) {
     var lastDigest: String = ""
-    val lastVerdictAt = HashMap<UUID, Long>()
+    val lastLineAt = HashMap<UUID, Long>()
   }
 }
 

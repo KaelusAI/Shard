@@ -49,7 +49,7 @@ class ChatOutputTest {
           interval-ticks: 20
           template: "{name}:{prob}"
           skip-unchanged: true
-        verdict:
+        live:
           min-probability: 0.5
           always-show-flagged: true
           cooldown-ticks: 20
@@ -143,8 +143,8 @@ class ChatOutputTest {
   }
 
   @Test
-  fun `verdict style ignores the render tick`() {
-    val context = context(MonitorChatStyle.VERDICT)
+  fun `live style ignores the render tick`() {
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
 
     output.render(context, payload(frame()))
@@ -153,12 +153,11 @@ class ChatOutputTest {
   }
 
   @Test
-  fun `a verdict below the probability floor is dropped`() {
-    val context = context(MonitorChatStyle.VERDICT)
+  fun `a line below the probability floor is dropped`() {
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
 
-    val delivered =
-      output.deliverVerdict(context, VerdictSignal(frame(), flagged = false, 0.2, 1_000L))
+    val delivered = output.deliverLive(context, LiveSignal(frame(), flagged = false, 0.2, 1_000L))
 
     assertFalse(delivered)
     assertTrue(sent.isEmpty())
@@ -166,11 +165,10 @@ class ChatOutputTest {
 
   @Test
   fun `a flag bypasses the probability floor`() {
-    val context = context(MonitorChatStyle.VERDICT)
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
 
-    val delivered =
-      output.deliverVerdict(context, VerdictSignal(frame(), flagged = true, 0.2, 1_000L))
+    val delivered = output.deliverLive(context, LiveSignal(frame(), flagged = true, 0.2, 1_000L))
 
     assertTrue(delivered)
     assertEquals(listOf("F43"), sent)
@@ -180,23 +178,22 @@ class ChatOutputTest {
   fun `always-show-flagged off keeps the probability floor`() {
     val config =
       runtimeConfig(yaml.replace("always-show-flagged: true", "always-show-flagged: false"))
-    val context = context(MonitorChatStyle.VERDICT, config)
+    val context = context(MonitorChatStyle.LIVE, config)
     output.attach(context)
 
-    val delivered =
-      output.deliverVerdict(context, VerdictSignal(frame(), flagged = true, 0.2, 1_000L))
+    val delivered = output.deliverLive(context, LiveSignal(frame(), flagged = true, 0.2, 1_000L))
 
     assertFalse(delivered)
   }
 
   @Test
-  fun `a second verdict for the same target inside the cooldown is dropped`() {
-    val context = context(MonitorChatStyle.VERDICT)
+  fun `a second line for the same target inside the cooldown is dropped`() {
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
     val target = frame()
 
-    output.deliverVerdict(context, VerdictSignal(target, flagged = false, 0.9, 1_000L))
-    val second = output.deliverVerdict(context, VerdictSignal(target, flagged = false, 0.9, 1_500L))
+    output.deliverLive(context, LiveSignal(target, flagged = false, 0.9, 1_000L))
+    val second = output.deliverLive(context, LiveSignal(target, flagged = false, 0.9, 1_500L))
 
     assertFalse(second)
     assertEquals(listOf("V43"), sent)
@@ -204,38 +201,37 @@ class ChatOutputTest {
 
   @Test
   fun `the cooldown is per target`() {
-    val context = context(MonitorChatStyle.VERDICT)
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
 
-    output.deliverVerdict(context, VerdictSignal(frame(), flagged = false, 0.9, 1_000L))
-    val other =
-      output.deliverVerdict(context, VerdictSignal(frame(name = "Alex"), false, 0.9, 1_500L))
+    output.deliverLive(context, LiveSignal(frame(), flagged = false, 0.9, 1_000L))
+    val other = output.deliverLive(context, LiveSignal(frame(name = "Alex"), false, 0.9, 1_500L))
 
     assertTrue(other)
     assertEquals(2, sent.size)
   }
 
   @Test
-  fun `a verdict lands again once the cooldown has elapsed`() {
-    val context = context(MonitorChatStyle.VERDICT)
+  fun `a line lands again once the cooldown has elapsed`() {
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
     val target = frame()
 
-    output.deliverVerdict(context, VerdictSignal(target, flagged = false, 0.9, 1_000L))
-    val later = output.deliverVerdict(context, VerdictSignal(target, flagged = false, 0.9, 2_000L))
+    output.deliverLive(context, LiveSignal(target, flagged = false, 0.9, 1_000L))
+    val later = output.deliverLive(context, LiveSignal(target, flagged = false, 0.9, 2_000L))
 
     assertTrue(later)
   }
 
   @Test
-  fun `clearing forgets the cooldown so the next verdict is immediate`() {
-    val context = context(MonitorChatStyle.VERDICT)
+  fun `clearing forgets the cooldown so the next line is immediate`() {
+    val context = context(MonitorChatStyle.LIVE)
     output.attach(context)
     val target = frame()
 
-    output.deliverVerdict(context, VerdictSignal(target, flagged = false, 0.9, 1_000L))
+    output.deliverLive(context, LiveSignal(target, flagged = false, 0.9, 1_000L))
     output.clear(context)
-    val next = output.deliverVerdict(context, VerdictSignal(target, flagged = false, 0.9, 1_100L))
+    val next = output.deliverLive(context, LiveSignal(target, flagged = false, 0.9, 1_100L))
 
     assertTrue(next)
   }

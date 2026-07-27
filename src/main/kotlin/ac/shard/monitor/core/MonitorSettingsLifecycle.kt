@@ -17,13 +17,20 @@
  */
 package ac.shard.monitor.core
 
-data class MonitorSettings(
-  val mode: MonitorMode,
-  val theme: MonitorTheme,
-  val showPing: Boolean,
-  val showDmg: Boolean,
-  val showTrend: Boolean,
-  val showName: MonitorNameMode,
-  val outputs: Set<MonitorOutputKind> = setOf(MonitorOutputKind.ACTIONBAR),
-  val chatStyle: MonitorChatStyle = MonitorChatStyle.DIGEST,
-)
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerQuitEvent
+
+class MonitorSettingsLifecycle(private val settingsService: MonitorSettingsService) : Listener {
+  @EventHandler(priority = EventPriority.MONITOR)
+  fun onJoin(event: PlayerJoinEvent) {
+    settingsService.prewarm(event.player.uniqueId)
+  }
+
+  @EventHandler(priority = EventPriority.MONITOR)
+  fun onQuit(event: PlayerQuitEvent) {
+    settingsService.evict(event.player.uniqueId)
+  }
+}

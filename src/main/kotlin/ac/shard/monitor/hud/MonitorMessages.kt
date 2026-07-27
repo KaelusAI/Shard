@@ -15,15 +15,22 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.monitor.core
+package ac.shard.monitor.hud
 
-data class MonitorSettings(
-  val mode: MonitorMode,
-  val theme: MonitorTheme,
-  val showPing: Boolean,
-  val showDmg: Boolean,
-  val showTrend: Boolean,
-  val showName: MonitorNameMode,
-  val outputs: Set<MonitorOutputKind> = setOf(MonitorOutputKind.ACTIONBAR),
-  val chatStyle: MonitorChatStyle = MonitorChatStyle.DIGEST,
-)
+import ac.shard.config.LocaleManager
+import ac.shard.utils.Message
+
+internal fun rawMessageFor(localeManager: LocaleManager, key: Message, targetName: String): String =
+  localeManager
+    .getRawMessage(key)
+    .replace(PREFIX_TAG, localeManager.getRawMessage(Message.PREFIX))
+    .replace(PLAYER_TAG, targetName)
+
+internal fun targetTexts(localeManager: LocaleManager, targetName: String): UnavailableTexts =
+  UnavailableTexts(
+    noData = rawMessageFor(localeManager, Message.MONITOR_NO_DATA, targetName),
+    noAiCheck = rawMessageFor(localeManager, Message.MONITOR_NO_AICHECK, targetName),
+  )
+
+private const val PREFIX_TAG = "<prefix>"
+private const val PLAYER_TAG = "<player>"

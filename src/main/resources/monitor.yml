@@ -1,9 +1,18 @@
 # Do not change this value manually.
-config-version: 1
+config-version: 2
 
 update: 2
 storage:
   per-player: true
+  # Load a player's saved settings asynchronously on join, so the first frame never
+  # waits on the database.
+  prewarm-on-join: true
+
+limits:
+  # Max monitor sessions on this server at once. 0 = unlimited.
+  max-sessions: 32
+  # Max viewers watching the same player. 0 = unlimited.
+  max-viewers-per-target: 0
 view:
   update: 2
   rebind-ticks: 100
@@ -29,15 +38,20 @@ defaults:
   show-dmg: true
   show-trend: true
   show-name: auto         # auto | always | never
-  output: actionbar       # actionbar | bossbar | sidebar | chat | tablist
-  chat-style: digest      # digest | verdict
+  # One or more, comma separated: actionbar | bossbar | sidebar | chat | tablist
+  output: actionbar
+  chat-style: live        # live | digest
 behavior:
   keep-length: true
   show-neutral-when-hidden: true
   keepalive-ticks: 20    # resend unchanged action bar every N ticks (20 ticks = 1 second)
+  ping-refresh-ticks: 20 # how often the target's ping is read
+  ping-bucket-ms: 10     # round ping to N ms so jitter does not force a redraw
+  trend-decay-ticks: 100 # reset trend to zero after N ticks without a probability change
   neutral:
     ping: "<gray>Ping --</gray>"
     dmg: "<gray>Dmg 1.00x</gray>"
+    trend: "<gray>+0.00</gray>"
   name:
     max-length: 12
     truncate-suffix: "…"
@@ -54,9 +68,73 @@ format:
   dmg:
     decimals: 2
     hide-when-default: false
+# Tokens: name, prob, trend, buffer, ping, dmg, prob90
 modes:
   compact: [name, prob, trend, buffer]
   full: [name, prob, trend, buffer, ping, dmg]
+# Where the monitor is drawn. A player picks one with "/shard monitor output <kind>".
+# Templates below accept three placeholder forms:
+#   {prob}     the raw formatted value, no colour
+#   {prob!}    the same value wrapped in the player's theme template
+#   {headline} the whole modes:<mode> line, joined with the theme separator
+outputs:
+  actionbar:
+    enabled: true
+    # -1 inherits behavior.keepalive-ticks. Set a positive value to override it here.
+    keepalive-ticks: -1
+
+  bossbar:
+    enabled: true
+    title: "{headline}"
+    overlay: PROGRESS          # PROGRESS | NOTCHED_6 | NOTCHED_10 | NOTCHED_12 | NOTCHED_20
+    progress: prob             # prob | buffer | none
+    progress-buffer-max: 50.0  # buffer value that fills the bar when progress is "buffer"
+    color: auto                # auto | PINK | BLUE | RED | GREEN | YELLOW | PURPLE | WHITE
+    max-bars: 3                # also caps how many players can be watched at once
+    overflow-template: "<gray>\u2026 and {count} more monitored</gray>"
+    color-thresholds:
+      yellow: 0.40
+      red: 0.75
+
+  sidebar:
+    enabled: true
+    slot: 1                    # 0 = tab list, 1 = sidebar, 2 = below name
+    title: "<gradient:#8e9eab:#eef2f3>Shard</gradient>"
+    reassert-ticks: 100        # re-claim the slot every N ticks; 0 gives it up
+    drop-blank-lines: false
+    unavailable-line: "<gray>no data</gray>"
+    # Max 15 lines. Requires Minecraft 1.20.3 or newer.
+    lines:
+      - "<gray>Target</gray>  <white>{name}</white>"
+      - ""
+      - "<gray>Prob</gray>    {prob!}"
+      - "<gray>Trend</gray>   {trend!}"
+      - "<gray>Buffer</gray>  {buffer!}"
+      - "<gray>Ping</gray>    {ping!}"
+      - "<gray>Dmg</gray>     {dmg!}"
+
+  chat:
+    enabled: true
+    # Used when the player's chat-style is "digest": one summary line every interval.
+    digest:
+      interval-ticks: 200
+      skip-unchanged: true
+      template: "<prefix> {headline}"
+    # Used when the player's chat-style is "live": one line per AI detection.
+    live:
+      min-probability: 0.0
+      always-show-flagged: true
+      cooldown-ticks: 20
+      unknown-ping: "--"
+      # {ping} comes from the last render tick; the AI detection itself carries no ping.
+      template: "<prefix> <white>{name}</white> <gray>\u00bb</gray> {prob!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {buffer!}"
+      flagged-template: "<prefix> <red>\u26a0</red> <white>{name}</white> <gray>\u00bb</gray> {prob!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {buffer!} <gray>\u2022</gray> {dmg!}"
+
+  tablist:
+    enabled: true
+    header: "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"
+    footer: "{headline}"
+
 theme:
   calm:
     name: "<gray>@{name}</gray>"
@@ -65,6 +143,7 @@ theme:
     buffer: "<color:#FBBF24>◆ {buffer}</color>"
     ping: "<color:#BFDBFE>Ping {ping}ms</color>"
     dmg: "<color:#FECACA>Dmg {dmg}x</color>"
+    prob90: "<color:#F87171>90+ {prob90}</color>"
     sep: "<dark_gray> • </dark_gray>"
   vivid:
     name: "<gray>@{name}</gray>"
@@ -73,6 +152,7 @@ theme:
     buffer: "<yellow>◆ {buffer}</yellow>"
     ping: "<aqua>Ping {ping}ms</aqua>"
     dmg: "<red>Dmg {dmg}x</red>"
+    prob90: "<red>90+ {prob90}</red>"
     sep: "<dark_gray> • </dark_gray>"
   minimal:
     name: "<gray>@{name}</gray>"
@@ -81,4 +161,5 @@ theme:
     buffer: "<yellow>◆ {buffer}</yellow>"
     ping: "<gray>{ping}ms</gray>"
     dmg: "<gray>{dmg}x</gray>"
+    prob90: "<gray>90+ {prob90}</gray>"
     sep: "<dark_gray> • </dark_gray>"
