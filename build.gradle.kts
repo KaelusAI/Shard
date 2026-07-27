@@ -6,10 +6,10 @@ import versioning.BuildConfig
 
 plugins {
   id("java")
-  id("org.jetbrains.kotlin.jvm") version "2.3.20"
-  id("com.gradleup.shadow") version "9.4.0"
+  id("org.jetbrains.kotlin.jvm") version "2.4.10"
+  id("com.gradleup.shadow") version "9.6.1"
   id("net.minecrell.plugin-yml.bukkit") version "0.6.0"
-  id("com.diffplug.spotless") version "8.4.0"
+  id("com.diffplug.spotless") version "8.8.0"
   id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 
@@ -28,15 +28,15 @@ repositories {
   maven("https://repo.codemc.io/repository/maven-releases/")
   maven("https://repo.codemc.io/repository/maven-snapshots/")
   maven("https://maven.enginehub.org/repo/") // WorldGuard
-  maven("https://repo.extendedclip.com/content/repositories/placeholderapi/") // PlaceholderAPI
+  maven("https://repo.extendedclip.com/releases/") // PlaceholderAPI
   maven("https://repo.opencollab.dev/maven-snapshots/") // Geyser / Floodgate
 }
 
 dependencies {
   // Bukkit APIs
   compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-  compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.15")
-  compileOnly("me.clip:placeholderapi:2.12.2")
+  compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.17")
+  compileOnly("me.clip:placeholderapi:2.12.3")
   compileOnly("org.geysermc.floodgate:api:2.0-SNAPSHOT")
 
   // PacketEvents
@@ -48,10 +48,10 @@ dependencies {
   implementation("org.bstats:bstats-bukkit:3.2.1")
 
   // Cloud Command Framework
-  implementation("org.incendo:cloud-paper:2.0.0-beta.14")
+  implementation("org.incendo:cloud-paper:2.0.0")
   implementation("org.incendo:cloud-processors-requirements:1.0.0-rc.1")
-  implementation("org.incendo:cloud-kotlin-extensions:2.0.0")
-  implementation("org.incendo:cloud-kotlin-coroutines:2.0.0")
+  implementation("org.incendo:cloud-kotlin-extensions:2.1.0")
+  implementation("org.incendo:cloud-kotlin-coroutines:2.1.0")
 
   // Adventure & MiniMessage
   implementation("net.kyori:adventure-platform-bukkit:4.4.1")
@@ -60,15 +60,15 @@ dependencies {
   implementation("net.kyori:adventure-text-serializer-gson:4.26.1")
 
   // HikariCP
-  implementation("com.zaxxer:HikariCP:7.0.2")
-  implementation("org.slf4j:slf4j-jdk14:2.0.17")
-  implementation("org.jetbrains.exposed:exposed-core:1.1.1")
-  implementation("org.jetbrains.exposed:exposed-java-time:1.1.1")
-  implementation("org.jetbrains.exposed:exposed-jdbc:1.1.1")
+  implementation("com.zaxxer:HikariCP:7.1.0")
+  implementation("org.slf4j:slf4j-jdk14:2.0.18")
+  implementation("org.jetbrains.exposed:exposed-core:1.3.1")
+  implementation("org.jetbrains.exposed:exposed-java-time:1.3.1")
+  implementation("org.jetbrains.exposed:exposed-jdbc:1.3.1")
   implementation("org.flywaydb:flyway-core:12.1.1")
   implementation("org.flywaydb:flyway-mysql:12.1.1")
-  implementation("org.mariadb.jdbc:mariadb-java-client:3.5.7")
-  implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
+  implementation("org.mariadb.jdbc:mariadb-java-client:3.5.9")
+  implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
 
   // Redis (cross-server alerts). Netty stays unbundled and unrelocated: PacketEvents reflects on
   // the server's io.netty Channel type, so Lettuce must share the server's Netty.
@@ -77,24 +77,24 @@ dependencies {
 
   // Utilities
   implementation(kotlin("stdlib"))
-  implementation("it.unimi.dsi:fastutil:8.5.15")
+  implementation("it.unimi.dsi:fastutil:8.5.18")
   implementation("org.jetbrains:annotations:26.1.0")
   implementation("org.spongepowered:configurate-yaml:4.2.0")
   implementation("ru.vyarus:yaml-config-updater:1.4.4")
-  implementation("io.insert-koin:koin-core:4.2.0")
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-  implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
+  implementation("io.insert-koin:koin-core:4.2.2")
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+  implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.5.1")
 
   // Testing
   testImplementation(kotlin("test"))
   testImplementation(packetEventsSpigot)
-  testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
-  testImplementation("io.mockk:mockk:1.14.9")
+  testImplementation("org.junit.jupiter:junit-jupiter:6.1.2")
+  testImplementation("io.mockk:mockk:1.14.11")
   testImplementation("org.testcontainers:junit-jupiter:1.21.4")
   testImplementation("org.testcontainers:mariadb:1.21.4")
   testCompileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
   testRuntimeOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-  testRuntimeOnly("org.xerial:sqlite-jdbc:3.51.3.0")
+  testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.2.1")
   testRuntimeOnly("io.netty:netty-handler:4.1.113.Final")
 }
 
