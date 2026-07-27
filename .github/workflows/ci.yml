@@ -104,7 +104,7 @@ jobs:
         id: version
         run: |
           base=$(./gradlew properties -q | sed -n 's/^version: //p')
-          last=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          last=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           if [ -z "$last" ]; then
             last=$(git describe --tags --abbrev=0 2>/dev/null || true)
           fi
