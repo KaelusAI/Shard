@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "actions",
+      "semanticCommitType": "ci"
+    },
+    {
+      "matchManagers": ["gradle", "gradle-wrapper"],
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
+    },
+    {
+      "matchPackageNames": ["io.papermc.paper:paper-api"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": ["io.netty:netty-handler"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": ["net.kyori:adventure-text-{/,}**"],
+      "allowedVersions": "<5.0.0"
+    }
+  ]
+}
