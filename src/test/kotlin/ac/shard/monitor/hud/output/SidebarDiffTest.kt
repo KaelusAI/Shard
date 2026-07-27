@@ -88,20 +88,24 @@ class SidebarDiffTest {
     )
   }
 
-  private fun payload(prob: String = "43", spacer: String = "S"): MonitorRenderPayload =
+  private fun payload(
+    prob: String = "43",
+    spacer: String = "S",
+    names: List<String> = listOf("Steve"),
+  ): MonitorRenderPayload =
     MonitorRenderPayload(
-      listOf(
+      names.map { name ->
         MonitorFrame(
-          targetId = targetId,
-          targetName = "Steve",
+          targetId = if (name == "Steve") targetId else UUID.randomUUID(),
+          targetName = name,
           headline = "h",
-          placeholders = mapOf("prob" to prob, "spacer" to spacer),
+          placeholders = mapOf("prob" to prob, "spacer" to spacer, "name" to name),
           progress = 0f,
           severity = MonitorSeverity.CALM,
           dataPresent = true,
           aiActive = true,
         )
-      ),
+      },
       emptyMap(),
     )
 
@@ -313,6 +317,38 @@ class SidebarDiffTest {
   fun `the objective name fits the sixteen character protocol limit`() {
     assertEquals(16, sidebarObjectiveName(viewerId, 1L).length)
     assertEquals(16, sidebarObjectiveName(viewerId, Long.MAX_VALUE).length)
+  }
+
+  @Test
+  fun `two targets are drawn with a separator between their blocks`() {
+    val config =
+      MonitorHudRuntimeConfig.from(
+          ConfigView(
+            YamlConfigurationLoader.builder()
+              .source {
+                """
+                outputs:
+                  sidebar:
+                    enabled: true
+                    target-separator: "--"
+                    lines:
+                      - "N{name}"
+                """
+                  .trimIndent()
+                  .reader()
+                  .buffered()
+              }
+              .build()
+              .load()
+          ),
+          2,
+          Logger.getLogger("sidebar-separator-test"),
+        )
+        .sidebar
+
+    val lines = buildSidebarLines(payload(names = listOf("Steve", "Alex")), config)
+
+    assertEquals(listOf("NSteve", "--", "NAlex"), lines)
   }
 
   @Test

@@ -42,6 +42,7 @@ data class SidebarConfig(
   val reassertCycles: Int,
   val dropBlankLines: Boolean,
   val unavailableLine: String,
+  val targetSeparator: String,
   val lines: List<String>,
 ) {
   companion object {
@@ -72,6 +73,7 @@ data class SidebarConfig(
         dropBlankLines = config.getBoolean("outputs.sidebar.drop-blank-lines", false),
         unavailableLine =
           config.getString("outputs.sidebar.unavailable-line", DEFAULT_SIDEBAR_UNAVAILABLE),
+        targetSeparator = config.getString("outputs.sidebar.target-separator", ""),
         lines = lines.take(SIDEBAR_MAX_LINES),
       )
     }

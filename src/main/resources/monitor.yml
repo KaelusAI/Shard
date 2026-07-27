@@ -103,6 +103,8 @@ outputs:
     reassert-ticks: 100        # re-claim the slot every N ticks; 0 gives it up
     drop-blank-lines: false
     unavailable-line: "<gray>no data</gray>"
+    # Drawn between two watched players. An empty string leaves a blank line.
+    target-separator: ""
     # Max 15 lines. Requires Minecraft 1.20.3 or newer.
     lines:
       - "<gray>Target</gray>  <white>{name}</white>"

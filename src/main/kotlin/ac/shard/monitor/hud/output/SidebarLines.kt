@@ -39,7 +39,11 @@ internal fun sidebarObjectiveName(viewerId: UUID, sessionId: Long): String {
 internal fun sidebarEntryKey(index: Int): String = "§" + ENTRY_KEY_ALPHABET[index]
 
 internal fun buildSidebarLines(payload: MonitorRenderPayload, config: SidebarConfig): List<String> =
-  payload.frames.flatMap { frame -> frameLines(frame, config) }.take(SIDEBAR_MAX_LINES)
+  payload.frames
+    .map { frame -> frameLines(frame, config) }
+    .reduceOrNull { drawn, next -> drawn + config.targetSeparator + next }
+    .orEmpty()
+    .take(SIDEBAR_MAX_LINES)
 
 internal fun restoreSidebar(
   bridge: ScoreboardPacketBridge,
