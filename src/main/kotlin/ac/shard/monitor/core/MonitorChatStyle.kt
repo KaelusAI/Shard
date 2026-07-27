@@ -20,19 +20,19 @@ package ac.shard.monitor.core
 import java.util.Locale
 
 enum class MonitorChatStyle {
-  DIGEST,
-  VERDICT;
+  SUMMARY,
+  LIVE;
 
   companion object {
     @JvmStatic
     fun fromConfig(value: String?): MonitorChatStyle {
       if (value == null) {
-        return DIGEST
+        return SUMMARY
       }
       return try {
         valueOf(value.trim().uppercase(Locale.ROOT))
       } catch (_: IllegalArgumentException) {
-        DIGEST
+        SUMMARY
       }
     }
   }

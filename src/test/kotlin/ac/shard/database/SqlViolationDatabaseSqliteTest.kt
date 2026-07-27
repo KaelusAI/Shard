@@ -138,15 +138,15 @@ class SqlViolationDatabaseSqliteTest {
         showDmg = true,
         showTrend = false,
         showName = MonitorNameMode.ALWAYS,
-        output = MonitorOutputKind.BOSSBAR,
-        chatStyle = MonitorChatStyle.VERDICT,
+        outputs = setOf(MonitorOutputKind.BOSSBAR),
+        chatStyle = MonitorChatStyle.LIVE,
       )
 
     violationDatabase.saveMonitorSettings(playerId, settings)
 
     val loaded = violationDatabase.loadMonitorSettings(playerId)
-    assertEquals(MonitorOutputKind.BOSSBAR, loaded?.output)
-    assertEquals(MonitorChatStyle.VERDICT, loaded?.chatStyle)
+    assertEquals(setOf(MonitorOutputKind.BOSSBAR), loaded?.outputs)
+    assertEquals(MonitorChatStyle.LIVE, loaded?.chatStyle)
     assertEquals(settings, loaded)
   }
 
@@ -169,8 +169,8 @@ class SqlViolationDatabaseSqliteTest {
 
     val loaded = SqlViolationDatabase(mockk(relaxed = true), database).loadMonitorSettings(playerId)
 
-    assertEquals(MonitorOutputKind.ACTIONBAR, loaded?.output)
-    assertEquals(MonitorChatStyle.DIGEST, loaded?.chatStyle)
+    assertEquals(setOf(MonitorOutputKind.ACTIONBAR), loaded?.outputs)
+    assertEquals(MonitorChatStyle.LIVE, loaded?.chatStyle)
   }
 
   private fun migrateFreshSqlite(jdbcUrl: String) {

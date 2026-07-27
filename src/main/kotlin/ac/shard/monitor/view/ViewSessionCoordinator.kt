@@ -35,10 +35,10 @@ internal class ViewSessionCoordinator(
   componentCache: ComponentCache,
   sampler: MonitorSampler,
   private val slotRegistry: ScoreboardSlotRegistry,
+  private val bridge: ScoreboardPacketBridge,
 ) {
   private val sessions = ConcurrentHashMap<UUID, ViewSession>()
   private val teamBridge = ViewTeamPacketBridge(componentCache)
-  private val bridge = ScoreboardPacketBridge(componentCache)
   private val tracker = ViewTargetTracker(ViewTagRenderer(sampler), teamBridge, bridge)
   private val slotGuard = ViewSlotGuard(plugin, tracker, bridge) { viewerId -> sessions[viewerId] }
 

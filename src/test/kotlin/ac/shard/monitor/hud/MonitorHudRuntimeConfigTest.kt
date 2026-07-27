@@ -130,8 +130,8 @@ class MonitorHudRuntimeConfigTest {
   }
 
   @Test
-  fun `a blank flagged template reuses the plain verdict template`() {
-    val config = load("outputs:\n  chat:\n    verdict:\n      template: \"{prob}\"\n")
+  fun `a blank flagged template reuses the plain live template`() {
+    val config = load("outputs:\n  chat:\n    live:\n      template: \"{prob}\"\n")
 
     assertEquals("{prob}", config.chat.flaggedTemplate)
   }

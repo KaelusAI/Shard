@@ -1,0 +1,2 @@
+ALTER TABLE monitor_settings
+  MODIFY COLUMN output_kind VARCHAR(64) NOT NULL DEFAULT 'ACTIONBAR';

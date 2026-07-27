@@ -68,7 +68,13 @@ class BossBarOutputTest {
     every { viewer.uniqueId } returns viewerId
     every { viewer.isOnline } returns true
     every { adventure.player(viewer) } returns audience
-    return MonitorRenderContext(viewer, viewerId, sessionId, MonitorChatStyle.DIGEST, runtimeConfig)
+    return MonitorRenderContext(
+      viewer,
+      viewerId,
+      sessionId,
+      MonitorChatStyle.SUMMARY,
+      runtimeConfig,
+    )
   }
 
   private fun frame(prob: String, progress: Float) =

@@ -308,7 +308,54 @@ bukkit {
     register("shard.monitor") {
       description = "Allows usage of the monitor command"
       default = Permission.Default.OP
-      children = listOf("shard.monitor.self", "shard.monitor.list")
+      children =
+        listOf(
+          "shard.monitor.self",
+          "shard.monitor.list",
+          "shard.monitor.others",
+          "shard.monitor.multi",
+          "shard.monitor.output",
+        )
+    }
+    register("shard.monitor.others") {
+      description = "Allows monitoring players other than yourself"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.multi") {
+      description = "Allows watching more than one player at the same time"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.output") {
+      description = "Parent permission for monitor output selection"
+      default = Permission.Default.OP
+      children =
+        listOf(
+          "shard.monitor.output.actionbar",
+          "shard.monitor.output.bossbar",
+          "shard.monitor.output.sidebar",
+          "shard.monitor.output.chat",
+          "shard.monitor.output.tablist",
+        )
+    }
+    register("shard.monitor.output.actionbar") {
+      description = "Allows using the action bar monitor output"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.output.bossbar") {
+      description = "Allows using the boss bar monitor output"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.output.sidebar") {
+      description = "Allows using the scoreboard sidebar monitor output"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.output.chat") {
+      description = "Allows using the chat monitor output"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.output.tablist") {
+      description = "Allows using the tab list monitor output"
+      default = Permission.Default.FALSE
     }
     register("shard.monitor.self") {
       description = "Allows enabling the monitor display only on self"
@@ -334,7 +381,7 @@ bukkit {
       children = listOf("shard.monitor.list")
     }
     register("shard.view") {
-      description = "Allows toggling AI nametag view above players"
+      description = "Allows toggling the AI nametag view on players"
       default = Permission.Default.OP
     }
     register("shard.profile") {
@@ -421,6 +468,14 @@ bukkit {
         "monitor",
         "monitor.self",
         "monitor.list",
+        "monitor.others",
+        "monitor.multi",
+        "monitor.output",
+        "monitor.output.actionbar",
+        "monitor.output.bossbar",
+        "monitor.output.sidebar",
+        "monitor.output.chat",
+        "monitor.output.tablist",
         "view",
         "profile",
         "brand",

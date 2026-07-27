@@ -92,11 +92,14 @@ internal data class ViewRuntimeConfig(
           prefixTemplate.contains(PING_PLACEHOLDER) ||
             suffixTemplate.contains(PING_PLACEHOLDER) ||
             belowTemplate.contains(PING_PLACEHOLDER),
-        slot = config.getInt("view.slot", BELOW_NAME_DISPLAY_SLOT).coerceIn(0, MAX_DISPLAY_SLOT),
+        slot = viewDisplaySlot(config),
       )
     }
   }
 }
+
+internal fun viewDisplaySlot(config: ConfigView): Int =
+  config.getInt("view.slot", BELOW_NAME_DISPLAY_SLOT).coerceIn(0, MAX_DISPLAY_SLOT)
 
 internal enum class ViewPlacement {
   ABOVE_NAME,

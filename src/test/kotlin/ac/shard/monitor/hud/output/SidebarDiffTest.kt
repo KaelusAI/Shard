@@ -36,6 +36,7 @@ import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.bukkit.entity.Player
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
@@ -78,7 +79,13 @@ class SidebarDiffTest {
   private fun context(sessionId: Long = 1L): MonitorRenderContext {
     every { viewer.uniqueId } returns viewerId
     every { viewer.isOnline } returns true
-    return MonitorRenderContext(viewer, viewerId, sessionId, MonitorChatStyle.DIGEST, runtimeConfig)
+    return MonitorRenderContext(
+      viewer,
+      viewerId,
+      sessionId,
+      MonitorChatStyle.SUMMARY,
+      runtimeConfig,
+    )
   }
 
   private fun payload(prob: String = "43", spacer: String = "S"): MonitorRenderPayload =
@@ -255,7 +262,9 @@ class SidebarDiffTest {
     claim.onLost.onSlotLost(viewer, SlotLossReason.DISPLACED, "otherPlugin")
 
     verify(exactly = 1) { bridge.displayObjective(viewer, any(), any()) }
-    verify(exactly = 0) { bridge.displayObjective(viewer, sidebarObjectiveName(viewerId), any()) }
+    verify(exactly = 0) {
+      bridge.displayObjective(viewer, sidebarObjectiveName(viewerId, 1L), any())
+    }
   }
 
   @Test
@@ -267,7 +276,7 @@ class SidebarDiffTest {
 
     claim.onLost.onSlotLost(viewer, SlotLossReason.DISPLACED, "otherPlugin")
 
-    verify(exactly = 1) { bridge.displayObjective(viewer, sidebarObjectiveName(viewerId), 1) }
+    verify(exactly = 1) { bridge.displayObjective(viewer, sidebarObjectiveName(viewerId, 1L), 1) }
   }
 
   @Test
@@ -276,7 +285,7 @@ class SidebarDiffTest {
     output.attach(context)
     output.render(context, payload())
     val claim = registry.claimsFor(viewerId)!!.single()
-    val ours = sidebarObjectiveName(viewerId)
+    val ours = sidebarObjectiveName(viewerId, 1L)
     val displayed = mutableListOf<String>()
     every { bridge.displayObjective(viewer, any(), any()) } answers
       {
@@ -302,6 +311,23 @@ class SidebarDiffTest {
 
   @Test
   fun `the objective name fits the sixteen character protocol limit`() {
-    assertEquals(16, sidebarObjectiveName(viewerId).length)
+    assertEquals(16, sidebarObjectiveName(viewerId, 1L).length)
+    assertEquals(16, sidebarObjectiveName(viewerId, Long.MAX_VALUE).length)
+  }
+
+  @Test
+  fun `each session gets its own objective name`() {
+    assertNotEquals(sidebarObjectiveName(viewerId, 1L), sidebarObjectiveName(viewerId, 2L))
+  }
+
+  @Test
+  fun `a restart removes the objective the previous session left behind`() {
+    val first = context(sessionId = 1L)
+    output.attach(first)
+    output.render(first, payload())
+
+    output.attach(context(sessionId = 2L))
+
+    verify(exactly = 1) { bridge.removeObjective(viewer, sidebarObjectiveName(viewerId, 1L)) }
   }
 }

@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
 import ac.shard.monitor.core.MonitorFormatConfig
 import ac.shard.monitor.core.MonitorMode
@@ -24,6 +25,7 @@ import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorThemeTable
 import ac.shard.monitor.core.MonitorToken
 import ac.shard.monitor.core.ticksToCycles
+import ac.shard.monitor.view.viewDisplaySlot
 import java.util.Locale
 import java.util.logging.Logger
 
@@ -118,6 +120,9 @@ data class MonitorHudRuntimeConfig(
   fun tokens(mode: MonitorMode): List<MonitorToken> = modes[mode] ?: FALLBACK_TOKENS
 
   companion object {
+    fun fromManager(configManager: ConfigManager, logger: Logger): MonitorHudRuntimeConfig =
+      from(configManager.monitorConfig, viewDisplaySlot(configManager.monitorConfig), logger)
+
     fun from(config: ConfigView, viewSlot: Int, logger: Logger): MonitorHudRuntimeConfig {
       val updateTicks = config.getLong("update", DEFAULT_HUD_UPDATE_TICKS).coerceAtLeast(1L)
       return MonitorHudRuntimeConfig(

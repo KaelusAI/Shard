@@ -21,6 +21,7 @@ import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.PacketEvents
@@ -32,6 +33,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.server.PluginDisableEvent
 
+@Suppress("LongParameterList")
 class MonitorViewService(
   private val plugin: Shard,
   private val configManager: ConfigManager,
@@ -39,9 +41,10 @@ class MonitorViewService(
   componentCache: ComponentCache,
   sampler: MonitorSampler,
   slotRegistry: ScoreboardSlotRegistry,
+  bridge: ScoreboardPacketBridge,
 ) : Listener {
   private val coordinator =
-    ViewSessionCoordinator(plugin, scheduler, componentCache, sampler, slotRegistry)
+    ViewSessionCoordinator(plugin, scheduler, componentCache, sampler, slotRegistry, bridge)
   private val trackingObserver =
     ViewTrackingObserver(scheduler, coordinator) { viewerId ->
       resolveActiveViewViewer(viewerId, coordinator)

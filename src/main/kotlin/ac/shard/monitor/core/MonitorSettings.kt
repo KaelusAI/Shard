@@ -18,12 +18,12 @@
 package ac.shard.monitor.core
 
 data class MonitorSettings(
-  var mode: MonitorMode,
-  var theme: MonitorTheme,
-  var showPing: Boolean,
-  var showDmg: Boolean,
-  var showTrend: Boolean,
-  var showName: MonitorNameMode,
-  var output: MonitorOutputKind = MonitorOutputKind.ACTIONBAR,
-  var chatStyle: MonitorChatStyle = MonitorChatStyle.DIGEST,
+  val mode: MonitorMode,
+  val theme: MonitorTheme,
+  val showPing: Boolean,
+  val showDmg: Boolean,
+  val showTrend: Boolean,
+  val showName: MonitorNameMode,
+  val outputs: Set<MonitorOutputKind> = setOf(MonitorOutputKind.ACTIONBAR),
+  val chatStyle: MonitorChatStyle = MonitorChatStyle.SUMMARY,
 )

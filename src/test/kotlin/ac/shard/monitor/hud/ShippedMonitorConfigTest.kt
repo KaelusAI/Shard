@@ -20,6 +20,7 @@ package ac.shard.monitor.hud
 import ac.shard.config.ConfigView
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
+import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.core.MonitorTheme
@@ -28,6 +29,7 @@ import java.util.UUID
 import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
 class ShippedMonitorConfigTest {
@@ -99,10 +101,21 @@ class ShippedMonitorConfigTest {
   }
 
   @Test
-  fun `the shipped file leaves the four new outputs off`() {
+  fun `the shipped file offers every output`() {
     assertEquals(
-      listOf(ac.shard.monitor.core.MonitorOutputKind.ACTIONBAR),
-      ac.shard.monitor.core.MonitorOutputKind.entries.filter { shipped.isEnabled(it) },
+      MonitorOutputKind.entries,
+      MonitorOutputKind.entries.filter { shipped.isEnabled(it) },
     )
+  }
+
+  @Test
+  fun `the shipped sidebar does not collide with the shipped view slot`() {
+    assertEquals(1, shipped.sidebar.slot)
+    assertTrue(shipped.sidebar.enabled)
+  }
+
+  @Test
+  fun `the shipped action bar keepalive inherits the shared setting`() {
+    assertEquals(10, shipped.actionBar.keepAliveCycles)
   }
 }

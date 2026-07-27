@@ -41,7 +41,13 @@ class OutputStatesTest {
   private fun context(sessionId: Long): MonitorRenderContext {
     val viewer = mockk<Player>(relaxed = true)
     every { viewer.uniqueId } returns viewerId
-    return MonitorRenderContext(viewer, viewerId, sessionId, MonitorChatStyle.DIGEST, runtimeConfig)
+    return MonitorRenderContext(
+      viewer,
+      viewerId,
+      sessionId,
+      MonitorChatStyle.SUMMARY,
+      runtimeConfig,
+    )
   }
 
   @Test

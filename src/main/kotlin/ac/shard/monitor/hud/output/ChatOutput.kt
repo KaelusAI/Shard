@@ -35,7 +35,7 @@ fun interface ChatSink {
   fun send(viewer: Player, raw: String)
 }
 
-data class VerdictSignal(
+data class LiveSignal(
   val frame: MonitorFrame,
   val flagged: Boolean,
   val probability: Double,
@@ -58,7 +58,7 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
   override fun isAvailable(): Boolean = true
 
   override fun policy(config: MonitorHudRuntimeConfig): MonitorOutputPolicy =
-    MonitorOutputPolicy(keepAliveCycles = 0, minIntervalCycles = config.chat.digestCycles)
+    MonitorOutputPolicy(keepAliveCycles = 0, minIntervalCycles = config.chat.summaryCycles)
 
   override fun attach(context: MonitorRenderContext): Boolean {
     states.put(context, ChatState(context.chatStyle))
@@ -67,50 +67,50 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
 
   override fun render(context: MonitorRenderContext, payload: MonitorRenderPayload) {
     val state = states.get(context)
-    if (state == null || state.style != MonitorChatStyle.DIGEST || !context.viewer.isOnline) {
+    if (state == null || state.style != MonitorChatStyle.SUMMARY || !context.viewer.isOnline) {
       return
     }
-    renderDigest(context, payload, state)
+    renderSummary(context, payload, state)
   }
 
   override fun clear(context: MonitorRenderContext) {
     val state = states.get(context) ?: return
-    state.lastDigest = ""
-    state.lastVerdictAt.clear()
+    state.lastSummary = ""
+    state.lastLineAt.clear()
   }
 
   override fun detach(context: MonitorRenderContext) {
     states.remove(context)
   }
 
-  fun deliverVerdict(context: MonitorRenderContext, signal: VerdictSignal): Boolean {
+  fun deliverLive(context: MonitorRenderContext, signal: LiveSignal): Boolean {
     val state = states.get(context)
-    if (state == null || !shouldDeliver(state, context, signal)) {
+    if (state == null || !shouldSendLine(state, context, signal)) {
       return false
     }
-    state.lastVerdictAt[signal.frame.targetId] = signal.nowMillis
+    state.lastLineAt[signal.frame.targetId] = signal.nowMillis
     val config = context.config.chat
-    val template = if (signal.flagged) config.flaggedTemplate else config.verdictTemplate
+    val template = if (signal.flagged) config.flaggedTemplate else config.liveTemplate
     sink.send(context.viewer, fillFrameTemplate(template, signal.frame))
     return true
   }
 
-  private fun shouldDeliver(
+  private fun shouldSendLine(
     state: ChatState,
     context: MonitorRenderContext,
-    signal: VerdictSignal,
+    signal: LiveSignal,
   ): Boolean {
-    if (state.style != MonitorChatStyle.VERDICT || !context.viewer.isOnline) {
+    if (state.style != MonitorChatStyle.LIVE || !context.viewer.isOnline) {
       return false
     }
     val config = context.config.chat
     val loudEnough =
       (signal.flagged && config.alwaysShowFlagged) || signal.probability >= config.minProbability
-    val last = state.lastVerdictAt[signal.frame.targetId] ?: 0L
+    val last = state.lastLineAt[signal.frame.targetId] ?: 0L
     return loudEnough && signal.nowMillis - last >= config.cooldownMillis
   }
 
-  private fun renderDigest(
+  private fun renderSummary(
     context: MonitorRenderContext,
     payload: MonitorRenderPayload,
     state: ChatState,
@@ -119,17 +119,17 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
     val text =
       payload.frames
         .filter { it.dataPresent && it.aiActive }
-        .joinToString(separator = "\n") { fillFrameTemplate(config.digestTemplate, it) }
-    if (text.isBlank() || (config.skipUnchanged && text == state.lastDigest)) {
+        .joinToString(separator = "\n") { fillFrameTemplate(config.summaryTemplate, it) }
+    if (text.isBlank() || (config.skipUnchanged && text == state.lastSummary)) {
       return
     }
-    state.lastDigest = text
+    state.lastSummary = text
     sink.send(context.viewer, text)
   }
 
   internal class ChatState(val style: MonitorChatStyle) {
-    var lastDigest: String = ""
-    val lastVerdictAt = HashMap<UUID, Long>()
+    var lastSummary: String = ""
+    val lastLineAt = HashMap<UUID, Long>()
   }
 }
 

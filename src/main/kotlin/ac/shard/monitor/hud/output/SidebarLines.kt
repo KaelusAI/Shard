@@ -27,8 +27,14 @@ import java.util.UUID
 import org.bukkit.entity.Player
 import org.bukkit.scoreboard.DisplaySlot
 
-internal fun sidebarObjectiveName(viewerId: UUID): String =
-  SIDEBAR_OBJECTIVE_PREFIX + viewerId.toString().replace("-", "").substring(0, SIDEBAR_HASH_LENGTH)
+internal fun sidebarObjectiveName(viewerId: UUID, sessionId: Long): String {
+  val viewerPart = viewerId.toString().replace("-", "").substring(0, SIDEBAR_HASH_LENGTH)
+  val sessionPart =
+    (sessionId and SIDEBAR_SESSION_MASK)
+      .toString(SIDEBAR_SESSION_RADIX)
+      .padStart(SIDEBAR_SESSION_LENGTH, '0')
+  return SIDEBAR_OBJECTIVE_PREFIX + viewerPart + sessionPart
+}
 
 internal fun sidebarEntryKey(index: Int): String = "§" + ENTRY_KEY_ALPHABET[index]
 
@@ -66,7 +72,10 @@ private fun bukkitObjectiveName(viewer: Player, slot: Int): String? {
 
 internal const val SIDEBAR_MAX_TARGETS = 4
 private const val SIDEBAR_OBJECTIVE_PREFIX = "shm_"
-private const val SIDEBAR_HASH_LENGTH = 12
+private const val SIDEBAR_HASH_LENGTH = 8
+private const val SIDEBAR_SESSION_LENGTH = 4
+private const val SIDEBAR_SESSION_MASK = 0xFFFFL
+private const val SIDEBAR_SESSION_RADIX = 16
 private const val ENTRY_KEY_ALPHABET = "0123456789abcdef"
 private const val TAB_LIST_SLOT = 0
 private const val SIDEBAR_SLOT = 1

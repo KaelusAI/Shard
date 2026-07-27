@@ -62,8 +62,8 @@ class DatabaseManagerMariaDbContainerTest {
           showDmg = false,
           showTrend = true,
           showName = MonitorNameMode.AUTO,
-          output = MonitorOutputKind.SIDEBAR,
-          chatStyle = MonitorChatStyle.VERDICT,
+          outputs = setOf(MonitorOutputKind.SIDEBAR),
+          chatStyle = MonitorChatStyle.LIVE,
         )
 
       try {

@@ -67,7 +67,7 @@ class SimpleOutputsTest {
     every { viewer.uniqueId } returns viewerId
     every { viewer.isOnline } returns online
     every { adventure.player(viewer) } returns audience
-    return MonitorRenderContext(viewer, viewerId, 1L, MonitorChatStyle.DIGEST, runtimeConfig)
+    return MonitorRenderContext(viewer, viewerId, 1L, MonitorChatStyle.SUMMARY, runtimeConfig)
   }
 
   private fun payload(headline: String = "hello"): MonitorRenderPayload =

@@ -58,8 +58,18 @@ class SidebarOutput(
 
   override fun attach(context: MonitorRenderContext): Boolean {
     val config = context.config.sidebar
-    val state = SidebarState(sidebarObjectiveName(context.viewerId), config.slot)
-    states.put(context, state)
+    val state = SidebarState(sidebarObjectiveName(context.viewerId, context.sessionId), config.slot)
+    states.put(context, state)?.let { displaced ->
+      state.lastForeignObjective = displaced.lastForeignObjective
+      if (context.viewer.isOnline && displaced.created) {
+        displaced.lines.indices.forEach {
+          bridge.removeEntry(context.viewer, displaced.objectiveName, sidebarEntryKey(it))
+        }
+        bridge.removeObjective(context.viewer, displaced.objectiveName)
+      }
+      displaced.created = false
+      displaced.lines = emptyList()
+    }
     createObjective(context, state)
     slotRegistry.claim(
       context.viewerId,

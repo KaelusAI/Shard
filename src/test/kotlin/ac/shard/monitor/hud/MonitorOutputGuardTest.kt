@@ -99,7 +99,13 @@ class MonitorOutputGuardTest {
     val viewer = mockk<Player>(relaxed = true)
     every { viewer.uniqueId } returns viewerId
     every { viewer.name } returns "Admin"
-    return MonitorRenderContext(viewer, viewerId, sessionId, MonitorChatStyle.DIGEST, runtimeConfig)
+    return MonitorRenderContext(
+      viewer,
+      viewerId,
+      sessionId,
+      MonitorChatStyle.SUMMARY,
+      runtimeConfig,
+    )
   }
 
   private fun payload(): MonitorRenderPayload =

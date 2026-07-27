@@ -26,8 +26,8 @@ import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
-import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.core.ScoreboardSlotObserver
+import ac.shard.monitor.hud.MonitorRuntime
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.player.PlayerDataManager
@@ -59,7 +59,7 @@ constructor(
   private val debugManager: DebugManager,
   private val packetListener: PacketListener,
   private val monitorViewService: MonitorViewService,
-  private val monitorSettingsService: MonitorSettingsService,
+  private val monitorRuntime: MonitorRuntime,
   private val slotObserver: ScoreboardSlotObserver,
   private val damageEvent: DamageEvent,
   private val shardApi: ShardApi,
@@ -75,6 +75,7 @@ constructor(
 
     initializePacketRuntime()
     plugin.server.pluginManager.registerEvents(damageEvent, plugin)
+    monitorRuntime.enable()
     plugin.server.servicesManager.register(
       ShardApi::class.java,
       shardApi,
@@ -99,6 +100,7 @@ constructor(
     adventure.close()
     coroutines.close()
     databaseManager.shutdown()
+    monitorRuntime.disable()
     runCatching { telemetryService.sendFarewell() }
   }
 
@@ -109,7 +111,7 @@ constructor(
     alertManager.reload()
     aiServerProvider.reload()
     playerDataManager.reloadAllPlayers()
-    monitorSettingsService.invalidateAll()
+    monitorRuntime.reload()
     monitorViewService.reload()
     crossServerAlertService.shutdown()
     crossServerSuspiciousService.shutdown()

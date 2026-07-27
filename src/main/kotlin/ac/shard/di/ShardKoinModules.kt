@@ -60,6 +60,9 @@ import ac.shard.command.commands.info.HelpCommand
 import ac.shard.command.commands.info.HistoryCommand
 import ac.shard.command.commands.info.LogsCommand
 import ac.shard.command.commands.info.MonitorCommand
+import ac.shard.command.commands.info.MonitorInfoCommand
+import ac.shard.command.commands.info.MonitorOutputSelector
+import ac.shard.command.commands.info.MonitorSettingsCommand
 import ac.shard.command.commands.info.ProfileCommand
 import ac.shard.command.commands.info.StatsCommand
 import ac.shard.command.commands.info.ViewCommand
@@ -78,8 +81,25 @@ import ac.shard.integration.WorldGuardManager
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.MonitorSettingsService
+import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.monitor.core.ScoreboardSlotObserver
 import ac.shard.monitor.core.ScoreboardSlotRegistry
+import ac.shard.monitor.hud.MonitorFrameBuilder
+import ac.shard.monitor.hud.MonitorHudService
+import ac.shard.monitor.hud.MonitorLiveChatListener
+import ac.shard.monitor.hud.MonitorOutput
+import ac.shard.monitor.hud.MonitorOutputFailureSink
+import ac.shard.monitor.hud.MonitorOutputGuard
+import ac.shard.monitor.hud.MonitorOutputRegistry
+import ac.shard.monitor.hud.MonitorRuntime
+import ac.shard.monitor.hud.MonitorTargetIndex
+import ac.shard.monitor.hud.MonitorTargetsService
+import ac.shard.monitor.hud.output.ActionBarOutput
+import ac.shard.monitor.hud.output.BossBarOutput
+import ac.shard.monitor.hud.output.ChatOutput
+import ac.shard.monitor.hud.output.ChatSink
+import ac.shard.monitor.hud.output.SidebarOutput
+import ac.shard.monitor.hud.output.TabListOutput
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
 import ac.shard.platform.scheduler.PlatformScheduler
@@ -96,6 +116,7 @@ import ac.shard.sender.Sender
 import ac.shard.sender.SenderFactory
 import ac.shard.server.AIServerProvider
 import ac.shard.telemetry.TelemetryService
+import ac.shard.utils.MessageUtil
 import java.util.logging.Logger
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
 import org.bukkit.command.CommandSender
@@ -106,7 +127,14 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 
 fun shardModules(plugin: Shard) =
-  listOf(coreModule(plugin), aiModule(), apiModule(), commandModule(), checkModule())
+  listOf(
+    coreModule(plugin),
+    monitorModule(),
+    aiModule(),
+    apiModule(),
+    commandModule(),
+    checkModule(),
+  )
 
 private fun coreModule(plugin: Shard) = module {
   single { plugin }
@@ -131,6 +159,7 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::CrossServerSuspiciousService)
   single { ComponentCache() }
   singleOf(::MonitorSampler)
+  single { ScoreboardPacketBridge(get()) }
   singleOf(::ScoreboardSlotRegistry)
   singleOf(::ScoreboardSlotObserver)
   singleOf(::MonitorSettingsService)
@@ -151,6 +180,40 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::DamageEvent)
 
   singleOf(::ShardCore)
+}
+
+private fun monitorModule() = module {
+  singleOf(::MonitorFrameBuilder)
+  singleOf(::MonitorTargetIndex)
+  singleOf(::MonitorTargetsService)
+  singleOf(::MonitorOutputSelector)
+  single<MonitorOutputFailureSink> {
+    val scope = this
+    MonitorOutputFailureSink { viewerId, kind, phase, error ->
+      scope.get<MonitorHudService>().onOutputFailed(viewerId, kind, phase, error)
+    }
+  }
+  single<ChatSink> {
+    ChatSink { viewer, raw -> MessageUtil.sendMessage(viewer, MessageUtil.format(raw)) }
+  }
+  single<MonitorOutput>(named("actionbar")) {
+    MonitorOutputGuard(ActionBarOutput(get(), get()), get(), get())
+  }
+  single<MonitorOutput>(named("bossbar")) {
+    MonitorOutputGuard(BossBarOutput(get(), get()), get(), get())
+  }
+  single<MonitorOutput>(named("sidebar")) {
+    MonitorOutputGuard(SidebarOutput(get(), get()), get(), get())
+  }
+  single { ChatOutput(get()) }
+  single<MonitorOutput>(named("chat")) { MonitorOutputGuard(get<ChatOutput>(), get(), get()) }
+  single<MonitorOutput>(named("tablist")) {
+    MonitorOutputGuard(TabListOutput(get(), get()), get(), get())
+  }
+  single { MonitorOutputRegistry(getAll()) }
+  singleOf(::MonitorHudService)
+  singleOf(::MonitorLiveChatListener)
+  singleOf(::MonitorRuntime)
 }
 
 private fun aiModule() = module {
@@ -190,6 +253,8 @@ private fun infoCommandsModule() = module {
   singleOf(::HistoryCommand).bind<ShardCommand>()
   singleOf(::LogsCommand).bind<ShardCommand>()
   singleOf(::MonitorCommand).bind<ShardCommand>()
+  singleOf(::MonitorSettingsCommand).bind<ShardCommand>()
+  singleOf(::MonitorInfoCommand).bind<ShardCommand>()
   singleOf(::ProfileCommand).bind<ShardCommand>()
   singleOf(::StatsCommand).bind<ShardCommand>()
   singleOf(::ViewCommand).bind<ShardCommand>()
