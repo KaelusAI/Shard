@@ -91,22 +91,21 @@ class HistoryCommand(
           maxPages.toString(),
         )
 
-      val entries =
-        violations.map { violation ->
-          MessageUtil.getMessage(
-            Message.HISTORY_ENTRY,
-            "server",
-            violation.serverName,
-            "check",
-            violation.checkName,
-            "vl",
-            violation.vl.toString(),
-            "verbose",
-            violation.verbose,
-            "timeago",
-            TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
-          )
-        }
+      val entries = violations.map { violation ->
+        MessageUtil.getMessage(
+          Message.HISTORY_ENTRY,
+          "server",
+          violation.serverName,
+          "check",
+          violation.checkName,
+          "vl",
+          violation.vl.toString(),
+          "verbose",
+          violation.verbose,
+          "timeago",
+          TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
+        )
+      }
 
       scheduler.runSync {
         sender.sendMessage(header)

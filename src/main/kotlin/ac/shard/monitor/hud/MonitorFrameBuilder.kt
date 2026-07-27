@@ -42,12 +42,11 @@ class MonitorFrameBuilder {
     val sample = request.sample
     val available = sample.dataPresent && sample.aiActive
     val raw = rawValues(request, config)
-    val themed =
-      raw.mapValues { (token, value) ->
-        fillTemplate(config.themes.template(request.settings.theme, token)) { key ->
-          if (key == token.key) value else null
-        }
+    val themed = raw.mapValues { (token, value) ->
+      fillTemplate(config.themes.template(request.settings.theme, token)) { key ->
+        if (key == token.key) value else null
       }
+    }
     val headline =
       if (available) headlineOf(request, config, themed) else request.unavailableHeadline
     return MonitorFrame(

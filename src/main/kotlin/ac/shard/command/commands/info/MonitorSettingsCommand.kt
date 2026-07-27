@@ -139,16 +139,15 @@ class MonitorSettingsCommand(
   private fun setFlag(context: CommandContext<Sender>, key: SettingKey) {
     val raw: String = context["state"]
     val enabled = parseToggle(raw)
-    val mutator =
-      enabled?.let {
-        { settings: MonitorSettings ->
-          when (key) {
-            SettingKey.PING -> settings.copy(showPing = it)
-            SettingKey.DMG -> settings.copy(showDmg = it)
-            SettingKey.TREND -> settings.copy(showTrend = it)
-          }
+    val mutator = enabled?.let {
+      { settings: MonitorSettings ->
+        when (key) {
+          SettingKey.PING -> settings.copy(showPing = it)
+          SettingKey.DMG -> settings.copy(showDmg = it)
+          SettingKey.TREND -> settings.copy(showTrend = it)
         }
       }
+    }
     applyOrReject(context, key.label, mutator, if (enabled == true) "on" else "off")
   }
 
