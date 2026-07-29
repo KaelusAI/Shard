@@ -26,4 +26,6 @@ data class MonitorSettings(
   val showName: MonitorNameMode,
   val outputs: Set<MonitorOutputKind> = setOf(MonitorOutputKind.ACTIONBAR),
   val chatStyle: MonitorChatStyle = MonitorChatStyle.SUMMARY,
+  val showCollect: Boolean = true,
+  val showInference: Boolean = true,
 )

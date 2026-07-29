@@ -25,17 +25,15 @@ import java.util.concurrent.CompletableFuture
 
 class DefaultAiService(
   private val transportProvider: AIServerProvider,
-  private val serializer: AiSerializer,
   private val parser: AiResponseParser,
 ) : AiService {
   override val isEnabled: Boolean
     get() = transportProvider.get() != null
 
-  override fun request(features: FloatArray, count: Int): CompletableFuture<AiResult> {
+  override fun request(payload: ByteArray): CompletableFuture<AiResult> {
     val transport: AiTransport =
       transportProvider.get() ?: return CompletableFuture.completedFuture(AiResult.disabledResult())
 
-    val payload: ByteArray = serializer.serialize(features, count)
     return transport.send(payload).thenApply(this::parse).exceptionallyCompose(this::handleError)
   }
 
@@ -56,56 +54,68 @@ class DefaultAiService(
       }
 
     if (
-      cause is AIServer.RequestException && cause.code == AIServer.ResponseCode.INVALID_SEQUENCE
+      cause is AIServer.RequestException && cause.code == AIServer.ResponseCode.RECONFIGURE_REQUIRED
     ) {
-      val sequence = sequenceFromDetails(cause.details) ?: parseSequence(cause.responseBody)
-      val step = stepFromDetails(cause.details) ?: parseStep(cause.responseBody)
-      if (sequence != null || step != null) {
-        return CompletableFuture.failedFuture(AiServiceException(cause, sequence, step))
+      val preWindow =
+        intFromDetails(cause.details, "expected_pre_window")
+          ?: parseIntFromBody(cause.responseBody, "expected_pre_window")
+      val postWindow =
+        intFromDetails(cause.details, "expected_post_window")
+          ?: parseIntFromBody(cause.responseBody, "expected_post_window")
+      val step =
+        intFromDetails(cause.details, "expected_step")
+          ?: parseIntFromBody(cause.responseBody, "expected_step")
+      val columns =
+        stringListFromDetails(cause.details, "expected_columns")
+          ?: parseStringListFromBody(cause.responseBody, "expected_columns")
+      val negotiated = AiServiceException(cause, preWindow, postWindow, step, columns)
+      if (negotiated.hasNewParams) {
+        return CompletableFuture.failedFuture(negotiated)
       }
     }
 
     return CompletableFuture.failedFuture(cause)
   }
 
-  private fun sequenceFromDetails(details: Map<String, Any?>?): Int? =
-    when (val value = details?.get("expected_sequence")) {
+  private fun intFromDetails(details: Map<String, Any?>?, key: String): Int? =
+    when (val value = details?.get(key)) {
       is Number -> value.toInt()
       is String -> value.toIntOrNull()
       else -> null
     }
 
-  private fun stepFromDetails(details: Map<String, Any?>?): Int? =
-    when (val value = details?.get("expected_step")) {
-      is Number -> value.toInt()
-      is String -> value.toIntOrNull()
-      else -> null
-    }
+  private fun stringListFromDetails(details: Map<String, Any?>?, key: String): List<String>? =
+    (details?.get(key) as? Collection<*>)
+      ?.mapNotNull { (it as? String)?.takeIf(String::isNotBlank) }
+      ?.takeIf { it.isNotEmpty() }
 
-  internal fun parseStep(body: String?): Int? {
+  internal fun parseStringListFromBody(body: String?, key: String): List<String>? {
     if (body.isNullOrBlank()) return null
     return runCatching { OBJECT_MAPPER.readTree(body) }
       .getOrNull()
       ?.get("details")
       ?.takeIf { it.isObject }
-      ?.let { details -> parseSequenceNode(details.get("expected_step")) }
+      ?.get(key)
+      ?.takeIf { it.isArray }
+      ?.mapNotNull { it.takeIf(JsonNode::isTextual)?.textValue()?.takeIf(String::isNotBlank) }
+      ?.takeIf { it.isNotEmpty() }
   }
 
-  internal fun parseSequence(body: String?): Int? {
+  internal fun parseIntFromBody(body: String?, key: String): Int? {
     if (body.isNullOrBlank()) return null
     return runCatching { OBJECT_MAPPER.readTree(body) }
       .getOrNull()
       ?.get("details")
       ?.takeIf { it.isObject }
-      ?.let { details -> parseSequenceNode(details.get("expected_sequence")) }
+      ?.let { details -> parseIntNode(details.get(key)) }
   }
 
-  private fun parseSequenceNode(sequence: JsonNode?): Int? {
-    if (sequence == null) return null
+  private fun parseIntNode(node: JsonNode?): Int? {
+    if (node == null) return null
     return when {
-      sequence.isInt -> sequence.intValue()
-      sequence.isLong -> sequence.longValue().toInt()
-      sequence.isTextual -> sequence.textValue().toIntOrNull()
+      node.isInt -> node.intValue()
+      node.isLong -> node.longValue().toInt()
+      node.isTextual -> node.textValue().toIntOrNull()
       else -> null
     }
   }

@@ -22,18 +22,14 @@ import ac.shard.ai.AiService
 import ac.shard.alert.AlertManager
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
-import ac.shard.debug.DebugCategory
+import ac.shard.data.TickBuffer
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
+import ac.shard.player.state.TrackingState
 import ac.shard.region.RegionProvider
 import ac.shard.scheduler.SchedulerService
-import ac.shard.utils.data.PacketStateData
-import com.github.retrooper.packetevents.event.PacketReceiveEvent
-import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import java.lang.reflect.Field
 import java.util.logging.Logger
 import org.bukkit.entity.Player
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -42,56 +38,38 @@ import org.junit.jupiter.api.Test
 class AiCheckDuplicatePacketTest {
 
   @Test
-  fun `duplicate flying packet is ignored before ai request`() {
-    val fixture = createFixture()
+  fun `attack tick anchors and advances the inference window`() {
+    val fixture = createFixture(attackThisTick = true)
 
-    fixture.check.onPacketReceive(fixture.event)
+    fixture.check.onDataTick(fixture.shardPlayer)
 
-    verify(exactly = 0) { fixture.aiService.request(any(), any()) }
+    assertEquals(1, fixture.ticksSinceAttackMark())
   }
 
   @Test
-  fun `duplicate flying packet does not log to console when debug is disabled`() {
-    val fixture = createFixture()
+  fun `tick without an attack does not anchor the window`() {
+    val fixture = createFixture(attackThisTick = false)
 
-    fixture.check.onPacketReceive(fixture.event)
+    fixture.check.onDataTick(fixture.shardPlayer)
 
-    verify(exactly = 0) { fixture.logger.info(any<String>()) }
+    assertEquals(-1, fixture.ticksSinceAttackMark())
   }
 
   @Test
-  fun `duplicate flying packet does not enter ai tick sequence`() {
-    val fixture = createFixture()
+  fun `a data buffer swap invalidates a stale anchor`() {
+    val fixture = createFixture(attackThisTick = true)
 
-    fixture.check.onPacketReceive(fixture.event)
+    fixture.check.onDataTick(fixture.shardPlayer)
+    assertEquals(1, fixture.ticksSinceAttackMark())
 
-    assertEquals(0, fixture.tickSequenceSize())
+    fixture.tracking.attackThisTick = false
+    every { fixture.shardPlayer.tickBuffer } returns mockk<TickBuffer>(relaxed = true)
+    fixture.check.onDataTick(fixture.shardPlayer)
+
+    assertEquals(-1, fixture.ticksSinceAttackMark())
   }
 
-  @Test
-  fun `duplicate flying packet logs only when packet duplication debug is enabled`() {
-    val fixture =
-      createFixture(
-        debugEnabled = true,
-        enabledCategories = setOf(DebugCategory.PACKET_DUPLICATION),
-      )
-
-    fixture.check.onPacketReceive(fixture.event)
-
-    verify(exactly = 1) {
-      fixture.logger.info(
-        match<String> { message ->
-          message.contains("[DEBUG | PACKET_DUPLICATION]") &&
-            message.contains("Mojang failed IQ Test for: TestPlayer.")
-        }
-      )
-    }
-  }
-
-  private fun createFixture(
-    debugEnabled: Boolean = false,
-    enabledCategories: Set<DebugCategory> = emptySet(),
-  ): Fixture {
+  private fun createFixture(attackThisTick: Boolean): Fixture {
     val logger = mockk<Logger>(relaxed = true)
     val plugin = mockk<Shard>(relaxed = true)
     every { plugin.logger } returns logger
@@ -100,26 +78,24 @@ class AiCheckDuplicatePacketTest {
     every { aiService.isEnabled } returns true
 
     val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.aiSequence } returns 40
-    every { configManager.aiStep } returns 1
+    every { configManager.aiPreWindow } returns 20
+    every { configManager.aiPostWindow } returns 40
+    every { configManager.aiStep } returns 60
     every { configManager.aiFlag } returns 1.0
     every { configManager.aiResetOnFlag } returns 0.0
     every { configManager.aiBufferMultiplier } returns 1.0
-    every { configManager.aiBufferDecrease } returns 0.25
+    every { configManager.aiBufferDecrease } returns 1.0
     every { configManager.suspiciousAlertsBuffer } returns 25.0
-    every { configManager.enabledDebugCategories } returns enabledCategories
-    every { configManager.isDebugEnabled() } returns debugEnabled
 
-    val packetStateData = PacketStateData().apply { lastPacketWasOnePointSeventeenDuplicate = true }
     val player = mockk<Player>(relaxed = true)
     every { player.name } returns "TestPlayer"
 
+    val tracking = TrackingState().apply { this.attackThisTick = attackThisTick }
+    val tickBuffer = mockk<TickBuffer>(relaxed = true)
     val shardPlayer = mockk<ShardPlayer>(relaxed = true)
     every { shardPlayer.player } returns player
-    every { shardPlayer.packetStateData } returns packetStateData
-
-    val event = mockk<PacketReceiveEvent>(relaxed = true)
-    every { event.packetType } returns PacketType.Play.Client.PLAYER_POSITION_AND_ROTATION
+    every { shardPlayer.tracking } returns tracking
+    every { shardPlayer.tickBuffer } returns tickBuffer
 
     val debugManager = DebugManager(plugin, configManager)
     val check =
@@ -135,23 +111,14 @@ class AiCheckDuplicatePacketTest {
         scheduler = mockk<SchedulerService>(relaxed = true),
       )
 
-    return Fixture(check, aiService, event, logger)
+    return Fixture(check, shardPlayer, tracking)
   }
 
   private data class Fixture(
     val check: AiCheck,
-    val aiService: AiService,
-    val event: PacketReceiveEvent,
-    val logger: Logger,
+    val shardPlayer: ShardPlayer,
+    val tracking: TrackingState,
   ) {
-    fun tickSequenceSize(): Int {
-      val ring = ringField.get(check) as TickRingBuffer
-      return ring.count
-    }
-  }
-
-  private companion object {
-    val ringField: Field =
-      AiCheck::class.java.getDeclaredField("ring").apply { isAccessible = true }
+    fun ticksSinceAttackMark(): Int = check.inferenceTicks
   }
 }

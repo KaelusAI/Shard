@@ -17,7 +17,7 @@ BuildConfig.init(project)
 
 group = "ac.shard"
 
-version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "1.2.0"
+version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.0.0"
 
 val packetEventsSpigot = "com.github.retrooper:packetevents-spigot:2.13.0"
 
@@ -278,30 +278,30 @@ bukkit {
       description = "Disables anti-cheat tracking for the player"
       default = Permission.Default.FALSE
     }
-    register("shard.datacollect") {
+    register("shard.collect") {
       description = "Parent permission for data collection commands"
       default = Permission.Default.OP
       children =
         listOf(
-          "shard.datacollect.start",
-          "shard.datacollect.stop",
-          "shard.datacollect.cancel",
-          "shard.datacollect.status",
+          "shard.collect.start",
+          "shard.collect.stop",
+          "shard.collect.cancel",
+          "shard.collect.status",
         )
     }
-    register("shard.datacollect.start") {
+    register("shard.collect.start") {
       description = "Allows starting a data collection session"
       default = Permission.Default.FALSE
     }
-    register("shard.datacollect.stop") {
+    register("shard.collect.stop") {
       description = "Allows stopping a data collection session"
       default = Permission.Default.FALSE
     }
-    register("shard.datacollect.cancel") {
+    register("shard.collect.cancel") {
       description = "Allows cancelling a data collection session without saving"
       default = Permission.Default.FALSE
     }
-    register("shard.datacollect.status") {
+    register("shard.collect.status") {
       description = "Allows viewing data collection session status"
       default = Permission.Default.FALSE
     }
@@ -315,6 +315,7 @@ bukkit {
           "shard.monitor.others",
           "shard.monitor.multi",
           "shard.monitor.output",
+          "shard.monitor.collect",
         )
     }
     register("shard.monitor.others") {
@@ -324,6 +325,10 @@ bukkit {
     register("shard.monitor.multi") {
       description = "Allows watching more than one player at the same time"
       default = Permission.Default.FALSE
+    }
+    register("shard.monitor.collect") {
+      description = "Shows the data collection and inference rows in the monitor"
+      default = Permission.Default.OP
     }
     register("shard.monitor.output") {
       description = "Parent permission for monitor output selection"
@@ -457,11 +462,11 @@ bukkit {
         "exempt",
         "exempt.manage",
         "disable",
-        "datacollect",
-        "datacollect.start",
-        "datacollect.stop",
-        "datacollect.cancel",
-        "datacollect.status",
+        "collect",
+        "collect.start",
+        "collect.stop",
+        "collect.cancel",
+        "collect.status",
         "prob",
         "prob.self",
         "prob.list",

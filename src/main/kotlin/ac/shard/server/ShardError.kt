@@ -115,7 +115,10 @@ object ShardError {
     put("INSUFFICIENT_CREDITS", credits)
     put("CREDITS_UNAVAILABLE", credits)
     put("RATE_LIMITED", Meta(ResponseCode.RATE_LIMITED, retryable = true, backoff = true))
-    put("INVALID_SEQUENCE", Meta(ResponseCode.INVALID_SEQUENCE, retryable = false, backoff = false))
+    put(
+      "RECONFIGURE_REQUIRED",
+      Meta(ResponseCode.RECONFIGURE_REQUIRED, retryable = false, backoff = false),
+    )
     val badRequest = Meta(ResponseCode.BAD_REQUEST, retryable = false, backoff = false)
     for (code in
       listOf(

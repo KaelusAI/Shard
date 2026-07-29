@@ -21,9 +21,9 @@ import ac.shard.Shard
 import ac.shard.alert.AlertManager
 import ac.shard.api.event.ShardEventBus
 import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
+import ac.shard.data.CollectManager
 import ac.shard.database.DatabaseManager
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
@@ -79,7 +79,10 @@ class PlayerDataManagerTest {
       }
 
     val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.aiSequence } returns 40
+    every { configManager.aiPreWindow } returns 32
+    every { configManager.aiPostWindow } returns 32
+    every { configManager.collectPreWindow } returns 128
+    every { configManager.collectPostWindow } returns 128
     every { configManager.cancelDuplicatePacket } returns true
     every { configManager.forceCancelDuplicatePacket } returns false
     every { configManager.ignoreDuplicatePacketRotation } returns true
@@ -87,9 +90,9 @@ class PlayerDataManagerTest {
     val alertManager = mockk<AlertManager>(relaxed = true)
     every { alertManager.handlePlayerQuit(any()) } just runs
 
-    val dataCollectorManager = mockk<DataCollectorManager>(relaxed = true)
-    every { dataCollectorManager.getSession(any()) } returns null
-    every { dataCollectorManager.stopCollecting(any()) } returns false
+    val collectManager = mockk<CollectManager>(relaxed = true)
+    every { collectManager.getSession(any()) } returns null
+    every { collectManager.stopCollecting(any()) } returns false
 
     val checkManagerFactory = mockk<CheckManager.Factory>()
     every { checkManagerFactory.create(any()) } returns mockk(relaxed = true)
@@ -110,7 +113,7 @@ class PlayerDataManagerTest {
       PlayerDataManager(
         plugin = plugin,
         alertManager = alertManager,
-        dataCollectorManager = dataCollectorManager,
+        collectManager = collectManager,
         configManager = configManager,
         aiServerProvider = mockk<AIServerProvider>(relaxed = true),
         exemptManager = ExemptManager(),

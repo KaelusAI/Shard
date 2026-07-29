@@ -87,7 +87,14 @@ class AIServerProvider(
       }
       ServerState.READY -> {
         plugin.logger.info("[AiCheck] AI Check loaded.")
-        AIServer(plugin, url, key, apiCooldown!!, credentialsStore.instanceId())
+        AIServer(
+          plugin,
+          url,
+          key,
+          apiCooldown!!,
+          credentialsStore.instanceId(),
+          configManager.aiGzipEnabled,
+        )
       }
     }
   }

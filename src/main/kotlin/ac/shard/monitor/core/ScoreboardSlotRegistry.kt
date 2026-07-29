@@ -51,11 +51,6 @@ class ScoreboardSlotRegistry {
     idle = claims.isEmpty()
   }
 
-  fun releaseAll(viewerId: UUID) {
-    claims.remove(viewerId)
-    idle = claims.isEmpty()
-  }
-
   fun claimsFor(viewerId: UUID): List<SlotClaim>? = claims[viewerId]
 
   fun isIdle(): Boolean = idle

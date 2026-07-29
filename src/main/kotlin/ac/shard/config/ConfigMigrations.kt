@@ -20,8 +20,10 @@ package ac.shard.config
 import java.io.File
 
 internal object ConfigMigrations {
-  const val LATEST_VERSION = 3
+  const val LATEST_VERSION = 4
   const val MONITOR_LATEST_VERSION = 2
+
+  private const val VERSION_WITH_ATTACK_WINDOWS = 4
 
   private val LATEST_BY_FILE =
     mapOf("config.yml" to LATEST_VERSION, "monitor.yml" to MONITOR_LATEST_VERSION)
@@ -43,7 +45,7 @@ internal object ConfigMigrations {
   ): List<String> {
     if (currentVersion >= latestVersion(fileName)) return emptyList()
     val drops = mutableListOf("config-version")
-    // if (currentVersion < 2) drops += "ai/legacy-path"
+    if (currentVersion < VERSION_WITH_ATTACK_WINDOWS) drops += "ai/continuous"
     return drops
   }
 }

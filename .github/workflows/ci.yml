@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [next/2.0]
   pull_request:
   workflow_dispatch:
 
@@ -80,7 +80,7 @@ jobs:
 
   release-candidate:
     name: Release candidate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/next/2.0'
     needs: [check, build]
     runs-on: ubuntu-latest
     permissions:
@@ -128,11 +128,11 @@ jobs:
       - name: Publish release candidate
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          tag_name: rc
+          tag_name: rc-2.0
           name: ${{ steps.version.outputs.number }}
           prerelease: true
           make_latest: false
           body: |
-            Release candidate built from `${{ github.sha }}` on `main`.
-            Replaced by the next push to `main`.
+            Release candidate built from `${{ github.sha }}` on `${{ github.ref_name }}`.
+            Replaced by the next push to `${{ github.ref_name }}`.
           files: ${{ steps.shadow-jar.outputs.path }}

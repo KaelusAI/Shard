@@ -18,10 +18,17 @@
 package ac.shard.monitor.core
 
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.data.CollectManager
 import ac.shard.player.PlayerDataManager
+import java.time.Duration
+import java.time.Instant
+import java.util.Locale
 import org.bukkit.entity.Player
 
-class MonitorSampler(private val playerDataManager: PlayerDataManager) {
+class MonitorSampler(
+  private val playerDataManager: PlayerDataManager,
+  private val collectManager: CollectManager,
+) {
   fun sample(target: Player): MonitorSample {
     val shardTarget = playerDataManager.getPlayer(target)
     val aiCheck = shardTarget?.checkManager?.getCheck(AiCheck::class.java)
@@ -35,6 +42,33 @@ class MonitorSampler(private val playerDataManager: PlayerDataManager) {
       rawPing = target.ping,
       damageMultiplier = shardTarget?.combat?.damageMultiplier ?: 1.0,
       prob90 = aiCheck?.prob90 ?: 0,
+      collect = collectInfo(target),
+      inference =
+        aiCheck?.let {
+          MonitorInferenceInfo(tickStatus(it.inferenceTicks, it.inferencePostWindow))
+        },
     )
+  }
+
+  private fun collectInfo(target: Player): MonitorCollectInfo? {
+    val session = collectManager.getSession(target.uniqueId) ?: return null
+    val elapsed = Duration.between(session.startTime, Instant.now())
+    return MonitorCollectInfo(
+      status =
+        tickStatus(
+          collectManager.getCurrentProgress(target.uniqueId),
+          collectManager.getPostWindow(),
+        ),
+      label = session.label.lowercase(Locale.ROOT),
+      windows = session.windowCount(),
+      elapsed = "${elapsed.toMinutes()}m${elapsed.toSecondsPart()}s",
+    )
+  }
+
+  private fun tickStatus(progress: Int, postWindow: Int): String =
+    if (progress < 0) WAITING else "$progress/$postWindow"
+
+  private companion object {
+    const val WAITING = "waiting"
   }
 }

@@ -17,4 +17,4 @@
  */
 package ac.shard.server
 
-data class AIResponse(val probability: Double)
+data class AIResponse(val probability: Double, val expectedColumns: List<String>? = null)

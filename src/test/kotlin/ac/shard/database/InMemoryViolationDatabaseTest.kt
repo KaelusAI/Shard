@@ -85,6 +85,8 @@ class InMemoryViolationDatabaseTest {
         showPing = true,
         showDmg = true,
         showTrend = false,
+        showCollect = true,
+        showInference = true,
         showName = MonitorNameMode.AUTO,
       )
 

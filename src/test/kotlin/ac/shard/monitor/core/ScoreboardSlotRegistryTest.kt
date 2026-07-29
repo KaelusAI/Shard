@@ -89,24 +89,10 @@ class ScoreboardSlotRegistryTest {
   }
 
   @Test
-  fun `releaseAll drops one viewer without touching another`() {
-    val registry = ScoreboardSlotRegistry()
-    registry.claim(viewer, SlotClaim(2, "below", noop))
-    registry.claim(other, SlotClaim(2, "below", noop))
-
-    registry.releaseAll(viewer)
-
-    assertNull(registry.claimsFor(viewer))
-    assertEquals(listOf(2), registry.claimsFor(other)?.map { it.slot })
-    assertFalse(registry.isIdle())
-  }
-
-  @Test
   fun `releasing an unknown viewer is harmless`() {
     val registry = ScoreboardSlotRegistry()
 
     registry.release(viewer, 2)
-    registry.releaseAll(viewer)
 
     assertTrue(registry.isIdle())
   }

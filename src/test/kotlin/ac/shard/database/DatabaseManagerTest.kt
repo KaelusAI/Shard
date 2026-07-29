@@ -124,6 +124,8 @@ class DatabaseManagerTest {
         showPing = true,
         showDmg = false,
         showTrend = true,
+        showCollect = true,
+        showInference = true,
         showName = MonitorNameMode.AUTO,
       )
 
@@ -193,6 +195,8 @@ class DatabaseManagerTest {
           showPing = true,
           showDmg = true,
           showTrend = true,
+          showCollect = true,
+          showInference = true,
           showName = MonitorNameMode.AUTO,
         )
 
@@ -333,9 +337,12 @@ class DatabaseManagerTest {
     assertTrue(tableExists(connection, "monitor_settings"))
     assertTrue(columnExists(connection, "violations", "created_at_instant"))
     assertTrue(columnExists(connection, "monitor_settings", "show_name"))
+    assertTrue(columnExists(connection, "monitor_settings", "show_collect"))
+    assertTrue(columnExists(connection, "monitor_settings", "show_inference"))
     assertTrue(hasAppliedVersion(connection, "1"))
     assertTrue(hasAppliedVersion(connection, "2"))
     assertTrue(hasAppliedVersion(connection, "3"))
+    assertTrue(hasAppliedVersion(connection, "7"))
   }
 
   private fun tableExists(connection: Connection, tableName: String): Boolean {

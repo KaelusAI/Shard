@@ -19,6 +19,7 @@ package ac.shard.monitor.view
 
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.data.CollectManager
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
@@ -54,7 +55,8 @@ class ViewTagRendererFallbackTest {
     val target = mockk<org.bukkit.entity.Player>(relaxed = true)
     every { playerDataManager.getPlayer(target) } returns null
 
-    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
+    val rendered =
+      ViewTagRenderer(MonitorSampler(playerDataManager, noCollector())).render(target, "", config)
 
     assertEquals("--|??", rendered.prefix)
     assertEquals("--", rendered.below)
@@ -72,7 +74,8 @@ class ViewTagRendererFallbackTest {
     every { shardPlayer.combat } returns mockk(relaxed = true)
     every { checkManager.getCheck(AiCheck::class.java) } returns null
 
-    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
+    val rendered =
+      ViewTagRenderer(MonitorSampler(playerDataManager, noCollector())).render(target, "", config)
 
     assertEquals("--|??", rendered.prefix)
     assertEquals("--", rendered.below)
@@ -93,11 +96,17 @@ class ViewTagRendererFallbackTest {
     every { aiCheck.lastProbability } returns 0.954
     every { aiCheck.buffer } returns 12.5
     every { aiCheck.prob90 } returns 0
+    every { aiCheck.inferenceTicks } returns -1
+    every { aiCheck.inferencePostWindow } returns 32
 
-    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
+    val rendered =
+      ViewTagRenderer(MonitorSampler(playerDataManager, noCollector())).render(target, "", config)
 
     assertEquals("95|12.50", rendered.prefix)
     assertEquals("95", rendered.below)
     assertEquals(95, rendered.belowScore)
   }
 }
+
+private fun noCollector(): CollectManager =
+  mockk<CollectManager>(relaxed = true).also { every { it.getSession(any()) } returns null }

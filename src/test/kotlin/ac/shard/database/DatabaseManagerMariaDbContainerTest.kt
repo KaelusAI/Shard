@@ -61,6 +61,8 @@ class DatabaseManagerMariaDbContainerTest {
           showPing = true,
           showDmg = false,
           showTrend = true,
+          showCollect = true,
+          showInference = true,
           showName = MonitorNameMode.AUTO,
           outputs = setOf(MonitorOutputKind.SIDEBAR),
           chatStyle = MonitorChatStyle.LIVE,
@@ -96,6 +98,8 @@ class DatabaseManagerMariaDbContainerTest {
           showPing = true,
           showDmg = false,
           showTrend = true,
+          showCollect = true,
+          showInference = true,
           showName = MonitorNameMode.AUTO,
         )
 
@@ -128,6 +132,8 @@ class DatabaseManagerMariaDbContainerTest {
           showPing = true,
           showDmg = false,
           showTrend = true,
+          showCollect = true,
+          showInference = true,
           showName = MonitorNameMode.AUTO,
         )
 

@@ -93,7 +93,8 @@ class AiCheckResponseTest {
     every { aiService.isEnabled } returns true
 
     val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.aiSequence } returns 40
+    every { configManager.aiPreWindow } returns 20
+    every { configManager.aiPostWindow } returns 40
     every { configManager.aiStep } returns 1
     every { configManager.aiFlag } returns aiFlag
     every { configManager.aiResetOnFlag } returns 0.0
@@ -109,7 +110,7 @@ class AiCheckResponseTest {
 
     val eventBus = mockk<ShardEventBus>(relaxed = true)
     val punishmentManager = mockk<PunishmentManager>(relaxed = true)
-    val combat = CombatState(0)
+    val combat = CombatState()
 
     val user = mockk<User>(relaxed = true)
     every { user.clientVersion } returns ClientVersion.V_1_21_4

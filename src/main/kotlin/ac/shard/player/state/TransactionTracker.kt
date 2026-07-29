@@ -27,20 +27,25 @@ import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.protocol.player.User
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPing
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowConfirmation
+import it.unimi.dsi.fastutil.ints.IntArraySet
 import java.util.Queue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 class TransactionTracker {
   val transactionsSent: Queue<TransactionStamp> = ConcurrentLinkedQueue()
   val didWeSendThatTrans: MutableSet<Short> = ConcurrentHashMap.newKeySet<Short>()
   val lastTransactionSent: AtomicInteger = AtomicInteger(0)
   val lastTransactionReceived: AtomicInteger = AtomicInteger(0)
+  val lastTransSentTime: AtomicLong = AtomicLong(System.currentTimeMillis())
+  val lastTransReceivedTime: AtomicLong = AtomicLong(System.currentTimeMillis())
+  val entitiesDespawnedThisTransaction: IntArraySet = IntArraySet()
   private val transactionIdCounter: AtomicInteger = AtomicInteger(0)
 
   fun sendTransaction(user: User) {
-    if (user.connectionState != com.github.retrooper.packetevents.protocol.ConnectionState.PLAY) {
+    if (user.encoderState != com.github.retrooper.packetevents.protocol.ConnectionState.PLAY) {
       return
     }
 
@@ -66,5 +71,6 @@ class TransactionTracker {
         WrapperPlayServerWindowConfirmation(0, transactionId, false)
       }
     user.sendPacket(packet)
+    lastTransSentTime.set(System.currentTimeMillis())
   }
 }

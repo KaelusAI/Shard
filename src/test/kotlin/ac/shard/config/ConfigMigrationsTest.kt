@@ -147,6 +147,7 @@ class ConfigMigrationsTest {
       ConfigMigrations.forcedDropsForUpgradeFrom(ConfigMigrations.LATEST_VERSION).isEmpty()
     )
     assertContains(ConfigMigrations.forcedDropsForUpgradeFrom(0), "config-version")
+    assertContains(ConfigMigrations.forcedDropsForUpgradeFrom(3), "ai/continuous")
   }
 
   @Test
@@ -160,7 +161,8 @@ class ConfigMigrationsTest {
     runMigration(userFile)
 
     val merged = userFile.readText()
-    assertContains(merged, "continuous: false")
+    assertContains(merged, "gzip: true")
+    assertFalse(merged.contains("continuous:"))
     assertContains(merged, "config-version: ${ConfigMigrations.LATEST_VERSION}")
     assertContains(merged, "# Redis connection, used by cross-server alerting.")
     assertContains(merged, """server-name: "server-1"""")
@@ -197,23 +199,43 @@ class ConfigMigrationsTest {
   }
 
   @Test
-  fun `user-modified value for a new key is not overwritten on merge`(@TempDir tempDir: Path) {
+  fun `user-modified value for an existing key is not overwritten on merge`(
+    @TempDir tempDir: Path
+  ) {
     val userFile = tempDir.resolve("config.yml").toFile()
     userFile.writeText(
       """
+      config-version: 4
       locale: "en"
       ai:
         enabled: true
-        step: 10
+        gzip: false
+      """
+        .trimIndent() + "\n"
+    )
+    runMigration(userFile)
+    val merged = userFile.readText()
+    assertContains(merged, "gzip: false")
+    assertFalse(merged.contains("gzip: true"))
+  }
+
+  @Test
+  fun `legacy continuous key is dropped on upgrade`(@TempDir tempDir: Path) {
+    val userFile = tempDir.resolve("config.yml").toFile()
+    userFile.writeText(
+      """
+      config-version: 3
+      locale: "en"
+      ai:
+        enabled: true
         continuous: true
       """
         .trimIndent() + "\n"
     )
     runMigration(userFile)
     val merged = userFile.readText()
-    // The user's `continuous: true` must survive the merge, not be replaced with template default.
-    assertContains(merged, "continuous: true")
-    assertFalse(merged.contains("continuous: false"))
+    assertFalse(merged.contains("continuous:"))
+    assertContains(merged, "config-version: ${ConfigMigrations.LATEST_VERSION}")
   }
 
   @Test

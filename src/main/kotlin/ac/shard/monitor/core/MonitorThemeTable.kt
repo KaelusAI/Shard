@@ -53,6 +53,8 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
         MonitorToken.PING to "Ping {ping}ms",
         MonitorToken.DMG to "Dmg {dmg}x",
         MonitorToken.PROB90 to "<color:#F87171>90+ {prob90}</color>",
+        MonitorToken.COLLECT to "<gray>{status} ticks ({label} w{windows} {elapsed})</gray>",
+        MonitorToken.INFERENCE to "<gray>inf {status}</gray>",
       )
   }
 }

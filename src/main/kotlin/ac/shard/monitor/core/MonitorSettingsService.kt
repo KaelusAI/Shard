@@ -137,6 +137,8 @@ class MonitorSettingsService(
           showName = MonitorNameMode.fromConfig(config.getString("defaults.show-name", "auto")),
           outputs = MonitorOutputKind.parseSet(config.getString("defaults.output", "actionbar")),
           chatStyle = MonitorChatStyle.fromConfig(config.getString("defaults.chat-style", "live")),
+          showCollect = config.getBoolean("defaults.show-collect", true),
+          showInference = config.getBoolean("defaults.show-inference", true),
         ),
       perPlayer = config.getBoolean("storage.per-player", true),
       prewarmOnJoin = config.getBoolean("storage.prewarm-on-join", true),

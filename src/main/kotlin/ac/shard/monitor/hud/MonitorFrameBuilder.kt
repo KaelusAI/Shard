@@ -35,16 +35,19 @@ data class MonitorFrameRequest(
   val trend: Double,
   val selfView: Boolean,
   val unavailableHeadline: String,
+  val collectVisible: Boolean = false,
 )
 
+@Suppress("TooManyFunctions")
 class MonitorFrameBuilder {
   fun build(request: MonitorFrameRequest, config: MonitorHudRuntimeConfig): MonitorFrame {
     val sample = request.sample
     val available = sample.dataPresent && sample.aiActive
     val raw = rawValues(request, config)
+    val extra = extraPlaceholders(sample)
     val themed = raw.mapValues { (token, value) ->
       fillTemplate(config.themes.template(request.settings.theme, token)) { key ->
-        if (key == token.key) value else null
+        if (key == token.key) value else extra[token]?.get(key)
       }
     }
     val headline =
@@ -83,7 +86,24 @@ class MonitorFrameBuilder {
       MonitorToken.PING to ping,
       MonitorToken.DMG to formatDecimal(sample.damageMultiplier, format.dmgDecimals),
       MonitorToken.PROB90 to sample.prob90.toString(),
+      MonitorToken.COLLECT to (sample.collect?.status ?: ""),
+      MonitorToken.INFERENCE to (sample.inference?.status ?: ""),
     )
+  }
+
+  private fun extraPlaceholders(sample: MonitorSample): Map<MonitorToken, Map<String, String>> {
+    val out = mutableMapOf<MonitorToken, Map<String, String>>()
+    sample.collect?.let {
+      out[MonitorToken.COLLECT] =
+        mapOf(
+          "status" to it.status,
+          "label" to it.label,
+          "windows" to it.windows.toString(),
+          "elapsed" to it.elapsed,
+        )
+    }
+    sample.inference?.let { out[MonitorToken.INFERENCE] = mapOf("status" to it.status) }
+    return out
   }
 
   private fun headlineOf(
@@ -104,6 +124,7 @@ class MonitorFrameBuilder {
   ): String? {
     val settings = request.settings
     val behavior = config.behavior
+    val sample = request.sample
     return when (token) {
       MonitorToken.NAME -> themed[token].takeIf { nameVisible(settings.showName, request.selfView) }
       MonitorToken.TREND ->
@@ -113,9 +134,19 @@ class MonitorFrameBuilder {
       MonitorToken.DMG ->
         if (dmgVisible(settings.showDmg, request.sample.damageMultiplier, config)) themed[token]
         else neutralFor(behavior.neutralDmg, behavior)
+      MonitorToken.COLLECT ->
+        themed[token].takeIf { recordingVisible(request, settings.showCollect, sample.collect) }
+      MonitorToken.INFERENCE ->
+        themed[token].takeIf { recordingVisible(request, settings.showInference, sample.inference) }
       else -> themed[token]
     }
   }
+
+  private fun recordingVisible(
+    request: MonitorFrameRequest,
+    enabled: Boolean,
+    value: Any?,
+  ): Boolean = enabled && request.collectVisible && value != null
 
   private fun nameVisible(mode: MonitorNameMode, selfView: Boolean): Boolean =
     when (mode) {

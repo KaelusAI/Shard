@@ -22,7 +22,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 
 class JacksonAiResponseParser : AiResponseParser {
   override fun parse(response: String): AIResponse {
-    val node = OBJECT_MAPPER.readTree(response).get("probability")
+    val root = OBJECT_MAPPER.readTree(response)
+    val node = root.get("probability")
     val probability =
       when {
         node == null || node.isNull -> null
@@ -30,8 +31,15 @@ class JacksonAiResponseParser : AiResponseParser {
         node.isTextual -> node.textValue().toDoubleOrNull()
         else -> null
       } ?: throw IllegalArgumentException("AI response does not contain a valid probability")
-    return AIResponse(probability)
+    return AIResponse(probability, expectedColumns(root))
   }
+
+  private fun expectedColumns(root: com.fasterxml.jackson.databind.JsonNode): List<String>? =
+    root
+      .get("expected_columns")
+      ?.takeIf { it.isArray }
+      ?.mapNotNull { it.takeIf { node -> node.isTextual }?.textValue()?.takeIf(String::isNotBlank) }
+      ?.takeIf { it.isNotEmpty() }
 
   companion object {
     private val OBJECT_MAPPER = ObjectMapper()

@@ -17,7 +17,7 @@
  */
 package ac.shard.player.state
 
-class CombatState(initialTicksSinceAttack: Int) {
+class CombatState(initialTicksSinceAttack: Int = 255) {
   var ticksSinceAttack: Int = initialTicksSinceAttack
   @Volatile var damageMultiplier: Double = 1.0
 }

@@ -13,27 +13,27 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.ai
+package ac.shard.redis
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-
-class AiSerializer {
-  fun serialize(features: FloatArray, count: Int): ByteArray {
-    val bytes = ByteArray(count * BYTES_PER_TICK)
-    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-    val floatCount = count * FEATURES_PER_TICK
-    for (i in 0 until floatCount) {
-      buffer.putFloat(features[i])
-    }
-    return bytes
+class CrossServerServices(
+  val redis: RedisManager,
+  val alerts: CrossServerAlertService,
+  val suspicious: CrossServerSuspiciousService,
+) {
+  fun start() {
+    alerts.start()
+    suspicious.start()
   }
 
-  private companion object {
-    const val FEATURES_PER_TICK = 2
-    const val BYTES_PER_FLOAT = 4
-    const val BYTES_PER_TICK = FEATURES_PER_TICK * BYTES_PER_FLOAT
+  fun stopMirrors() {
+    alerts.shutdown()
+    suspicious.shutdown()
+  }
+
+  fun shutdown() {
+    stopMirrors()
+    redis.shutdown()
   }
 }

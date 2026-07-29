@@ -39,7 +39,7 @@ connect:
   link-success: "<prefix> <color:#a8ff78>Привязано!</color> <gray>Сервер привязан к</gray> <white><server></white><gray>.</gray>"
   link-invalid: "<prefix> <color:#ff4b2b>Код неверный или истёк.</color> <gray>Сгенерируйте новый в панели.</gray>"
 
-datacollect:
+collect:
   details-required: "<prefix> <color:#ff4b2b>Требуется указать детали для типов LEGIT и CHEAT.</color>"
   invalid-type: "<prefix> <color:#ff4b2b>Неверный статус. Используйте LEGIT или CHEAT.</color>"
   start-success: "<prefix> <color:#a8ff78>Сбор данных для <white><player></white> начат. Статус: <white><status></white></color>"

@@ -20,6 +20,8 @@ package ac.shard.server
 import ac.shard.Shard
 import ac.shard.ai.AiBatchTransport
 import ac.shard.ai.AiTransport
+import ac.shard.ai.TickSerializer
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -29,6 +31,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.zip.GZIPOutputStream
 
 class AIServer(
   private val plugin: Shard,
@@ -36,6 +39,7 @@ class AIServer(
   private val apiKey: String,
   private val apiCooldown: ApiCooldown,
   private val instanceId: String,
+  private val gzipEnabled: Boolean,
 ) : AiTransport, AiBatchTransport {
   private val serverUri: URI = URI.create(url)
   private val userAgent: String = "Shard/" + plugin.description.version
@@ -62,15 +66,19 @@ class AIServer(
   }
 
   private fun sendRequest(body: ByteArray, batch: Boolean): CompletableFuture<String> {
+    val wireBody = if (gzipEnabled) gzip(body) else body
     val builder =
       HttpRequest.newBuilder(serverUri)
-        .header("Content-Type", "application/octet-stream")
+        .header("Content-Type", TickSerializer.CONTENT_TYPE)
         .header("User-Agent", userAgent)
         .header("X-API-Key", apiKey)
         .header("X-Instance-Id", instanceId)
         .header("Accept", "application/json")
-        .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+        .POST(HttpRequest.BodyPublishers.ofByteArray(wireBody))
         .timeout(if (batch) BATCH_REQUEST_TIMEOUT else REQUEST_TIMEOUT)
+    if (gzipEnabled) {
+      builder.header("Content-Encoding", "gzip")
+    }
     if (batch) {
       builder.header("X-Batch", "1")
     }
@@ -78,6 +86,12 @@ class AIServer(
     return HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
       .thenApply { response -> catchResponse(response) }
       .exceptionallyCompose { throwable -> catchException(throwable) }
+  }
+
+  private fun gzip(data: ByteArray): ByteArray {
+    val out = ByteArrayOutputStream(data.size / GZIP_SIZE_ESTIMATE_DIVISOR + 1)
+    GZIPOutputStream(out).use { it.write(data) }
+    return out.toByteArray()
   }
 
   private fun encodeBatchFraming(items: List<ByteArray>): ByteArray {
@@ -146,7 +160,7 @@ class AIServer(
     UNAUTHORIZED(403),
     NOT_FOUND(404),
     PAYLOAD_TOO_LARGE(413),
-    INVALID_SEQUENCE(422),
+    RECONFIGURE_REQUIRED(422),
     RATE_LIMITED(429),
     SERVER_ERROR(500),
     SERVICE_UNAVAILABLE(503),
@@ -196,6 +210,7 @@ class AIServer(
     private const val BATCH_COUNT_SIZE = 2
     private const val BATCH_ITEM_HEADER_SIZE = 4
     const val BATCH_MAX_ITEMS = 256
+    private const val GZIP_SIZE_ESTIMATE_DIVISOR = 4
 
     const val HTTP_PAYMENT_REQUIRED = 402
     private const val HTTP_UNAUTHORIZED = 401

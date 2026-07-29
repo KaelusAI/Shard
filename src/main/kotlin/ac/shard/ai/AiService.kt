@@ -22,5 +22,5 @@ import java.util.concurrent.CompletableFuture
 interface AiService {
   val isEnabled: Boolean
 
-  fun request(features: FloatArray, count: Int): CompletableFuture<AiResult>
+  fun request(payload: ByteArray): CompletableFuture<AiResult>
 }

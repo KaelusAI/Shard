@@ -63,17 +63,17 @@ enum class Message(val path: String) {
   BRAND_DISCONNECT_FORGE("brand.disconnect-forge"),
 
   // DataCollect
-  DATACOLLECT_DETAILS_REQUIRED("datacollect.details-required"),
-  DATACOLLECT_INVALID_TYPE("datacollect.invalid-type"),
-  DATACOLLECT_START_SUCCESS("datacollect.start-success"),
-  DATACOLLECT_START_RESTARTED("datacollect.start-restarted"),
-  DATACOLLECT_STOP_SUCCESS("datacollect.stop-success"),
-  DATACOLLECT_STOP_FAIL("datacollect.stop-fail"),
-  DATACOLLECT_CANCEL_SUCCESS("datacollect.cancel-success"),
-  DATACOLLECT_STATUS_HEADER("datacollect.status-header"),
-  DATACOLLECT_STATUS_PLAYER("datacollect.status-player"),
-  DATACOLLECT_STATUS_NONE("datacollect.status-none"),
-  DATACOLLECT_STATUS_NO_SESSION("datacollect.status-no-session"),
+  COLLECT_DETAILS_REQUIRED("collect.details-required"),
+  COLLECT_INVALID_TYPE("collect.invalid-type"),
+  COLLECT_START_SUCCESS("collect.start-success"),
+  COLLECT_START_RESTARTED("collect.start-restarted"),
+  COLLECT_STOP_SUCCESS("collect.stop-success"),
+  COLLECT_STOP_FAIL("collect.stop-fail"),
+  COLLECT_CANCEL_SUCCESS("collect.cancel-success"),
+  COLLECT_STATUS_HEADER("collect.status-header"),
+  COLLECT_STATUS_PLAYER("collect.status-player"),
+  COLLECT_STATUS_NONE("collect.status-none"),
+  COLLECT_STATUS_NO_SESSION("collect.status-no-session"),
 
   // Monitor
   MONITOR_ENABLED("monitor.enabled"),

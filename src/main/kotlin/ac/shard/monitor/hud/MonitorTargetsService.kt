@@ -18,7 +18,6 @@
 package ac.shard.monitor.hud
 
 import ac.shard.config.LocaleManager
-import java.util.Locale
 import java.util.UUID
 import org.bukkit.entity.Player
 
@@ -84,5 +83,3 @@ class MonitorTargetsService(
       .firstOrNull { it.targetName.equals(targetName, ignoreCase = true) }
       ?.targetId
 }
-
-internal fun normalizeTargetName(raw: String): String = raw.trim().lowercase(Locale.ROOT)

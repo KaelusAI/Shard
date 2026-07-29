@@ -21,6 +21,7 @@ import ac.shard.Shard
 import ac.shard.ai.AiResult
 import ac.shard.ai.AiService
 import ac.shard.ai.AiServiceException
+import ac.shard.ai.TickSerializer
 import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.api.event.AiPredictionEvent
@@ -28,9 +29,10 @@ import ac.shard.checks.AbstractCheck
 import ac.shard.checks.CheckData
 import ac.shard.checks.CheckFactory
 import ac.shard.checks.Reloadable
-import ac.shard.checks.type.PacketCheck
+import ac.shard.checks.type.TickCheck
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
+import ac.shard.data.AttackWindowTracker
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
@@ -40,9 +42,7 @@ import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServer
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
-import com.github.retrooper.packetevents.event.PacketReceiveEvent
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying
-import java.util.concurrent.atomic.AtomicReference
+import com.github.retrooper.packetevents.PacketEvents
 
 @CheckData(name = "AI (Aim)")
 @Suppress("TooManyFunctions")
@@ -56,11 +56,11 @@ class AiCheck(
   private val damageProcessor: DamageProcessor,
   private val debugManager: DebugManager,
   private val scheduler: SchedulerService,
-) : AbstractCheck(shardPlayer), PacketCheck, Reloadable {
+) : AbstractCheck(shardPlayer), TickCheck, Reloadable {
   private var aiEnabled = false
 
-  @Volatile private var ring: TickRingBuffer = TickRingBuffer(configManager.aiSequence)
-  private val snapshotBuffer: AtomicReference<FloatArray?> = AtomicReference()
+  private val window = AttackWindowTracker()
+  private var ticksSinceLastInference = Int.MAX_VALUE / 2
 
   @Volatile
   var buffer: Double = 0.0
@@ -76,6 +76,12 @@ class AiCheck(
     private set
 
   @Volatile var prob90: Int = 0
+
+  val inferenceTicks: Int
+    get() = window.ticksSinceAttack
+
+  val inferencePostWindow: Int
+    get() = configManager.aiPostWindow
 
   private var flag = 0.0
   private var bufferResetOnFlag = 0.0
@@ -93,11 +99,6 @@ class AiCheck(
 
   override fun reload() {
     aiEnabled = aiService.isEnabled
-
-    if (ring.capacity != maxOf(configManager.aiSequence, TickRingBuffer.MIN_SEQUENCE)) {
-      ring = TickRingBuffer(configManager.aiSequence)
-    }
-
     flag = configManager.aiFlag
     bufferResetOnFlag = configManager.aiResetOnFlag
     bufferMultiplier = configManager.aiBufferMultiplier
@@ -105,46 +106,34 @@ class AiCheck(
     suspiciousAlertBuffer = configManager.suspiciousAlertsBuffer
   }
 
-  override fun onPacketReceive(event: PacketReceiveEvent) {
+  override fun onDataTick(player: ShardPlayer) {
     if (!aiEnabled) return
-    if (!WrapperPlayClientPlayerFlying.isFlying(event.packetType)) return
-    val shardPlayer = shardPlayer
-    val r = ring
 
-    val packetStateData = shardPlayer.packetStateData
-    if (packetStateData.shouldIgnoreFlyingTick) {
-      if (
-        packetStateData.lastPacketWasOnePointSeventeenDuplicate &&
-          debugManager.isEnabled(DebugCategory.PACKET_DUPLICATION)
-      ) {
-        debugManager.log(
-          DebugCategory.PACKET_DUPLICATION,
-          "Mojang failed IQ Test for: ${shardPlayer.player.name}.",
-        )
+    if (ticksSinceLastInference < Int.MAX_VALUE) ticksSinceLastInference++
+
+    window.onTick(player.tickBuffer, player.tracking.attackThisTick, configManager.aiPostWindow) {
+      ticks,
+      attackIndex ->
+      if (ticksSinceLastInference >= configManager.aiStep) {
+        sendInference(ticks, attackIndex)
+        ticksSinceLastInference = 0
       }
-      return
-    }
-
-    if (shardPlayer.compensatedEntities.self.riding != null) {
-      r.reset()
-      return
-    }
-
-    if (!configManager.aiContinuous && shardPlayer.combat.ticksSinceAttack > r.capacity) {
-      r.reset()
-      return
-    }
-
-    val movement = shardPlayer.movement
-    r.push(movement.yaw - movement.lastYaw, movement.pitch - movement.lastPitch)
-
-    if (r.canSend(configManager.aiStep)) {
-      trySendWindow(r)
-      r.markSent()
     }
   }
 
-  private fun trySendWindow(r: TickRingBuffer) {
+  private fun inDisabledRegion(): Boolean =
+    configManager.isAiWorldGuardEnabled() &&
+      regionProvider.isPlayerInDisabledRegion(shardPlayer.player)
+
+  private fun sendInference(ticksSinceAttack: Int, attackIndex: Int) {
+    val window =
+      shardPlayer.tickBuffer.extractWindow(
+        configManager.aiPreWindow,
+        configManager.aiPostWindow,
+        ticksSinceAttack,
+        attackIndex,
+      ) ?: return
+
     if (configManager.regionCheckMode == RegionCheckMode.SKIP_DETECTION && inDisabledRegion()) {
       debugManager.log(
         DebugCategory.WORLDGUARD,
@@ -152,38 +141,26 @@ class AiCheck(
       )
       return
     }
-    sendData(r)
-  }
 
-  private fun inDisabledRegion(): Boolean =
-    configManager.isAiWorldGuardEnabled() &&
-      regionProvider.isPlayerInDisabledRegion(shardPlayer.player)
-
-  private fun sendData(r: TickRingBuffer) {
-    val count = r.count
-    if (count == 0 || !aiEnabled) {
-      return
-    }
-
-    val floatCount = count * FEATURES_PER_TICK
-    val snapshot = borrowSnapshot(floatCount)
-    r.snapshotInto(snapshot)
-
-    val shardPlayer = shardPlayer
+    val bytes =
+      TickSerializer.serialize(
+        window,
+        shardPlayer.user.clientVersion.protocolVersion,
+        PacketEvents.getAPI().serverManager.version.protocolVersion,
+        configManager.aiColumnMask,
+      )
     val player = shardPlayer.player
     val playerName = player.name
 
     scheduler.runAsync {
       try {
-        aiService.request(snapshot, count).whenCompleteAsync({ parsed, error ->
+        aiService.request(bytes).whenCompleteAsync({ parsed, error ->
           if (error != null) onError(error) else onResponse(parsed)
         }) { runnable ->
           scheduler.runSync(player, runnable)
         }
       } catch (e: Exception) {
         plugin.logger.warning("[AiCheck] Failed to send data for $playerName: ${e.message}")
-      } finally {
-        releaseSnapshot(snapshot)
       }
     }
   }
@@ -214,6 +191,10 @@ class AiCheck(
       lastProbability = 0.0
       damageProcessor.reset(shardPlayer)
       return
+    }
+
+    apiResponse.expectedColumns?.let {
+      configManager.updateAiParams(null, null, null, columns = it)
     }
 
     val probability = apiResponse.probability
@@ -295,11 +276,13 @@ class AiCheck(
     val cause = (error as? java.util.concurrent.CompletionException)?.cause ?: error
 
     val ex = cause as? AiServiceException
-    if (ex != null && (ex.newSequence != null || ex.newStep != null)) {
-      configManager.updateAiParams(ex.newSequence, ex.newStep)
-      if (ring.capacity != maxOf(configManager.aiSequence, TickRingBuffer.MIN_SEQUENCE)) {
-        ring = TickRingBuffer(configManager.aiSequence)
-      }
+    if (ex != null && ex.hasNewParams) {
+      configManager.updateAiParams(
+        ex.newPreWindow,
+        ex.newPostWindow,
+        ex.newStep,
+        columns = ex.newColumns,
+      )
       return null
     }
 
@@ -336,21 +319,8 @@ class AiCheck(
       else -> null
     }
 
-  private fun borrowSnapshot(size: Int): FloatArray {
-    val buffer = snapshotBuffer.getAndSet(null)
-    if (buffer == null || buffer.size < size) {
-      return FloatArray(size)
-    }
-    return buffer
-  }
-
-  private fun releaseSnapshot(buffer: FloatArray) {
-    snapshotBuffer.set(buffer)
-  }
-
   companion object {
     private const val CHEAT_PROBABILITY = 0.90
     private const val LEGIT_PROBABILITY = 0.10
-    private const val FEATURES_PER_TICK = 2
   }
 }

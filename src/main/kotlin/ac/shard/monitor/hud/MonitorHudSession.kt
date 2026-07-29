@@ -140,6 +140,7 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
         trend = state.trend,
         selfView = spec.viewer.uniqueId == state.targetId,
         unavailableHeadline = if (sample.dataPresent) state.texts.noAiCheck else state.texts.noData,
+        collectVisible = spec.viewer.hasPermission(COLLECT_VIEW_PERMISSION),
       ),
       spec.config,
     )
@@ -181,3 +182,5 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
       prob90 = event.prob90,
     )
 }
+
+private const val COLLECT_VIEW_PERMISSION = "shard.monitor.collect"

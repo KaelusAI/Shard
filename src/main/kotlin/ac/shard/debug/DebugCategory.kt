@@ -24,7 +24,6 @@ enum class DebugCategory(val configKey: String) {
   AI_API_RATE_LIMITED("api-error.rate-limited"),
   AI_API_SERVICE_UNAVAILABLE("api-error.service-unavailable"),
   AI_PERSISTENT_BUFFER("persistent-buffer"),
-  RATE_LIMIT("rate-limit"),
+  AI_FLOOD("flood"),
   WORLDGUARD("worldguard"),
-  PACKET_DUPLICATION("packet-duplication"),
 }

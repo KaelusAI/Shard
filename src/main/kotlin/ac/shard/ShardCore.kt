@@ -23,22 +23,23 @@ import ac.shard.command.CommandManager
 import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
 import ac.shard.coroutines.ShardCoroutines
+import ac.shard.data.CollectManager
+import ac.shard.data.CollectSession
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
-import ac.shard.monitor.core.ScoreboardSlotObserver
-import ac.shard.monitor.hud.MonitorRuntime
-import ac.shard.monitor.view.MonitorViewService
+import ac.shard.monitor.MonitorServices
 import ac.shard.packet.PacketListener
 import ac.shard.player.PlayerDataManager
-import ac.shard.redis.CrossServerAlertService
-import ac.shard.redis.CrossServerSuspiciousService
-import ac.shard.redis.RedisManager
+import ac.shard.redis.CrossServerServices
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
 import ac.shard.telemetry.TelemetryService
 import ac.shard.utils.MessageUtil
 import com.github.retrooper.packetevents.PacketEvents
+import com.github.retrooper.packetevents.netty.channel.ChannelHelper
+import java.util.logging.Level
+import java.util.logging.Logger
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
 import org.bukkit.plugin.ServicePriority
 
@@ -53,54 +54,52 @@ constructor(
   private val commandManager: CommandManager,
   private val alertManager: AlertManager,
   private val databaseManager: DatabaseManager,
-  private val redisManager: RedisManager,
-  private val crossServerAlertService: CrossServerAlertService,
-  private val crossServerSuspiciousService: CrossServerSuspiciousService,
+  private val crossServer: CrossServerServices,
   private val debugManager: DebugManager,
   private val packetListener: PacketListener,
-  private val monitorViewService: MonitorViewService,
-  private val monitorRuntime: MonitorRuntime,
-  private val slotObserver: ScoreboardSlotObserver,
+  private val monitor: MonitorServices,
   private val damageEvent: DamageEvent,
   private val shardApi: ShardApi,
   private val adventure: BukkitAudiences,
   private val coroutines: ShardCoroutines,
   private val scheduler: SchedulerService,
   private val telemetryService: TelemetryService,
+  private val collectManager: CollectManager,
+  private val logger: Logger,
 ) {
   fun enable() {
+    CollectSession.sweepStaging(plugin.dataFolder)
     commandManager.registerCommands()
 
     MessageUtil.init(localeManager, adventure, plugin.logger)
 
     initializePacketRuntime()
     plugin.server.pluginManager.registerEvents(damageEvent, plugin)
-    monitorRuntime.enable()
+    monitor.runtime.enable()
     plugin.server.servicesManager.register(
       ShardApi::class.java,
       shardApi,
       plugin,
       ServicePriority.Normal,
     )
-    scheduler.runAsync {
-      crossServerAlertService.start()
-      crossServerSuspiciousService.start()
-    }
+    scheduler.runAsync { crossServer.start() }
     telemetryService.start()
   }
 
   fun disable() {
+    runCatching { PacketEvents.getAPI().eventManager.unregisterListener(packetListener) }
+    // Saves must finish before the scheduler stops running queued work.
+    runCatching { collectManager.saveAll() }
+    runCatching { playerDataManager.saveAllBuffersSync() }
+    runCatching { scheduler.cancelTasks() }
     runCatching { telemetryService.stop() }
     plugin.server.servicesManager.unregister(ShardApi::class.java, shardApi)
-    runCatching { playerDataManager.saveAllBuffersSync() }
     runCatching { aiServerProvider.shutdownTransport() }
-    runCatching { crossServerAlertService.shutdown() }
-    runCatching { crossServerSuspiciousService.shutdown() }
-    runCatching { redisManager.shutdown() }
+    runCatching { crossServer.shutdown() }
     adventure.close()
     coroutines.close()
     databaseManager.shutdown()
-    monitorRuntime.disable()
+    monitor.runtime.disable()
     runCatching { telemetryService.sendFarewell() }
   }
 
@@ -111,21 +110,47 @@ constructor(
     alertManager.reload()
     aiServerProvider.reload()
     playerDataManager.reloadAllPlayers()
-    monitorRuntime.reload()
-    monitorViewService.reload()
-    crossServerAlertService.shutdown()
-    crossServerSuspiciousService.shutdown()
+    monitor.runtime.reload()
+    monitor.view.reload()
+    crossServer.stopMirrors()
     scheduler.runAsync {
-      redisManager.shutdown()
-      crossServerAlertService.start()
-      crossServerSuspiciousService.start()
+      crossServer.redis.shutdown()
+      crossServer.start()
     }
   }
 
   private fun initializePacketRuntime() {
     PacketEvents.getAPI().eventManager.registerListener(packetListener)
-    PacketEvents.getAPI().eventManager.registerListener(slotObserver)
-    monitorViewService.start()
+    PacketEvents.getAPI().eventManager.registerListener(monitor.slotObserver)
+    monitor.view.start()
     PacketEvents.getAPI().init()
+    trackAlreadyOnlinePlayers()
+    scheduler.runTimer({ pollAllPlayers() }, 0L, 1L)
+  }
+
+  private fun trackAlreadyOnlinePlayers() {
+    for (player in plugin.server.onlinePlayers) {
+      val user = runCatching { PacketEvents.getAPI().playerManager.getUser(player) }.getOrNull()
+      if (user == null) {
+        logger.warning("No PacketEvents user for ${player.name}; leaving them untracked")
+        continue
+      }
+      playerDataManager.handleUserLogin(user, player)
+    }
+  }
+
+  @Suppress("TooGenericExceptionCaught")
+  private fun pollAllPlayers() {
+    for (shardPlayer in playerDataManager.getPlayers()) {
+      try {
+        if (!ChannelHelper.isOpen(shardPlayer.user.channel)) {
+          playerDataManager.handleUserDisconnect(shardPlayer.user)
+        } else {
+          shardPlayer.pollData()
+        }
+      } catch (e: Exception) {
+        logger.log(Level.WARNING, "Polling ${shardPlayer.player.name} failed", e)
+      }
+    }
   }
 }

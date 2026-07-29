@@ -19,6 +19,7 @@ package ac.shard.monitor.core
 
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.data.CollectManager
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.CombatState
@@ -48,7 +49,7 @@ class MonitorSamplerTest {
     val target = target()
     every { playerDataManager.getPlayer(target) } returns null
 
-    val sample = MonitorSampler(playerDataManager).sample(target)
+    val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
 
     assertFalse(sample.dataPresent)
     assertFalse(sample.aiActive)
@@ -72,7 +73,7 @@ class MonitorSamplerTest {
     every { shardPlayer.combat } returns CombatState(0).also { it.damageMultiplier = 0.5 }
     every { checkManager.getCheck(AiCheck::class.java) } returns null
 
-    val sample = MonitorSampler(playerDataManager).sample(target)
+    val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
 
     assertTrue(sample.dataPresent)
     assertFalse(sample.aiActive)
@@ -94,8 +95,10 @@ class MonitorSamplerTest {
     every { aiCheck.lastProbability } returns 0.87
     every { aiCheck.buffer } returns 31.5
     every { aiCheck.prob90 } returns 4
+    every { aiCheck.inferenceTicks } returns -1
+    every { aiCheck.inferencePostWindow } returns 32
 
-    val sample = MonitorSampler(playerDataManager).sample(target)
+    val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
 
     assertTrue(sample.dataPresent)
     assertTrue(sample.aiActive)
@@ -105,3 +108,6 @@ class MonitorSamplerTest {
     assertEquals(4, sample.prob90)
   }
 }
+
+private fun noCollector(): CollectManager =
+  mockk<CollectManager>(relaxed = true).also { every { it.getSession(any()) } returns null }

@@ -39,7 +39,7 @@ connect:
   link-success: "<prefix> <color:#a8ff78>Linked!</color> <gray>This server is now linked to</gray> <white><server></white><gray>.</gray>"
   link-invalid: "<prefix> <color:#ff4b2b>Invalid or expired code.</color> <gray>Generate a new one in the panel.</gray>"
 
-datacollect:
+collect:
   details-required: "<prefix> <color:#ff4b2b>Details are required for LEGIT and CHEAT types.</color>"
   invalid-type: "<prefix> <color:#ff4b2b>Invalid status. Use LEGIT or CHEAT.</color>"
   start-success: "<prefix> <color:#a8ff78>Started data collection for <white><player></white>. Status: <white><status></white></color>"

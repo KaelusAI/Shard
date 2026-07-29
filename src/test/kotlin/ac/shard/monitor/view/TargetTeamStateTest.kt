@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.data.CollectManager
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.ScoreDisplay
 import ac.shard.monitor.core.ScoreboardPacketBridge
@@ -104,9 +105,13 @@ class TargetTeamStateTest {
 
     every { playerDataManager.getPlayer(target) } returns null
 
-    val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
+    val rendered =
+      ViewTagRenderer(MonitorSampler(playerDataManager, noCollector())).render(target, "", config)
 
     assertEquals("<white>--</white>", rendered.below)
     assertEquals(0, rendered.belowScore)
   }
 }
+
+private fun noCollector(): CollectManager =
+  mockk<CollectManager>(relaxed = true).also { every { it.getSession(any()) } returns null }

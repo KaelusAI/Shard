@@ -101,12 +101,12 @@ class ConnectCommand(
     }
     val uuid = sender.uniqueId
     val isConsole = sender.isConsole
+    // pluginMeta is newer than the Paper versions Shard supports.
+    @Suppress("DEPRECATION") val pluginVersion = plugin.description.version
     scheduler.runAsync {
       val instanceId = credentialsStore.instanceId()
       val hostname = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()
-      when (
-        val result = connectService.redeem(code, instanceId, hostname, plugin.description.version)
-      ) {
+      when (val result = connectService.redeem(code, instanceId, hostname, pluginVersion)) {
         is LinkResult.Linked -> {
           credentialsStore.write(
             Credentials(

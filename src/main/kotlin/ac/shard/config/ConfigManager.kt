@@ -24,6 +24,7 @@ package ac.shard.config
 
 import ac.shard.Shard
 import ac.shard.connect.CredentialsStore
+import ac.shard.data.TickSchema
 import ac.shard.debug.DebugCategory
 import ac.shard.region.RegionCheckMode
 import java.io.File
@@ -63,7 +64,11 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     private set
 
   @Volatile
-  var aiSequence: Int = 0
+  var aiPreWindow: Int = 0
+    private set
+
+  @Volatile
+  var aiPostWindow: Int = 0
     private set
 
   @Volatile
@@ -74,7 +79,21 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   var aiModel: String? = null
     private set
 
-  var aiContinuous: Boolean = false
+  @Volatile
+  var aiColumns: List<String>? = null
+    private set
+
+  @Volatile
+  var aiColumnMask: LongArray = TickSchema.fullMask
+    private set
+
+  var aiGzipEnabled: Boolean = true
+    private set
+
+  var collectPreWindow: Int = 0
+    private set
+
+  var collectPostWindow: Int = 0
     private set
 
   var aiFlag: Double = 0.0
@@ -175,11 +194,33 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   }
 
   @Synchronized
-  fun updateAiParams(sequence: Int?, step: Int?, model: String? = null) {
+  fun updateAiParams(
+    preWindow: Int?,
+    postWindow: Int?,
+    step: Int?,
+    model: String? = null,
+    columns: List<String>? = null,
+  ) {
+    var changed = columns != null && columns != aiColumns && applyAiColumns(columns)
+    changed = applyAiWindow(preWindow, postWindow, step) || changed
+    if (!model.isNullOrBlank() && model != aiModel) {
+      plugin.logger.info("[Config] AI model $aiModel -> $model (from server)")
+      aiModel = model
+      changed = true
+    }
+    if (changed) modelStore.write(aiPreWindow, aiPostWindow, aiStep, aiModel, aiColumns)
+  }
+
+  private fun applyAiWindow(preWindow: Int?, postWindow: Int?, step: Int?): Boolean {
     var changed = false
-    if (sequence != null && sequence >= MIN_AI_SEQUENCE && sequence != aiSequence) {
-      plugin.logger.info("[Config] AI sequence $aiSequence -> $sequence (from server)")
-      aiSequence = sequence
+    if (preWindow != null && preWindow >= MIN_AI_WINDOW && preWindow != aiPreWindow) {
+      plugin.logger.info("[Config] AI pre-window $aiPreWindow -> $preWindow (from server)")
+      aiPreWindow = preWindow
+      changed = true
+    }
+    if (postWindow != null && postWindow >= MIN_AI_WINDOW && postWindow != aiPostWindow) {
+      plugin.logger.info("[Config] AI post-window $aiPostWindow -> $postWindow (from server)")
+      aiPostWindow = postWindow
       changed = true
     }
     if (step != null && step >= MIN_AI_STEP && step != aiStep) {
@@ -187,12 +228,44 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
       aiStep = step
       changed = true
     }
-    if (!model.isNullOrBlank() && model != aiModel) {
-      plugin.logger.info("[Config] AI model $aiModel -> $model (from server)")
-      aiModel = model
-      changed = true
+    return changed
+  }
+
+  private fun loadNegotiatedAiParams() {
+    aiPreWindow =
+      modelStore.readPreWindow()
+        ?: config
+          .getInt("ai.inference.pre-window", DEFAULT_AI_PRE_WINDOW)
+          .coerceAtLeast(MIN_AI_WINDOW)
+    aiPostWindow =
+      modelStore.readPostWindow()
+        ?: config
+          .getInt("ai.inference.post-window", DEFAULT_AI_POST_WINDOW)
+          .coerceAtLeast(MIN_AI_WINDOW)
+    aiStep =
+      modelStore.readStep()
+        ?: config.getInt("ai.inference.step", DEFAULT_AI_STEP).coerceAtLeast(MIN_AI_STEP)
+    aiModel = modelStore.readModel()
+    modelStore.readColumns()?.let { applyAiColumns(it) }
+  }
+
+  private fun applyAiColumns(columns: List<String>): Boolean {
+    val mask = TickSchema.maskOf(columns)
+    if (mask == null) {
+      val unknown = columns.filterNot { it in TickSchema.fieldNames }
+      plugin.logger.warning(
+        "[Config] Inference server asked for unknown columns $unknown; sending every column instead"
+      )
+      aiColumns = null
+      aiColumnMask = TickSchema.fullMask
+      return false
     }
-    if (changed) modelStore.write(aiSequence, aiStep, aiModel)
+    plugin.logger.info(
+      "[Config] AI columns ${TickSchema.columnCount(aiColumnMask)} -> ${columns.size} (from server)"
+    )
+    aiColumns = columns
+    aiColumnMask = mask
+    return true
   }
 
   fun isAiEnabled(): Boolean = aiEnabled
@@ -305,15 +378,15 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     telemetryGroupId =
       System.getenv("SHARD_GROUP_ID")?.trim()?.takeIf { it.isNotBlank() }
         ?: config.getString("telemetry.group-id", "").trim().takeIf { it.isNotBlank() }
-    aiSequence = modelStore.readSequence() ?: DEFAULT_AI_SEQUENCE
-    aiStep = modelStore.readStep() ?: DEFAULT_AI_STEP
-    aiModel = modelStore.readModel()
-    aiContinuous = config.getBoolean("ai.continuous", false)
+    loadNegotiatedAiParams()
+    aiGzipEnabled = config.getBoolean("ai.gzip", true)
+    collectPreWindow = config.getInt("ai.collect.pre-window", DEFAULT_COLLECT_WINDOW)
+    collectPostWindow = config.getInt("ai.collect.post-window", DEFAULT_COLLECT_WINDOW)
 
     aiFlag = config.getDouble("ai.buffer.flag", 50.0)
     aiResetOnFlag = config.getDouble("ai.buffer.reset-on-flag", 25.0)
     aiBufferMultiplier = config.getDouble("ai.buffer.multiplier", 100.0)
-    aiBufferDecrease = config.getDouble("ai.buffer.decrease", 0.25)
+    aiBufferDecrease = config.getDouble("ai.buffer.decrease", 1.0)
 
     aiDamageReductionEnabled = config.getBoolean("ai.damage-reduction.enabled", true)
     aiDamageReductionProb = config.getDouble("ai.damage-reduction.prob", 0.9)
@@ -431,10 +504,12 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   }
 
   private companion object {
-    const val MIN_AI_SEQUENCE = 1
+    const val MIN_AI_WINDOW = 1
     const val MIN_AI_STEP = 1
-    const val DEFAULT_AI_SEQUENCE = 40
-    const val DEFAULT_AI_STEP = 10
+    const val DEFAULT_AI_PRE_WINDOW = 32
+    const val DEFAULT_AI_POST_WINDOW = 32
+    const val DEFAULT_AI_STEP = 32
+    const val DEFAULT_COLLECT_WINDOW = 128
     const val MILLIS_PER_SEC = 1000L
     const val MILLIS_PER_HOUR = 3_600_000L
     const val DEFAULT_BUFFER_TTL_HOURS = 48L

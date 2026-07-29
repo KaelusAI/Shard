@@ -2,7 +2,7 @@
 # Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
 
 # Do not change this value manually.
-config-version: 3
+config-version: 4
 
 # Locale: en, ru
 locale: "en"
@@ -11,9 +11,19 @@ ai:
   # Enable AI check?
   enabled: true
   # URL for the AI inference API.
-  server: "https://api.shard.ac/v1/inference"
-  # When true, sequences are recorded and sent continuously without requiring combat (hits).
-  continuous: false
+  server: "https://api.shard.ac/v2/inference"
+  # Compress request bodies with gzip. Cuts bandwidth up to 6x.
+  gzip: true
+  # Overwritten by the panel while the server is linked via /shard connect.
+  inference:
+    pre-window: 32
+    post-window: 32
+    # Minimum ticks between inference requests. Set <= post-window to send one per attack.
+    step: 32
+  collect:
+    # Ticks captured before and after each attack when recording with /shard collect.
+    pre-window: 128
+    post-window: 128
   buffer:
     # The violation level (VL) at which a flag will be triggered.
     flag: 50.0
@@ -23,7 +33,7 @@ ai:
     # (probability - 0.9) * multiplier
     multiplier: 100.0
     # The amount subtracted from the buffer when cheat probability is low (<0.1).
-    decrease: 0.25
+    decrease: 1.0
   damage-reduction:
     # Enable damage reduction?
     enabled: true
@@ -126,10 +136,14 @@ alerts:
 
 history:
   enabled: true
+  # Origin tag stored with every violation row.
+  server-name: "server"
 
 database:
   # sqlite, mysql or mariadb
   type: sqlite
+  # Connection pool size. Left unset: defaults to the CPU count, clamped to a sane range.
+  #pool-size: 4
   sqlite:
     file: "violations.db"
   # Legacy section name; used for the MariaDB Connector/J network database mode.
@@ -210,6 +224,5 @@ debug:
       rate-limited: false        # HTTP 429
       service-unavailable: true  # HTTP 503
     persistent-buffer: false  # AI buffer save/restore on quit/login
-    rate-limit: false     # Rate limiting events
+    flood: false          # Captures dropped by the packet rate budget
     worldguard: false     # WorldGuard region checks
-    packet-duplication: false  # Mojang packet duplication bugs

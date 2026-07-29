@@ -138,7 +138,7 @@ class BatchingAiTransport(
   private fun completeItem(item: PendingItem, result: BatchItemResult) {
     val probability = result.probability
     if (probability != null) {
-      item.future.complete(probabilityResponseJson(probability))
+      item.future.complete(probabilityResponseJson(probability, result.expectedColumns))
       return
     }
     val errorNode = result.error
@@ -149,17 +149,22 @@ class BatchingAiTransport(
       return
     }
     val error = ShardError.fromError(errorNode, HTTP_OK)
-    if (
-      error.code == AIServer.ResponseCode.INVALID_SEQUENCE &&
-        error.details?.get("expected_sequence") == null
-    ) {
-      recoverInvalidSequence(item)
+    if (error.code == AIServer.ResponseCode.RECONFIGURE_REQUIRED && !hasNegotiationDetails(error)) {
+      recoverReconfigureRequired(item)
     } else {
       item.future.completeExceptionally(error)
     }
   }
 
-  private fun recoverInvalidSequence(item: PendingItem) {
+  private fun hasNegotiationDetails(error: AIServer.RequestException): Boolean {
+    val details = error.details ?: return false
+    return details["expected_pre_window"] != null ||
+      details["expected_post_window"] != null ||
+      details["expected_step"] != null ||
+      details["expected_columns"] != null
+  }
+
+  private fun recoverReconfigureRequired(item: PendingItem) {
     singleTransport.send(item.payload).whenComplete { body, error ->
       if (body != null) {
         item.future.complete(body)
@@ -173,16 +178,22 @@ class BatchingAiTransport(
     val root: JsonNode = OBJECT_MAPPER.readTree(body)
     val results = root.get("results") ?: error("Missing 'results' field in batch response")
     if (!results.isArray) error("'results' is not an array")
+    val expectedColumns = root.get("expected_columns")?.takeIf { it.isArray }
     return results.map { node ->
       BatchItemResult(
         probability = node.get("probability")?.takeIf { it.isNumber }?.asDouble(),
         error = node.get("error")?.takeIf { it.isObject },
+        expectedColumns = expectedColumns,
       )
     }
   }
 
-  private fun probabilityResponseJson(probability: Double): String =
-    """{"probability":$probability}"""
+  private fun probabilityResponseJson(probability: Double, expectedColumns: JsonNode?): String =
+    if (expectedColumns == null) {
+      """{"probability":$probability}"""
+    } else {
+      """{"probability":$probability,"expected_columns":$expectedColumns}"""
+    }
 
   private fun failPending(reason: Throwable) {
     while (true) {
@@ -205,7 +216,11 @@ class BatchingAiTransport(
 
   private data class PendingItem(val payload: ByteArray, val future: CompletableFuture<String>)
 
-  private data class BatchItemResult(val probability: Double?, val error: JsonNode?)
+  private data class BatchItemResult(
+    val probability: Double?,
+    val error: JsonNode?,
+    val expectedColumns: JsonNode? = null,
+  )
 
   companion object {
     private const val HTTP_OK = 200

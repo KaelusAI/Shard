@@ -29,4 +29,15 @@ data class MonitorSample(
   val rawPing: Int,
   val damageMultiplier: Double,
   val prob90: Int,
+  val collect: MonitorCollectInfo? = null,
+  val inference: MonitorInferenceInfo? = null,
 )
+
+data class MonitorCollectInfo(
+  val status: String,
+  val label: String,
+  val windows: Int,
+  val elapsed: String,
+)
+
+data class MonitorInferenceInfo(val status: String)

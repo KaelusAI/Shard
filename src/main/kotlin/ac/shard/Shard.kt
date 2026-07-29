@@ -19,9 +19,6 @@ package ac.shard
 
 import ac.shard.di.shardModules
 import ac.shard.integration.ShardFlags
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.util.logging.Level
 import org.bstats.bukkit.Metrics
 import org.bukkit.plugin.java.JavaPlugin
@@ -35,7 +32,6 @@ class Shard : JavaPlugin() {
   private var runtimeStopped = false
 
   override fun onLoad() {
-    migrateLegacyDataFolder()
     packetEventsLoadFailure = runCatching { packetEventsLoader.load() }.exceptionOrNull()
     if (server.pluginManager.getPlugin("WorldGuard") != null) {
       runCatching { ShardFlags.register(logger) }
@@ -63,43 +59,6 @@ class Shard : JavaPlugin() {
 
   private companion object {
     const val BSTATS_PLUGIN_ID = 32301
-    const val LEGACY_DATA_FOLDER = "SlothAC"
-    val SKIP_MIGRATION = setOf("config.yml", "credentials.yml")
-  }
-
-  // One-time rebrand step: seed plugins/Shard from the old plugins/SlothAC folder. The legacy
-  // folder is copied, never deleted, so a rollback to the old plugin keeps its data intact.
-  private fun migrateLegacyDataFolder() {
-    val target = dataFolder
-    val legacy = target.parentFile?.resolve(LEGACY_DATA_FOLDER) ?: return
-    if (!legacy.isDirectory || legacy == target || target.list()?.isNotEmpty() == true) {
-      return
-    }
-    runCatching { copyDirectory(legacy.toPath(), target.toPath()) }
-      .onSuccess {
-        logger.info("Migrated legacy $LEGACY_DATA_FOLDER data folder into ${target.name}")
-      }
-      .onFailure {
-        logger.log(Level.WARNING, "Failed to migrate legacy $LEGACY_DATA_FOLDER data", it)
-      }
-  }
-
-  private fun copyDirectory(source: Path, target: Path) {
-    Files.walk(source).use { paths ->
-      paths.forEach { path ->
-        val relative = source.relativize(path)
-        if (relative.nameCount == 1 && relative.toString() in SKIP_MIGRATION) {
-          return@forEach
-        }
-        val destination = target.resolve(relative)
-        if (Files.isDirectory(path)) {
-          Files.createDirectories(destination)
-        } else {
-          destination.parent?.let(Files::createDirectories)
-          Files.copy(path, destination, StandardCopyOption.COPY_ATTRIBUTES)
-        }
-      }
-    }
   }
 
   private fun enableRuntime() {

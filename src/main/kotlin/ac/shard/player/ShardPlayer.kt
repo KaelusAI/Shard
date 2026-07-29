@@ -26,18 +26,23 @@ import ac.shard.Shard
 import ac.shard.alert.AlertManager
 import ac.shard.api.event.ShardEventBus
 import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.config.ConfigManager
+import ac.shard.data.TickBuffer
 import ac.shard.entity.CompensatedEntities
+import ac.shard.entity.CompensatedFireworks
 import ac.shard.player.state.CombatState
 import ac.shard.player.state.MovementState
+import ac.shard.player.state.TrackingState
 import ac.shard.player.state.TransactionTracker
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
+import ac.shard.utils.data.HeadRotation
 import ac.shard.utils.data.PacketStateData
 import ac.shard.utils.latency.ILatencyUtils
 import ac.shard.utils.latency.LatencyUtils
+import ac.shard.utils.update.RotationUpdate
+import ac.shard.world.CompensatedWorld
 import com.github.retrooper.packetevents.protocol.player.ClientVersion
 import com.github.retrooper.packetevents.protocol.player.GameMode
 import com.github.retrooper.packetevents.protocol.player.User
@@ -56,9 +61,7 @@ constructor(
   val user: User,
   private val plugin: Shard,
   private val configManager: ConfigManager,
-  aiSequence: Int,
   alertManager: AlertManager,
-  dataCollectorManager: DataCollectorManager,
   aiServerProvider: AIServerProvider,
   val exemptManager: ExemptManager,
   private val scheduler: SchedulerService,
@@ -68,6 +71,7 @@ constructor(
 ) {
   val uuid: UUID = player.uniqueId
   val packetStateData: PacketStateData = PacketStateData()
+  val rotationUpdate: RotationUpdate = RotationUpdate(HeadRotation(), HeadRotation(), 0f, 0f)
   val joinTime: Long = System.currentTimeMillis()
 
   var entityId: Int = 0
@@ -79,16 +83,24 @@ constructor(
     get() = configManager.isBedrockExemptEnabled() && isBedrock
 
   val movement: MovementState = MovementState()
-  val combat: CombatState = CombatState(aiSequence + 1)
+  val combat: CombatState = CombatState()
+  val tracking: TrackingState = TrackingState()
   val transactions: TransactionTracker = TransactionTracker()
+  @Volatile
+  var tickBuffer: TickBuffer = TickBuffer(requiredBufferCapacity())
+    private set
 
   val pendingTeleports: Queue<TeleportData> = ConcurrentLinkedQueue()
   val pendingRotations: Queue<RotationData> = ConcurrentLinkedQueue()
 
   val compensatedEntities: CompensatedEntities = CompensatedEntities(this)
+  val compensatedFireworks: CompensatedFireworks = CompensatedFireworks()
+  val compensatedWorld: CompensatedWorld = CompensatedWorld(this)
   val latencyUtils: ILatencyUtils = LatencyUtils(this, plugin)
   val checkManager: CheckManager = checkManagerFactory.create(this)
   val punishmentManager: PunishmentManager = punishmentManagerFactory.create(this)
+
+  private val hasDisconnected = java.util.concurrent.atomic.AtomicBoolean(false)
 
   private var cancelDuplicatePacket = true
   private var forceCancelDuplicatePacket = false
@@ -112,10 +124,32 @@ constructor(
     transactions.sendTransaction(user)
   }
 
+  fun pollData() {
+    val now = System.currentTimeMillis()
+    if (user.encoderState != com.github.retrooper.packetevents.protocol.ConnectionState.PLAY) {
+      transactions.lastTransReceivedTime.set(now)
+      return
+    }
+    if (now - transactions.lastTransSentTime.get() > TRANSACTION_KEEPALIVE_MS) {
+      sendTransaction()
+    }
+    if (now - transactions.lastTransReceivedTime.get() > TRANSACTION_TIMEOUT_MS) {
+      disconnect(Component.text("Transaction timeout"))
+    }
+  }
+
+  @Suppress("TooGenericExceptionCaught")
   fun disconnect(reason: Component) {
-    user.sendPacket(
-      com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(reason)
-    )
+    if (!hasDisconnected.compareAndSet(false, true)) {
+      return
+    }
+    try {
+      user.sendPacket(
+        com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(reason)
+      )
+    } catch (e: Exception) {
+      plugin.logger.warning("[Shard] Disconnect packet for ${player.name} failed: ${e.message}")
+    }
     user.closeConnection()
 
     scheduler.runSync(player) { player.kick(reason) }
@@ -123,9 +157,22 @@ constructor(
 
   fun reload() {
     refreshDuplicatePacketSettings()
+    ensureTickBufferCapacity()
     punishmentManager.reload()
     checkManager.reloadChecks()
   }
+
+  fun ensureTickBufferCapacity() {
+    val required = requiredBufferCapacity()
+    if (required > tickBuffer.capacity()) {
+      tickBuffer = TickBuffer(required)
+    }
+  }
+
+  private fun requiredBufferCapacity(): Int =
+    maxOf(configManager.aiPreWindow, configManager.collectPreWindow) +
+      maxOf(configManager.aiPostWindow, configManager.collectPostWindow) +
+      1
 
   private fun refreshDuplicatePacketSettings() {
     cancelDuplicatePacket = configManager.cancelDuplicatePacket
@@ -133,12 +180,37 @@ constructor(
     ignoreDuplicatePacketRotation = configManager.ignoreDuplicatePacketRotation
   }
 
-  class TeleportData(val location: Vector3d, val flags: RelativeFlag, val transactionId: Int) {
+  class TeleportData(
+    val location: Vector3d,
+    val yaw: Float,
+    val pitch: Float,
+    val flags: RelativeFlag,
+    val transactionId: Int,
+  ) {
     fun isRelativeX(): Boolean = flags.has(RelativeFlag.X)
 
     fun isRelativeY(): Boolean = flags.has(RelativeFlag.Y)
 
     fun isRelativeZ(): Boolean = flags.has(RelativeFlag.Z)
+
+    fun isRelativePos(): Boolean = isRelativeX() || isRelativeY() || isRelativeZ()
+
+    fun rotationMatches(actualYaw: Float, actualPitch: Float): Boolean =
+      (flags.has(RelativeFlag.YAW) || angleMatches(actualYaw, yaw, yaw % FULL_TURN)) &&
+        (flags.has(RelativeFlag.PITCH) ||
+          angleMatches(actualPitch, pitch, pitch.coerceIn(MIN_PITCH, MAX_PITCH)))
+
+    // Some versions wrap yaw and clamp pitch client-side, others apply the raw value, and the
+    // server
+    // sends it raw either way, so both forms have to be accepted.
+    private fun angleMatches(actual: Float, raw: Float, adjusted: Float): Boolean =
+      !raw.isFinite() || actual == raw || actual == adjusted
+
+    private companion object {
+      const val FULL_TURN = 360f
+      const val MIN_PITCH = -90f
+      const val MAX_PITCH = 90f
+    }
   }
 
   class RotationData(
@@ -148,4 +220,9 @@ constructor(
     val relativePitch: Boolean,
     val transactionId: Int,
   )
+
+  private companion object {
+    const val TRANSACTION_KEEPALIVE_MS = 80L
+    const val TRANSACTION_TIMEOUT_MS = 60_000L
+  }
 }

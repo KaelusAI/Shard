@@ -17,5 +17,13 @@
  */
 package ac.shard.ai
 
-class AiServiceException(cause: Throwable, val newSequence: Int?, val newStep: Int?) :
-  RuntimeException(cause.message, cause)
+class AiServiceException(
+  cause: Throwable,
+  val newPreWindow: Int?,
+  val newPostWindow: Int?,
+  val newStep: Int?,
+  val newColumns: List<String>? = null,
+) : RuntimeException(cause.message, cause) {
+  val hasNewParams: Boolean
+    get() = sequenceOf(newPreWindow, newPostWindow, newStep, newColumns).any { it != null }
+}

@@ -33,8 +33,7 @@ interface ILatencyUtils {
 
   /**
    * Adds a task to be executed asynchronously via the player's event loop when the corresponding
-   * transaction ACK is received. (Note: Benchmark might simplify/ignore the async part unless
-   * specifically testing event loop contention)
+   * transaction ACK is received.
    *
    * @param transaction The transaction ID this task is associated with.
    * @param runnable The task to execute.

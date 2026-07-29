@@ -27,9 +27,9 @@ import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.api.event.ShardEventBus
 import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
+import ac.shard.data.CollectManager
 import ac.shard.database.DatabaseManager
 import ac.shard.integration.GeyserUtil
 import ac.shard.punishment.PunishmentManager
@@ -42,12 +42,13 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerQuitEvent
 
+@Suppress("TooManyFunctions")
 class PlayerDataManager
 @Suppress("LongParameterList")
 constructor(
   private val plugin: Shard,
   private val alertManager: AlertManager,
-  private val dataCollectorManager: DataCollectorManager,
+  private val collectManager: CollectManager,
   private val configManager: ConfigManager,
   private val aiServerProvider: AIServerProvider,
   private val exemptManager: ExemptManager,
@@ -59,6 +60,7 @@ constructor(
   private val persistentBufferService: PersistentBufferService,
 ) : Listener {
   private val players = ConcurrentHashMap<UUID, ShardPlayer>()
+  private val unsavedBuffers = ConcurrentHashMap.newKeySet<ShardPlayer>()
 
   init {
     plugin.server.pluginManager.registerEvents(this, plugin)
@@ -66,12 +68,17 @@ constructor(
 
   @EventHandler
   fun onQuit(event: PlayerQuitEvent) {
-    cleanupPlayer(event.player.uniqueId, event.player)
+    cleanupPlayer(event.player.uniqueId, event.player, players[event.player.uniqueId])
   }
 
-  private fun cleanupPlayer(uuid: UUID, player: Player?) {
-    if (dataCollectorManager.getSession(uuid) != null) {
-      dataCollectorManager.stopCollecting(uuid)
+  private fun cleanupPlayer(uuid: UUID, player: Player?, tracked: ShardPlayer?) {
+    // A late close of an old channel must not evict the session that replaced it.
+    val removed = tracked != null && players.remove(uuid, tracked)
+    if (tracked != null && !removed) {
+      return
+    }
+    if (collectManager.getSession(uuid) != null) {
+      collectManager.stopCollecting(uuid)
     }
     if (player != null) {
       runCatching { alertManager.handlePlayerQuit(player) }
@@ -83,12 +90,24 @@ constructor(
           )
         }
     }
-    val tracked = players.remove(uuid) ?: return
-    scheduler.runAsync { persistentBufferService.saveOnQuit(tracked) }
+    if (tracked == null) return
+    // runAsync only starts on the next heartbeat, so the write is not guaranteed by shutdown.
+    unsavedBuffers.add(tracked)
+    scheduler.runAsync {
+      if (unsavedBuffers.remove(tracked)) {
+        persistentBufferService.saveOnQuit(tracked)
+      }
+    }
   }
 
   fun saveAllBuffersSync() {
     for (shardPlayer in players.values) {
+      persistentBufferService.saveOnShutdown(shardPlayer)
+    }
+    val iterator = unsavedBuffers.iterator()
+    while (iterator.hasNext()) {
+      val shardPlayer = iterator.next()
+      iterator.remove()
       persistentBufferService.saveOnShutdown(shardPlayer)
     }
   }
@@ -115,8 +134,15 @@ constructor(
     scheduler.runSync(
       player,
       Runnable {
-        if (!player.isOnline || players.containsKey(player.uniqueId)) {
+        if (!player.isOnline) {
           return@Runnable
+        }
+        val existing = players[player.uniqueId]
+        if (existing != null) {
+          if (existing.user === user) {
+            return@Runnable
+          }
+          cleanupPlayer(player.uniqueId, existing.player, existing)
         }
 
         val loginTimestamp = System.currentTimeMillis()
@@ -129,9 +155,7 @@ constructor(
             user = user,
             plugin = plugin,
             configManager = configManager,
-            aiSequence = configManager.aiSequence,
             alertManager = alertManager,
-            dataCollectorManager = dataCollectorManager,
             aiServerProvider = aiServerProvider,
             exemptManager = exemptManager,
             scheduler = scheduler,
@@ -139,42 +163,45 @@ constructor(
             punishmentManagerFactory = punishmentManagerFactory,
             eventBus = eventBus,
           )
+        shardPlayer.entityId = user.entityId.takeIf { it > 0 } ?: player.entityId
+        applyInitialWorldState(shardPlayer, player)
         shardPlayer.isBedrock = GeyserUtil.isBedrockPlayer(playerUuid)
         players[player.uniqueId] = shardPlayer
         persistentBufferService.restoreOnLogin(shardPlayer)
 
-        if (
-          player.hasPermission("shard.alerts") &&
-            player.hasPermission("shard.alerts.enable-on-join")
-        ) {
-          if (!alertManager.hasAlertsEnabled(player, AlertType.REGULAR)) {
-            alertManager.toggle(player, AlertType.REGULAR, true)
-          }
-        }
-
-        if (
-          player.hasPermission("shard.brand") && player.hasPermission("shard.brand.enable-on-join")
-        ) {
-          if (!alertManager.hasAlertsEnabled(player, AlertType.BRAND)) {
-            alertManager.toggle(player, AlertType.BRAND, true)
-          }
-        }
-
-        if (
-          player.hasPermission("shard.suspicious.alerts") &&
-            player.hasPermission("shard.suspicious.alerts.enable-on-join")
-        ) {
-          if (!alertManager.hasAlertsEnabled(player, AlertType.SUSPICIOUS)) {
-            alertManager.toggle(player, AlertType.SUSPICIOUS, true)
-          }
-        }
+        enableAlertsOnJoin(player, "shard.alerts", AlertType.REGULAR)
+        enableAlertsOnJoin(player, "shard.brand", AlertType.BRAND)
+        enableAlertsOnJoin(player, "shard.suspicious.alerts", AlertType.SUSPICIOUS)
       },
     )
   }
 
+  private fun enableAlertsOnJoin(player: Player, permission: String, type: AlertType) {
+    if (!player.hasPermission(permission) || !player.hasPermission("$permission.enable-on-join")) {
+      return
+    }
+    if (!alertManager.hasAlertsEnabled(player, type)) {
+      alertManager.toggle(player, type, true)
+    }
+  }
+
+  private fun applyInitialWorldState(shardPlayer: ShardPlayer, player: Player) {
+    val gameMode =
+      com.github.retrooper.packetevents.protocol.player.GameMode.getById(player.gameMode.value)
+    if (gameMode != null) {
+      shardPlayer.gameMode = gameMode
+      shardPlayer.tracking.gameMode = gameMode.ordinal
+    }
+    shardPlayer.compensatedWorld.updateMinHeight(player.world.minHeight)
+  }
+
   fun handleUserDisconnect(user: com.github.retrooper.packetevents.protocol.player.User) {
     val uuid = user.uuid ?: return
-    cleanupPlayer(uuid, players[uuid]?.player)
+    val tracked = players[uuid]
+    if (tracked != null && tracked.user !== user) {
+      return
+    }
+    cleanupPlayer(uuid, tracked?.player, tracked)
   }
 
   fun reloadAllPlayers() {

@@ -290,6 +290,8 @@ class FlywaySqliteMigrationsTest {
   private fun assertMonitorSettingsTable(connection: Connection) {
     assertTrue(tableExists(connection, "monitor_settings"))
     assertTrue(columnExists(connection, "monitor_settings", "show_name"))
+    assertTrue(columnExists(connection, "monitor_settings", "show_collect"))
+    assertTrue(columnExists(connection, "monitor_settings", "show_inference"))
   }
 
   private fun assertCreatedAtInstantBackfilled(connection: Connection, expected: String) {

@@ -58,6 +58,8 @@ class ResilientViolationDatabaseTest {
         showPing = true,
         showDmg = true,
         showTrend = true,
+        showCollect = true,
+        showInference = true,
         showName = MonitorNameMode.AUTO,
       )
 

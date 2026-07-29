@@ -254,14 +254,16 @@ class SqlViolationDatabase(
           val theme = MonitorTheme.fromConfig(row[MonitorSettingsTable.theme])
           val showName = MonitorNameMode.fromConfig(row[MonitorSettingsTable.showName])
           MonitorSettings(
-            mode,
-            theme,
-            row[MonitorSettingsTable.showPing],
-            row[MonitorSettingsTable.showDmg],
-            row[MonitorSettingsTable.showTrend],
-            showName,
-            MonitorOutputKind.parseSet(row[MonitorSettingsTable.outputKind]),
-            MonitorChatStyle.fromConfig(row[MonitorSettingsTable.chatStyle]),
+            mode = mode,
+            theme = theme,
+            showPing = row[MonitorSettingsTable.showPing],
+            showDmg = row[MonitorSettingsTable.showDmg],
+            showTrend = row[MonitorSettingsTable.showTrend],
+            showName = showName,
+            outputs = MonitorOutputKind.parseSet(row[MonitorSettingsTable.outputKind]),
+            chatStyle = MonitorChatStyle.fromConfig(row[MonitorSettingsTable.chatStyle]),
+            showCollect = row[MonitorSettingsTable.showCollect],
+            showInference = row[MonitorSettingsTable.showInference],
           )
         }
     }
@@ -276,6 +278,8 @@ class SqlViolationDatabase(
           it[MonitorSettingsTable.showPing] = insertValue(MonitorSettingsTable.showPing)
           it[MonitorSettingsTable.showDmg] = insertValue(MonitorSettingsTable.showDmg)
           it[MonitorSettingsTable.showTrend] = insertValue(MonitorSettingsTable.showTrend)
+          it[MonitorSettingsTable.showCollect] = insertValue(MonitorSettingsTable.showCollect)
+          it[MonitorSettingsTable.showInference] = insertValue(MonitorSettingsTable.showInference)
           it[MonitorSettingsTable.showName] = insertValue(MonitorSettingsTable.showName)
           it[MonitorSettingsTable.outputKind] = insertValue(MonitorSettingsTable.outputKind)
           it[MonitorSettingsTable.chatStyle] = insertValue(MonitorSettingsTable.chatStyle)
@@ -287,6 +291,8 @@ class SqlViolationDatabase(
         it[showPing] = settings.showPing
         it[showDmg] = settings.showDmg
         it[showTrend] = settings.showTrend
+        it[showCollect] = settings.showCollect
+        it[showInference] = settings.showInference
         it[showName] = settings.showName.name
         it[outputKind] = MonitorOutputKind.store(settings.outputs)
         it[chatStyle] = settings.chatStyle.name
@@ -356,6 +362,8 @@ class SqlViolationDatabase(
     val showPing: Column<Boolean> = bool("show_ping")
     val showDmg: Column<Boolean> = bool("show_dmg")
     val showTrend: Column<Boolean> = bool("show_trend")
+    val showCollect: Column<Boolean> = bool("show_collect").default(true)
+    val showInference: Column<Boolean> = bool("show_inference").default(true)
     val showName: Column<String> = varchar("show_name", 16)
     val outputKind: Column<String> = varchar("output_kind", 64)
     val chatStyle: Column<String> = varchar("chat_style", 16)

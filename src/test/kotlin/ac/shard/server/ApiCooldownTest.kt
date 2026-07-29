@@ -57,7 +57,7 @@ class ApiCooldownTest {
     cooldown.recordSuccess()
     assertFalse(cooldown.isWaiting())
 
-    // Simulate two consecutive failures — second should have longer backoff
+    // Two consecutive failures: the second one must back off longer
     cooldown
       .recordFailure() // backoff = 1000ms initially, sets next = now+1000, then backoff -> 2000
     cooldown.recordFailure() // backoff = 2000ms, sets next = now+2000, then backoff -> 4000

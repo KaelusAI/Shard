@@ -28,30 +28,45 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 class ModelStore(private val plugin: Shard) {
   private val file = File(plugin.dataFolder, FILE_NAME)
 
-  fun readSequence(): Int? = readInt("sequence")
+  fun readPreWindow(): Int? = readInt("pre-window")
+
+  fun readPostWindow(): Int? = readInt("post-window")
 
   fun readStep(): Int? = readInt("step")
 
   fun readModel(): String? {
-    if (!file.exists()) return null
-    return runCatching {
-        val node = YamlConfigurationLoader.builder().path(file.toPath()).build().load()
-        node.node("model").getString("").takeIf { it.isNotBlank() }
-      }
-      .getOrNull()
+    val node = loadCurrentFormat() ?: return null
+    return node.node("model").getString("").takeIf { it.isNotBlank() }
   }
 
+  fun readColumns(): List<String>? =
+    loadCurrentFormat()
+      ?.node("columns")
+      ?.takeIf { it.isList }
+      ?.childrenList()
+      ?.mapNotNull { it.getString("").takeIf { name -> name.isNotBlank() } }
+      ?.takeIf { it.isNotEmpty() }
+
   private fun readInt(key: String): Int? {
+    val node = loadCurrentFormat() ?: return null
+    return node.node(key).getInt(0).takeIf { it >= 1 }
+  }
+
+  private fun loadCurrentFormat(): org.spongepowered.configurate.ConfigurationNode? {
     if (!file.exists()) return null
-    return runCatching {
-        val node = YamlConfigurationLoader.builder().path(file.toPath()).build().load()
-        node.node(key).getInt(0).takeIf { it >= 1 }
-      }
+    return runCatching { YamlConfigurationLoader.builder().path(file.toPath()).build().load() }
       .getOrNull()
+      ?.takeUnless { it.node("pre-window").virtual() }
   }
 
   @Synchronized
-  fun write(sequence: Int, step: Int, model: String?) {
+  fun write(
+    preWindow: Int,
+    postWindow: Int,
+    step: Int,
+    model: String?,
+    columns: List<String>? = null,
+  ) {
     val tmp = File(plugin.dataFolder, "$FILE_NAME.tmp")
     try {
       if (!plugin.dataFolder.exists()) plugin.dataFolder.mkdirs()
@@ -61,9 +76,11 @@ class ModelStore(private val plugin: Shard) {
       node
         .node("_note")
         .set("Managed by the inference server. Do not edit; tune ai.* in config.yml.")
-      node.node("sequence").set(sequence)
+      node.node("pre-window").set(preWindow)
+      node.node("post-window").set(postWindow)
       node.node("step").set(step)
       if (model != null) node.node("model").set(model)
+      if (columns != null) node.node("columns").set(columns)
       loader.save(node)
       moveIntoPlace(tmp)
     } catch (e: Exception) {

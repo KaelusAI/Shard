@@ -204,11 +204,12 @@ class TelemetryService(
     val used = field("quota_used_percent")?.asInt()
     if (used != null) quota = QuotaSnapshot(used)
     if (applyParams) {
-      val seq = field("sequence")?.asInt()
+      val preWindow = field("pre_window")?.asInt()
+      val postWindow = field("post_window")?.asInt()
       val step = field("step")?.asInt()
       val model = field("model")?.asText()
-      if (seq != null || step != null || model != null) {
-        configManager.updateAiParams(seq, step, model)
+      if (preWindow != null || postWindow != null || step != null || model != null) {
+        configManager.updateAiParams(preWindow, postWindow, step, model)
       }
     }
     return used

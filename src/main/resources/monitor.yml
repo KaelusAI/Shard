@@ -15,6 +15,8 @@ limits:
   max-viewers-per-target: 0
 view:
   update: 2
+  # Scoreboard display slot: 0 = tab list, 1 = sidebar, 2 = below name.
+  slot: 2
   rebind-ticks: 100
   resync-ticks: 100
   ping-refresh-ticks: 20
@@ -37,6 +39,8 @@ defaults:
   show-ping: true
   show-dmg: true
   show-trend: true
+  show-collect: true      # requires shard.monitor.collect to actually render
+  show-inference: true    # requires shard.monitor.collect to actually render
   show-name: auto         # auto | always | never
   # One or more, comma separated: actionbar | bossbar | sidebar | chat | tablist
   output: actionbar
@@ -70,8 +74,8 @@ format:
     hide-when-default: false
 # Tokens: name, prob, trend, buffer, ping, dmg, prob90
 modes:
-  compact: [name, prob, trend, buffer]
-  full: [name, prob, trend, buffer, ping, dmg]
+  compact: [name, prob, trend, buffer, collect, inference]
+  full: [name, prob, trend, buffer, ping, dmg, collect, inference]
 # Where the monitor is drawn. A player picks one with "/shard monitor output <kind>".
 # Templates below accept three placeholder forms:
 #   {prob}     the raw formatted value, no colour
@@ -145,6 +149,8 @@ theme:
     buffer: "<color:#FBBF24>◆ {buffer}</color>"
     ping: "<color:#BFDBFE>Ping {ping}ms</color>"
     dmg: "<color:#FECACA>Dmg {dmg}x</color>"
+    collect: "<color:#86EFAC>{status} ticks</color> <dark_gray>({label} w{windows} {elapsed})</dark_gray>"
+    inference: "<color:#93C5FD>inf {status}</color>"
     prob90: "<color:#F87171>90+ {prob90}</color>"
     sep: "<dark_gray> • </dark_gray>"
   vivid:
@@ -154,6 +160,8 @@ theme:
     buffer: "<yellow>◆ {buffer}</yellow>"
     ping: "<aqua>Ping {ping}ms</aqua>"
     dmg: "<red>Dmg {dmg}x</red>"
+    collect: "<white>{status} ticks</white> <gray>({label} w{windows} {elapsed})</gray>"
+    inference: "<aqua>inf {status}</aqua>"
     prob90: "<red>90+ {prob90}</red>"
     sep: "<dark_gray> • </dark_gray>"
   minimal:
@@ -163,5 +171,7 @@ theme:
     buffer: "<yellow>◆ {buffer}</yellow>"
     ping: "<gray>{ping}ms</gray>"
     dmg: "<gray>{dmg}x</gray>"
+    collect: "<gray>{status} ticks</gray>"
+    inference: "<gray>inf {status}</gray>"
     prob90: "<gray>90+ {prob90}</gray>"
     sep: "<dark_gray> • </dark_gray>"

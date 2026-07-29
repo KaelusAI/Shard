@@ -106,6 +106,8 @@ class SqlViolationDatabaseSqliteTest {
         showPing = true,
         showDmg = false,
         showTrend = true,
+        showCollect = true,
+        showInference = true,
         showName = MonitorNameMode.AUTO,
       )
 

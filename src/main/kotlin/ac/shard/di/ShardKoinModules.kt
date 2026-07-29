@@ -20,7 +20,6 @@ package ac.shard.di
 import ac.shard.Shard
 import ac.shard.ShardCore
 import ac.shard.ai.AiResponseParser
-import ac.shard.ai.AiSerializer
 import ac.shard.ai.AiService
 import ac.shard.ai.DefaultAiService
 import ac.shard.ai.JacksonAiResponseParser
@@ -39,19 +38,17 @@ import ac.shard.api.service.MonitorApi
 import ac.shard.api.service.PunishmentApi
 import ac.shard.checks.CheckFactory
 import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.ActionManager
 import ac.shard.checks.impl.ai.AiCheck
-import ac.shard.checks.impl.ai.DataCollectorCheck
-import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
+import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.checks.impl.misc.ClientBrand
 import ac.shard.command.CommandManager
 import ac.shard.command.CommandRegister
 import ac.shard.command.ShardCommand
 import ac.shard.command.commands.admin.AlertsCommand
 import ac.shard.command.commands.admin.BrandsCommand
+import ac.shard.command.commands.admin.CollectCommand
 import ac.shard.command.commands.admin.ConnectCommand
-import ac.shard.command.commands.admin.DataCollectCommand
 import ac.shard.command.commands.admin.ExemptCommand
 import ac.shard.command.commands.admin.PunishCommand
 import ac.shard.command.commands.admin.ReloadCommand
@@ -74,10 +71,12 @@ import ac.shard.connect.CredentialsStore
 import ac.shard.coroutines.ShardCoroutines
 import ac.shard.damage.AiDamageProcessor
 import ac.shard.damage.DamageProcessor
+import ac.shard.data.CollectManager
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
 import ac.shard.event.DamageEvent
 import ac.shard.integration.WorldGuardManager
+import ac.shard.monitor.MonitorServices
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.MonitorSettingsService
@@ -108,6 +107,7 @@ import ac.shard.player.ExemptManager
 import ac.shard.player.PlayerDataManager
 import ac.shard.punishment.PunishmentManager
 import ac.shard.redis.CrossServerAlertService
+import ac.shard.redis.CrossServerServices
 import ac.shard.redis.CrossServerSuspiciousService
 import ac.shard.redis.RedisManager
 import ac.shard.region.RegionProvider
@@ -165,7 +165,7 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::MonitorSettingsService)
   singleOf(::MonitorViewService)
   singleOf(::ExemptManager)
-  singleOf(::DataCollectorManager)
+  singleOf(::CollectManager)
   singleOf(::PersistentBufferService)
   singleOf(::WorldGuardManager)
   single<RegionProvider> { get<WorldGuardManager>() }
@@ -179,10 +179,12 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::PacketListener)
   singleOf(::DamageEvent)
 
+  singleOf(::CrossServerServices)
   singleOf(::ShardCore)
 }
 
 private fun monitorModule() = module {
+  singleOf(::MonitorServices)
   singleOf(::MonitorFrameBuilder)
   singleOf(::MonitorTargetIndex)
   singleOf(::MonitorTargetsService)
@@ -217,7 +219,6 @@ private fun monitorModule() = module {
 }
 
 private fun aiModule() = module {
-  singleOf(::AiSerializer)
   singleOf(::JacksonAiResponseParser).bind<AiResponseParser>()
   singleOf(::DefaultAiService).bind<AiService>()
 }
@@ -241,7 +242,7 @@ private fun adminCommandsModule() = module {
   singleOf(::AlertsCommand).bind<ShardCommand>()
   singleOf(::BrandsCommand).bind<ShardCommand>()
   singleOf(::ConnectCommand).bind<ShardCommand>()
-  singleOf(::DataCollectCommand).bind<ShardCommand>()
+  singleOf(::CollectCommand).bind<ShardCommand>()
   singleOf(::ExemptCommand).bind<ShardCommand>()
   singleOf(::PunishCommand).bind<ShardCommand>()
   singleOf(::ReloadCommand).bind<ShardCommand>()
@@ -261,14 +262,11 @@ private fun infoCommandsModule() = module {
 }
 
 private fun checkModule() = module {
-  single<CheckFactory>(named("action")) { CheckFactory { player -> ActionManager(player) } }
+  single<CheckFactory>(named("aim")) { CheckFactory { player -> AimProcessor(player) } }
   single<CheckFactory>(named("ai")) {
     CheckFactory { player ->
       AiCheck(player, get(), get(), get(), get(), get(), get(), get(), get())
     }
-  }
-  single<CheckFactory>(named("collector")) {
-    CheckFactory { player -> DataCollectorCheck(player, get(), get(), get()) }
   }
   single<CheckFactory>(named("brand")) {
     CheckFactory { player -> ClientBrand(player, get(), get()) }

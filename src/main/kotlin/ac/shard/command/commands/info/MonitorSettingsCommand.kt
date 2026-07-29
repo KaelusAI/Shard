@@ -58,6 +58,12 @@ class MonitorSettingsCommand(
     registerMonitorSetting(manager, "trend", "state", MonitorSuggestions.TOGGLE) { ctx ->
       setFlag(ctx, SettingKey.TREND)
     }
+    registerMonitorSetting(manager, "collect", "state", MonitorSuggestions.TOGGLE) { ctx ->
+      setFlag(ctx, SettingKey.COLLECT)
+    }
+    registerMonitorSetting(manager, "inference", "state", MonitorSuggestions.TOGGLE) { ctx ->
+      setFlag(ctx, SettingKey.INFERENCE)
+    }
 
     monitorCommand(manager, path = listOf("set", "chat")) {
       required("style", StringParser.stringParser()) {
@@ -145,6 +151,8 @@ class MonitorSettingsCommand(
           SettingKey.PING -> settings.copy(showPing = it)
           SettingKey.DMG -> settings.copy(showDmg = it)
           SettingKey.TREND -> settings.copy(showTrend = it)
+          SettingKey.COLLECT -> settings.copy(showCollect = it)
+          SettingKey.INFERENCE -> settings.copy(showInference = it)
         }
       }
     }
@@ -205,6 +213,8 @@ class MonitorSettingsCommand(
     PING("ping"),
     DMG("dmg"),
     TREND("trend"),
+    COLLECT("collect"),
+    INFERENCE("inference"),
   }
 }
 
