@@ -75,6 +75,7 @@ class PunishmentManager(
 
     val punishmentsSection = configManager.punishments.node("Punishments")
     if (punishmentsSection.empty()) {
+      plugin.logger.warning("[Punish] punishments.yml has no Punishments section")
       return
     }
 
