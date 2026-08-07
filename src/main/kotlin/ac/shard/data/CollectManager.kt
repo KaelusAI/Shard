@@ -106,15 +106,17 @@ class CollectManager(
     val tracker = windows.getOrPut(uuid) { AttackWindowTracker() }
     tracker.onTick(
       shardPlayer.tickBuffer,
-      shardPlayer.tracking.attackThisTick,
+      shardPlayer.tracking.windowStartThisTick,
+      shardPlayer.tracking.windowStartKind,
       configManager.collectPostWindow,
-    ) { ticks, attackIndex ->
+    ) { ticks, attackIndex, kind ->
       val window =
         shardPlayer.tickBuffer.extractWindow(
           configManager.collectPreWindow,
           configManager.collectPostWindow,
           ticks,
           attackIndex,
+          kind,
         )
       if (window != null) session.addWindow(window)
     }

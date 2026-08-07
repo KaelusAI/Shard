@@ -24,25 +24,29 @@ class AttackWindowTracker {
 
   private var attackIndex: Int = -1
   private var anchorBufferId: Int = 0
+  private var windowStartKind: Short = 0
 
   fun reset() {
     ticksSinceAttack = -1
     attackIndex = -1
     anchorBufferId = 0
+    windowStartKind = 0
   }
 
   fun onTick(
     buffer: TickBuffer,
-    attackThisTick: Boolean,
+    windowStart: Boolean,
+    eventKind: Short,
     postWindow: Int,
-    onWindowReady: (ticksSinceAttack: Int, attackIndex: Int) -> Unit,
+    onWindowReady: (ticksSinceAttack: Int, attackIndex: Int, kind: Short) -> Unit,
   ) {
     val bufferId = System.identityHashCode(buffer)
 
-    if (attackThisTick && ticksSinceAttack < 0) {
+    if (windowStart && ticksSinceAttack < 0) {
       ticksSinceAttack = 0
       attackIndex = buffer.attackIndex()
       anchorBufferId = bufferId
+      windowStartKind = eventKind
     }
 
     // The anchored index points into the old buffer, so the window would be cut from foreign rows.
@@ -57,8 +61,9 @@ class AttackWindowTracker {
     if (ticksSinceAttack >= postWindow) {
       val ticks = ticksSinceAttack
       val anchoredIndex = attackIndex
+      val kind = windowStartKind
       reset()
-      onWindowReady(ticks, anchoredIndex)
+      onWindowReady(ticks, anchoredIndex, kind)
     }
   }
 }

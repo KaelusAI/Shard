@@ -195,7 +195,7 @@
     <ID>ReturnCount:CheckApiImpl.kt$CheckApiImpl$override fun getCheck(playerId: UUID, checkName: String): Optional&lt;CheckInfo></ID>
     <ID>ReturnCount:CompensatedWorld.kt$CompensatedWorld$fun getBlock(x: Int, y: Int, z: Int): WrappedBlockState?</ID>
     <ID>ReturnCount:CompensatedWorld.kt$CompensatedWorld$fun setBlock(x: Int, y: Int, z: Int, state: WrappedBlockState?)</ID>
-    <ID>ReturnCount:TickBuffer.kt$TickBuffer$fun extractWindow( preWindow: Int, postWindow: Int, ticksSinceAttack: Int, attackIdx: Int = attackBufferIndex, ): List&lt;TickData>?</ID>
+    <ID>ReturnCount:TickBuffer.kt$TickBuffer$fun extractWindow( preWindow: Int, postWindow: Int, ticksSinceAttack: Int, attackIdx: Int = attackBufferIndex, windowStartKind: Short = TickData.START_MELEE_PLAYER, ): List&lt;TickData>?</ID>
     <ID>ReturnCount:ExemptManager.kt$ExemptManager$fun isExempt(player: Player?): Boolean</ID>
     <ID>ReturnCount:MonitorApiImpl.kt$MonitorApiImpl$override fun getSnapshot(playerId: UUID): Optional&lt;MonitorSnapshot></ID>
     <ID>ReturnCount:PacketListener.kt$PacketListener$override fun onPacketReceive(event: PacketReceiveEvent)</ID>

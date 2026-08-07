@@ -111,10 +111,13 @@ class AiCheck(
 
     if (ticksSinceLastInference < Int.MAX_VALUE) ticksSinceLastInference++
 
-    window.onTick(player.tickBuffer, player.tracking.attackThisTick, configManager.aiPostWindow) {
-      ticks,
-      attackIndex ->
-      if (ticksSinceLastInference >= configManager.aiStep) {
+    window.onTick(
+      player.tickBuffer,
+      player.tracking.windowStartThisTick,
+      player.tracking.windowStartKind,
+      configManager.aiPostWindow,
+    ) { ticks, attackIndex, kind ->
+      if (kind == TickData.START_MELEE_PLAYER && ticksSinceLastInference >= configManager.aiStep) {
         sendInference(ticks, attackIndex)
         ticksSinceLastInference = 0
       }
@@ -133,6 +136,20 @@ class AiCheck(
         ticksSinceAttack,
         attackIndex,
       ) ?: return
+
+  val inferenceProgress: IntArray?
+    get() {
+      val anchored = window.ticksSinceAttack >= 0
+      val stepThrottles = configManager.aiStep > configManager.aiPostWindow
+      val leftWindow = if (anchored) configManager.aiPostWindow - window.ticksSinceAttack else -1
+      val leftStep = configManager.aiStep - ticksSinceLastInference
+      return when {
+        stepThrottles && leftStep > leftWindow && leftStep > 0 ->
+          intArrayOf(ticksSinceLastInference, configManager.aiStep)
+        anchored -> intArrayOf(window.ticksSinceAttack, configManager.aiPostWindow)
+        else -> null
+      }
+    }
 
     if (configManager.regionCheckMode == RegionCheckMode.SKIP_DETECTION && inDisabledRegion()) {
       debugManager.log(

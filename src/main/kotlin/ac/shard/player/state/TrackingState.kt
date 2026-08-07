@@ -22,6 +22,7 @@
  */
 package ac.shard.player.state
 
+import ac.shard.data.TickData
 import com.github.retrooper.packetevents.protocol.item.type.ItemType
 import com.github.retrooper.packetevents.protocol.item.type.ItemTypes
 
@@ -103,6 +104,9 @@ class TrackingState {
   var preAttackCooldownProgress: Float = 1.0f
   var swungThisTick: Boolean = false
   var attackThisTick: Boolean = false
+  var windowStartThisTick: Boolean = false
+  var windowStartKind: Short = 0
+  var enabledWindowStarts: Int = MELEE_PLAYER_ONLY
   var isSprintingOnAttack: Boolean = false
   var attackSpeed: Float = 4.0f
 
@@ -113,8 +117,29 @@ class TrackingState {
   var ticksSinceVelocity: Int = 255
   var receivedExplosionThisTick: Boolean = false
   var ticksSinceExplosion: Int = 255
+  var explosionKbX: Float = 0.0f
+  var explosionKbY: Float = 0.0f
+  var explosionKbZ: Float = 0.0f
 
   var ticksSinceUseItem: Int = 255
+
+  var slotSwitchesThisTick: Int = 0
+  var placesThisTick: Int = 0
+  var placeFace: Int = -1
+  var placeBlockClass: Int = 0
+  var placeBlockX: Int = 0
+  var placeBlockY: Int = 0
+  var placeBlockZ: Int = 0
+  var placeCursorX: Float = -1.0f
+  var placeCursorY: Float = -1.0f
+  var placeCursorZ: Float = -1.0f
+  var placeInsideBlock: Boolean = false
+
+  var crystalSpawnToAttack: Int = -1
+  var placeOffhand: Boolean = false
+  var attackTargetType: Short = TickData.TARGET_PLAYER
+  var anchorCharge: Int = -1
+  var anchorUseInterval: Int = -1
 
   var stuckMultX: Float = 1.0f
   var stuckMultY: Float = 1.0f
@@ -148,21 +173,65 @@ class TrackingState {
 
     swungThisTick = false
     attackThisTick = false
+    windowStartThisTick = false
+    windowStartKind = 0
     damageTakenThisTick = 0.0f
     receivedVelocityThisTick = false
     receivedExplosionThisTick = false
     isSprintingOnAttack = false
     rotationThisTick = false
+    slotSwitchesThisTick = 0
+    placesThisTick = 0
+    placeFace = -1
+    placeBlockClass = 0
+    placeBlockX = 0
+    placeBlockY = 0
+    placeBlockZ = 0
+    placeCursorX = -1.0f
+    placeCursorY = -1.0f
+    placeCursorZ = -1.0f
+    placeInsideBlock = false
+    crystalSpawnToAttack = -1
+    placeOffhand = false
+    attackTargetType = TickData.TARGET_PLAYER
+    anchorCharge = -1
+    anchorUseInterval = -1
   }
 
   fun onTickAborted() {
     swungThisTick = false
     attackThisTick = false
+    windowStartThisTick = false
+    windowStartKind = 0
     damageTakenThisTick = 0.0f
     receivedVelocityThisTick = false
     receivedExplosionThisTick = false
     isSprintingOnAttack = false
     rotationThisTick = false
+    slotSwitchesThisTick = 0
+    placesThisTick = 0
+    placeFace = -1
+    placeBlockClass = 0
+    placeBlockX = 0
+    placeBlockY = 0
+    placeBlockZ = 0
+    placeCursorX = -1.0f
+    placeCursorY = -1.0f
+    placeCursorZ = -1.0f
+    placeInsideBlock = false
+    crystalSpawnToAttack = -1
+    placeOffhand = false
+    attackTargetType = TickData.TARGET_PLAYER
+    anchorCharge = -1
+    anchorUseInterval = -1
+  }
+
+  fun raiseWindowStart(kind: Short) {
+    if (enabledWindowStarts and (1 shl kind.toInt()) == 0) return
+    if (!windowStartThisTick || kind < windowStartKind) {
+      windowStartThisTick = true
+      windowStartKind = kind
+    }
   }
 
   fun onAttack(entityId: Int, isSprinting: Boolean) {
@@ -189,9 +258,50 @@ class TrackingState {
     ticksSinceVelocity = 0
   }
 
-  fun onExplosion() {
+  fun onExplosion(kbX: Float, kbY: Float, kbZ: Float) {
     receivedExplosionThisTick = true
     ticksSinceExplosion = 0
+    explosionKbX = kbX
+    explosionKbY = kbY
+    explosionKbZ = kbZ
+  }
+
+  fun onSlotSwitch() {
+    slotSwitchesThisTick++
+  }
+
+  fun swapOffhand() {
+    val held = hotbarItems.getOrNull(heldSlot)
+    if (heldSlot in hotbarItems.indices) {
+      hotbarItems[heldSlot] = offhandItem
+    }
+    offhandItem = held
+    isUsingItem = false
+    updateActiveItem()
+  }
+
+  @Suppress("LongParameterList")
+  fun onBlockPlace(
+    face: Int,
+    blockClass: Int,
+    blockX: Int,
+    blockY: Int,
+    blockZ: Int,
+    cursor: FloatArray,
+    insideBlock: Boolean,
+    offhand: Boolean,
+  ) {
+    placesThisTick++
+    if (offhand) placeOffhand = true
+    placeFace = face
+    placeBlockClass = blockClass
+    placeBlockX = blockX
+    placeBlockY = blockY
+    placeBlockZ = blockZ
+    placeCursorX = cursor[0]
+    placeCursorY = cursor[1]
+    placeCursorZ = cursor[2]
+    placeInsideBlock = insideBlock
   }
 
   fun onSequenceBreak() {
@@ -224,6 +334,8 @@ class TrackingState {
     damageTakenThisTick = 0.0f
     swungThisTick = false
     attackThisTick = false
+    windowStartThisTick = false
+    windowStartKind = 0
     damageTakenThisTick = 0.0f
     receivedVelocityThisTick = false
     receivedExplosionThisTick = false
@@ -285,6 +397,8 @@ class TrackingState {
   }
 
   companion object {
+    const val MELEE_PLAYER_ONLY = 1
+
     const val DEFAULT_HEALTH = 20.0f
     const val HOTBAR_SIZE = 9
     const val ACTIVE_ITEM_NONE: Short = 0

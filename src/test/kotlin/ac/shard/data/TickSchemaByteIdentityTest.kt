@@ -228,7 +228,8 @@ class TickSchemaByteIdentityTest {
   // Wire types (B=bool1, S=i16, I=i32, L=i64, F=f32, D=f64), spelled out on purpose: this is the
   // second source the test compares TickSchema against.
   private val referenceTypes =
-    "IIFIFFDDDBBBSBBBBBBIBBBBBBBIIFFFIBIIIIIFFFFFBFFFFFSBFBIBBBFBFFFIBFFBBFFFIBIIBFFBBFFIFFFBBBBIFBBFFFFI"
+    "IIFIFFDDDBBBSBBBBBBIBBBBBBBIIFFFIBIIIIIFFFFFBFFFFFSBFBIBBBFBFFFIBFFBBFFFIBIIBFFBBFFIFFFBBBBIFBBFFFFI" +
+      "SSSBISSSSIIIFFFBSSSSFFFIFFSB"
 
   private val referenceRowBytes = referenceTypes.indices.sumOf { referenceFieldSize(it) }
 
@@ -355,6 +356,34 @@ class TickSchemaByteIdentityTest {
       97 -> t.health
       98 -> t.damageTakenThisTick
       99 -> t.ticksSinceDamage.toFloat()
+      100 -> t.windowStartKind.toFloat()
+      101 -> t.targetType.toFloat()
+      102 -> t.crystalSpawnToAttack.toFloat()
+      103 -> if (t.useOffhand) 1f else 0f
+      104 -> t.nearbyCrystalCount.toFloat()
+      105 -> t.anchorCharge.toFloat()
+      106 -> t.anchorUseInterval.toFloat()
+      107 -> t.placeFace.toFloat()
+      108 -> t.placeBlockClass.toFloat()
+      109 -> t.placeBlockX.toFloat()
+      110 -> t.placeBlockY.toFloat()
+      111 -> t.placeBlockZ.toFloat()
+      112 -> t.placeCursorX
+      113 -> t.placeCursorY
+      114 -> t.placeCursorZ
+      115 -> if (t.placeInsideBlock) 1f else 0f
+      116 -> t.placesThisTick.toFloat()
+      117 -> t.heldItemClass.toFloat()
+      118 -> t.offhandItemClass.toFloat()
+      119 -> t.slotSwitchesThisTick.toFloat()
+      120 -> t.explosionKbX
+      121 -> t.explosionKbY
+      122 -> t.explosionKbZ
+      123 -> t.hittableEntitiesCount.toFloat()
+      124 -> t.aimErrorYaw
+      125 -> t.aimErrorPitch
+      126 -> t.raytraceDirsHitCount.toFloat()
+      127 -> if (t.raytraceHitStrict) 1f else 0f
       else -> 0f
     }
   }
@@ -529,6 +558,62 @@ class TickSchemaByteIdentityTest {
     refFloat(out, t.damageTakenThisTick)
     out.append(',')
     out.append(t.ticksSinceDamage.toString())
+    out.append(',')
+    out.append(t.windowStartKind.toString())
+    out.append(',')
+    out.append(t.targetType.toString())
+    out.append(',')
+    out.append(t.crystalSpawnToAttack.toString())
+    out.append(',')
+    refBool(out, t.useOffhand)
+    out.append(',')
+    out.append(t.nearbyCrystalCount.toString())
+    out.append(',')
+    out.append(t.anchorCharge.toString())
+    out.append(',')
+    out.append(t.anchorUseInterval.toString())
+    out.append(',')
+    out.append(t.placeFace.toString())
+    out.append(',')
+    out.append(t.placeBlockClass.toString())
+    out.append(',')
+    out.append(t.placeBlockX.toString())
+    out.append(',')
+    out.append(t.placeBlockY.toString())
+    out.append(',')
+    out.append(t.placeBlockZ.toString())
+    out.append(',')
+    refFloat(out, t.placeCursorX)
+    out.append(',')
+    refFloat(out, t.placeCursorY)
+    out.append(',')
+    refFloat(out, t.placeCursorZ)
+    out.append(',')
+    refBool(out, t.placeInsideBlock)
+    out.append(',')
+    out.append(t.placesThisTick.toString())
+    out.append(',')
+    out.append(t.heldItemClass.toString())
+    out.append(',')
+    out.append(t.offhandItemClass.toString())
+    out.append(',')
+    out.append(t.slotSwitchesThisTick.toString())
+    out.append(',')
+    refFloat(out, t.explosionKbX)
+    out.append(',')
+    refFloat(out, t.explosionKbY)
+    out.append(',')
+    refFloat(out, t.explosionKbZ)
+    out.append(',')
+    out.append(t.hittableEntitiesCount.toString())
+    out.append(',')
+    refFloat(out, t.aimErrorYaw)
+    out.append(',')
+    refFloat(out, t.aimErrorPitch)
+    out.append(',')
+    out.append(t.raytraceDirsHitCount.toString())
+    out.append(',')
+    refBool(out, t.raytraceHitStrict)
   }
 
   private fun refBool(out: Appendable, value: Boolean) {
@@ -575,11 +660,11 @@ class TickSchemaByteIdentityTest {
   }
 
   private companion object {
-    const val FIELD_COUNT = 100
+    const val FIELD_COUNT = 128
     const val RAW_HEADER = 26
     const val MASKED_NCOLS_MARKER = 0
     const val FULL_MASK_LOW = -1L
-    const val FULL_MASK_HIGH = 0xF_FFFF_FFFFL
+    const val FULL_MASK_HIGH = -1L
     const val TEST_CLIENT_PROTOCOL = 769
     const val TEST_SERVER_PROTOCOL = 769
   }

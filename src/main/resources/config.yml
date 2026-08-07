@@ -99,6 +99,23 @@ ai:
     # Skip save below this value
     save-threshold: 1.0
 
+# Extra events that start recording a window. A melee hit on a player always starts one and is not
+# listed here. Windows from these events are recorded but not sent to the model.
+experimental:
+  extra-window-starts:
+    # Melee hit on a non-player living entity.
+    melee-living-other: false
+    # Hit on an end crystal.
+    attack-end-crystal: false
+    # Hit on any other entity, or on an id the plugin does not track.
+    attack-entity-other: false
+    # Charging or detonating a respawn anchor.
+    use-respawn-anchor: false
+    # Placing an end crystal on obsidian or bedrock.
+    place-end-crystal: false
+    # An explosion reached the player.
+    explosion-received: false
+
 exemptions:
   # Skip all checks for Bedrock players connecting through Geyser/Floodgate?
   # Their movement and combat are not comparable to Java clients, so the AI

@@ -129,6 +129,10 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   var persistentBufferTtlMillis: Long = 0L
     private set
+  @Volatile
+  var enabledWindowStarts: Int = 1 shl TickData.START_MELEE_PLAYER.toInt()
+    private set
+
 
   var persistentBufferCap: Double = 0.0
     private set
@@ -414,6 +418,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     persistentBufferDecayPerHour =
       config.getDouble("ai.persistent-buffer.decay-rate-per-hour", DEFAULT_BUFFER_DECAY)
     persistentBufferDisconnectWindowMillis =
+    enabledWindowStarts = loadWindowStarts()
+
       config.getLong(
         "ai.persistent-buffer.disconnect-window-seconds",
         DEFAULT_BUFFER_DISCONNECT_WINDOW_SECS,
@@ -475,6 +481,15 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     val legacyList = config.getStringList("ai.worldguard.disabled-regions")
     if (legacyList.isEmpty()) return emptyMap()
 
+  private fun loadWindowStarts(): Int {
+    var mask = 1 shl TickData.START_MELEE_PLAYER.toInt()
+    for ((key, kind) in OPTIONAL_WINDOW_STARTS) {
+      if (config.getBoolean("experimental.extra-window-starts.$key", false))
+        mask = mask or (1 shl kind)
+    }
+    return mask
+  }
+
     plugin.logger.warning(
       "[Config] ai.worldguard.disabled-regions uses deprecated " +
         "region:world format. Please migrate to the new map format."
@@ -519,6 +534,16 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     const val DEFAULT_BUFFER_SAVE_THRESHOLD = 1.0
 
     const val DEFAULT_BATCH_MAX_SIZE = 32
+    private val OPTIONAL_WINDOW_STARTS =
+      listOf(
+        "melee-living-other" to TickData.START_MELEE_LIVING_OTHER.toInt(),
+        "attack-end-crystal" to TickData.START_ATTACK_END_CRYSTAL.toInt(),
+        "attack-entity-other" to TickData.START_ATTACK_ENTITY_OTHER.toInt(),
+        "use-respawn-anchor" to TickData.START_USE_RESPAWN_ANCHOR.toInt(),
+        "place-end-crystal" to TickData.START_PLACE_END_CRYSTAL.toInt(),
+        "explosion-received" to TickData.START_EXPLOSION_RECEIVED.toInt(),
+      )
+
     const val DEFAULT_BATCH_MAX_DELAY_MS = 50L
 
     const val DEFAULT_RETRY_MAX_ATTEMPTS = 3

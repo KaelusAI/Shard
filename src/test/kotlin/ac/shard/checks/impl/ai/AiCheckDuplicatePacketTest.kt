@@ -23,6 +23,7 @@ import ac.shard.alert.AlertManager
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
 import ac.shard.data.TickBuffer
+import ac.shard.data.TickData
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.TrackingState
@@ -63,6 +64,7 @@ class AiCheckDuplicatePacketTest {
     assertEquals(1, fixture.ticksSinceAttackMark())
 
     fixture.tracking.attackThisTick = false
+    fixture.tracking.windowStartThisTick = false
     every { fixture.shardPlayer.tickBuffer } returns mockk<TickBuffer>(relaxed = true)
     fixture.check.onDataTick(fixture.shardPlayer)
 
@@ -90,7 +92,11 @@ class AiCheckDuplicatePacketTest {
     val player = mockk<Player>(relaxed = true)
     every { player.name } returns "TestPlayer"
 
-    val tracking = TrackingState().apply { this.attackThisTick = attackThisTick }
+    val tracking =
+      TrackingState().apply {
+        this.attackThisTick = attackThisTick
+        if (attackThisTick) raiseWindowStart(TickData.START_MELEE_PLAYER)
+      }
     val tickBuffer = mockk<TickBuffer>(relaxed = true)
     val shardPlayer = mockk<ShardPlayer>(relaxed = true)
     every { shardPlayer.player } returns player

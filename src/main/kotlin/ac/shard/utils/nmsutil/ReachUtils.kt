@@ -366,4 +366,43 @@ object ReachUtils {
 
   private fun isVecInXY(box: SimpleCollisionBox, vec: Vector3dm?): Boolean =
     vec != null && vec.x >= box.minX && vec.x <= box.maxX && vec.y >= box.minY && vec.y <= box.maxY
+
+  fun eyeHeightFor(player: ShardPlayer): Double {
+    val tracking = player.tracking
+    return when {
+      tracking.swimming || tracking.gliding -> SWIM_EYE_HEIGHT
+      tracking.sneaking -> SNEAK_EYE_HEIGHT
+      else -> STAND_EYE_HEIGHT
+    }
+  }
+
+  fun aimErrorAxes(player: ShardPlayer, box: SimpleCollisionBox, out: DoubleArray) {
+    out[0] = 0.0
+    out[1] = 0.0
+    val m = player.movement
+    val dx = (box.minX + box.maxX) / 2 - m.x
+    val dy = (box.minY + box.maxY) / 2 - (m.y + eyeHeightFor(player))
+    val dz = (box.minZ + box.maxZ) / 2 - m.z
+    val horizontal = sqrt(dx * dx + dz * dz)
+    val distance = sqrt(dx * dx + dy * dy + dz * dz)
+    if (distance < MIN_AIM_DISTANCE) return
+
+    var deltaYaw = m.yaw - Math.toDegrees(atan2(-dx, dz))
+    deltaYaw -= floor(deltaYaw / FULL_TURN_DEGREES + HALF) * FULL_TURN_DEGREES
+    val deltaPitch = m.pitch - Math.toDegrees(-atan2(dy, horizontal))
+
+    val halfWidth = maxOf(box.maxX - box.minX, box.maxZ - box.minZ) / 2
+    val halfHeight = (box.maxY - box.minY) / 2
+    val angularWidth = Math.toDegrees(atan2(halfWidth, distance))
+    val angularHeight = Math.toDegrees(atan2(halfHeight, distance))
+    if (angularWidth > MIN_ANGULAR_EXTENT) out[0] = deltaYaw / angularWidth
+    if (angularHeight > MIN_ANGULAR_EXTENT) out[1] = deltaPitch / angularHeight
+  }
+
+  private const val STAND_EYE_HEIGHT = 1.62
+  private const val SNEAK_EYE_HEIGHT = 1.27
+  private const val SWIM_EYE_HEIGHT = 0.4
+  private const val MIN_AIM_DISTANCE = 0.001
+  private const val MIN_ANGULAR_EXTENT = 1e-6
+  private const val FULL_TURN_DEGREES = 360.0
 }

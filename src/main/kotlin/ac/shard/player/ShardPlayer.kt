@@ -27,6 +27,7 @@ import ac.shard.alert.AlertManager
 import ac.shard.api.event.ShardEventBus
 import ac.shard.checks.CheckManager
 import ac.shard.config.ConfigManager
+import ac.shard.data.CrystalTracker
 import ac.shard.data.TickBuffer
 import ac.shard.entity.CompensatedEntities
 import ac.shard.entity.CompensatedFireworks
@@ -112,6 +113,7 @@ constructor(
 
   fun isPointThree(): Boolean = user.clientVersion.isOlderThan(ClientVersion.V_1_18_2)
 
+  val crystalTracker: CrystalTracker = CrystalTracker()
   fun getMovementThreshold(): Double = if (isPointThree()) 0.03 else 0.0002
 
   fun isCancelDuplicatePacket(): Boolean = cancelDuplicatePacket
@@ -195,6 +197,7 @@ constructor(
 
     fun isRelativePos(): Boolean = isRelativeX() || isRelativeY() || isRelativeZ()
 
+    tracking.enabledWindowStarts = configManager.enabledWindowStarts
     fun rotationMatches(actualYaw: Float, actualPitch: Float): Boolean =
       (flags.has(RelativeFlag.YAW) || angleMatches(actualYaw, yaw, yaw % FULL_TURN)) &&
         (flags.has(RelativeFlag.PITCH) ||

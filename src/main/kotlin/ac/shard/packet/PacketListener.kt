@@ -24,6 +24,7 @@ package ac.shard.packet
 
 import ac.shard.data.CollectManager
 import ac.shard.debug.DebugCategory
+import ac.shard.data.TickData
 import ac.shard.debug.DebugManager
 import ac.shard.entity.PacketEntity
 import ac.shard.player.PlayerDataManager
@@ -55,6 +56,7 @@ import com.github.retrooper.packetevents.protocol.potion.PotionTypes
 import com.github.retrooper.packetevents.protocol.teleport.RelativeFlag
 import com.github.retrooper.packetevents.protocol.world.Location
 import com.github.retrooper.packetevents.util.Vector3d
+import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAnimation
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAttack
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientEntityAction
@@ -62,6 +64,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientHe
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerAbilities
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerDigging
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerBlockPlacement
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerInput
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPong
@@ -230,8 +233,6 @@ class PacketListener(
       return
     }
 
-    val shardPlayer = playerDataManager.getPlayer(player) ?: return
-
     if (handleTransaction(event, shardPlayer)) {
       dropWrapperUnlessRewritten(event)
       return
@@ -357,13 +358,14 @@ class PacketListener(
     }
     shardPlayer.ensureTickBufferCapacity()
     if (
-      shardPlayer.packetStateData.shouldIgnoreFlyingTick && !shardPlayer.tracking.attackThisTick
+      shardPlayer.packetStateData.shouldIgnoreFlyingTick &&
+        !shardPlayer.tracking.windowStartThisTick
     ) {
       return
     }
 
     val withinFloodBudget = shardPlayer.tracking.floodTryConsume(System.nanoTime())
-    if (!withinFloodBudget && !shardPlayer.tracking.attackThisTick) {
+    if (!withinFloodBudget && !shardPlayer.tracking.windowStartThisTick) {
       shardPlayer.tracking.floodDroppedCaptures++
       if (debugManager.isEnabled(DebugCategory.AI_FLOOD)) {
         debugManager.log(
@@ -377,7 +379,7 @@ class PacketListener(
 
     val buf = shardPlayer.tickBuffer
     buf.capture(shardPlayer)
-    if (shardPlayer.tracking.attackThisTick) {
+    if (shardPlayer.tracking.windowStartThisTick) {
       buf.markAttack()
     }
     collectManager.onTick(shardPlayer)
@@ -572,7 +574,9 @@ class PacketListener(
           tracking.onSwing()
         }
       }
-      PacketType.Play.Client.USE_ITEM,
+      PacketType.Play.Client.USE_ITEM -> {
+        tracking.ticksSinceUseItem = 0
+      }
       PacketType.Play.Client.PLAYER_BLOCK_PLACEMENT -> {
         tracking.ticksSinceUseItem = 0
       }
@@ -582,6 +586,7 @@ class PacketListener(
           tracking.isUsingItem = false
           tracking.updateActiveItem()
         }
+        recordBlockPlacement(WrapperPlayClientPlayerBlockPlacement(event), shardPlayer)
       }
       PacketType.Play.Client.HELD_ITEM_CHANGE -> {
         tracking.isUsingItem = false
@@ -589,12 +594,17 @@ class PacketListener(
         tracking.cooldownTicks = 0
         tracking.heldSlot = WrapperPlayClientHeldItemChange(event).slot
         updateHeldAttackSpeed(shardPlayer)
+        if (dig.action == DiggingAction.SWAP_ITEM_WITH_OFFHAND) {
+          tracking.swapOffhand()
+          updateHeldAttackSpeed(shardPlayer)
+        }
       }
       PacketType.Play.Client.ENTITY_ACTION -> {
         val action = WrapperPlayClientEntityAction(event)
         when (action.action) {
           WrapperPlayClientEntityAction.Action.START_SPRINTING -> {
             tracking.sprinting = true
+        tracking.onSlotSwitch()
           }
           WrapperPlayClientEntityAction.Action.STOP_SPRINTING -> {
             tracking.sprinting = false
@@ -651,17 +661,80 @@ class PacketListener(
     if (targetId == shardPlayer.entityId) return
     val target = shardPlayer.compensatedEntities.getEntity(targetId)
     if (target != null && target.isPlayer) {
-      shardPlayer.tracking.onAttack(targetId, shardPlayer.tracking.sprinting)
+      tracking.onAttack(targetId, tracking.sprinting)
+      tracking.raiseWindowStart(TickData.START_MELEE_PLAYER)
+      return
+    }
+  }
+  private fun recordBlockPlacement(
+    placement: WrapperPlayClientPlayerBlockPlacement,
+    shardPlayer: ShardPlayer,
+  ) {
+    val pos = placement.blockPosition
+    val tracking = shardPlayer.tracking
+    val state = shardPlayer.compensatedWorld.getBlock(pos.x, pos.y, pos.z)
+    val blockClass =
+      when (state?.type) {
+        null -> TickData.PLACE_UNKNOWN
+        StateTypes.OBSIDIAN,
+        StateTypes.CRYING_OBSIDIAN -> TickData.PLACE_OBSIDIAN
+        StateTypes.BEDROCK -> TickData.PLACE_BEDROCK
+        StateTypes.RESPAWN_ANCHOR -> TickData.PLACE_RESPAWN_ANCHOR
+        else -> TickData.PLACE_OTHER_SOLID
+      }
+    val cursor = placement.cursorPosition
+    tracking.onBlockPlace(
+      placement.faceId,
+      blockClass.toInt(),
+      pos.x,
+      pos.y,
+      pos.z,
+      floatArrayOf(cursor.x, cursor.y, cursor.z),
+      placement.insideBlock.orElse(false),
+      placement.hand == InteractionHand.OFF_HAND,
+    )
+    if (state?.type == StateTypes.RESPAWN_ANCHOR) {
+      tracking.anchorCharge = state.charges
+      tracking.anchorUseInterval =
+        shardPlayer.crystalTracker.anchorUseInterval(pos.x, pos.y, pos.z, tracking.tickIndex)
+      tracking.raiseWindowStart(TickData.START_USE_RESPAWN_ANCHOR)
+    } else if (blockClass == TickData.PLACE_OBSIDIAN || blockClass == TickData.PLACE_BEDROCK) {
+      val held = tracking.hotbarItems.getOrNull(tracking.heldSlot)
+      if (held == ItemTypes.END_CRYSTAL) tracking.raiseWindowStart(TickData.START_PLACE_END_CRYSTAL)
     }
   }
 
+
   private fun handleShardServerPackets(event: PacketSendEvent, shardPlayer: ShardPlayer) {
     val tracking = shardPlayer.tracking
+    val tracking = shardPlayer.tracking
+    tracking.crystalSpawnToAttack =
+      shardPlayer.crystalTracker.spawnToAttack(targetId, tracking.tickIndex)
+    tracking.attackTargetType = classifyAttackTarget(target)
 
     when (event.packetType) {
       PacketType.Play.Server.ENTITY_VELOCITY -> {
+    tracking.raiseWindowStart(
+      when {
+        target == null -> TickData.START_ATTACK_ENTITY_OTHER
+        target.type == EntityTypes.END_CRYSTAL -> TickData.START_ATTACK_END_CRYSTAL
+        target.isLivingEntity -> TickData.START_MELEE_LIVING_OTHER
+        else -> TickData.START_ATTACK_ENTITY_OTHER
+      }
+    )
         val vel = WrapperPlayServerEntityVelocity(event)
         if (vel.entityId == shardPlayer.entityId) {
+  private fun classifyAttackTarget(target: PacketEntity?): Short =
+    when {
+      target == null -> TickData.TARGET_UNKNOWN
+      target.isPlayer -> TickData.TARGET_PLAYER
+      target.type == EntityTypes.END_CRYSTAL -> TickData.TARGET_END_CRYSTAL
+      target.isLivingEntity -> TickData.TARGET_LIVING_OTHER
+      EntityTypes.isTypeInstanceOf(target.type, EntityTypes.BOAT) ||
+        EntityTypes.isTypeInstanceOf(target.type, EntityTypes.MINECART) -> TickData.TARGET_VEHICLE
+      else -> TickData.TARGET_OTHER
+    }
+
           val velocity = vel.velocity
           shardPlayer.sendTransaction()
           shardPlayer.latencyUtils.addRealTimeTask(
@@ -680,7 +753,8 @@ class PacketListener(
           shardPlayer.latencyUtils.addRealTimeTask(
             shardPlayer.transactions.lastTransactionSent.get()
           ) {
-            tracking.onExplosion()
+            tracking.onExplosion(kb.x, kb.y, kb.z)
+            tracking.raiseWindowStart(TickData.START_EXPLOSION_RECEIVED)
           }
           event.tasksAfterSend.add(Runnable { shardPlayer.sendTransaction() })
         }
@@ -1192,6 +1266,9 @@ class PacketListener(
   private fun handleSpawnLivingEntity(
     spawn: WrapperPlayServerSpawnLivingEntity,
     shardPlayer: ShardPlayer,
+        if (type == EntityTypes.END_CRYSTAL) {
+          shardPlayer.crystalTracker.onCrystalSpawn(entityId, shardPlayer.tracking.tickIndex)
+        }
   ) {
     if (shardPlayer.transactions.entitiesDespawnedThisTransaction.contains(spawn.entityId)) {
       shardPlayer.sendTransaction()
@@ -1306,6 +1383,7 @@ class PacketListener(
         }
       }
     }
+        shardPlayer.crystalTracker.onEntityRemoved(id)
     shardPlayer.latencyUtils.addRealTimeTask(
       destroyTransaction + 1,
       Runnable {
@@ -1323,7 +1401,6 @@ class PacketListener(
     shardPlayer: ShardPlayer,
   ) {
     shardPlayer.tracking.onSequenceBreak()
-    val entityId = join.entityId
     val gameMode = join.gameMode
     val dimensionMinY = runCatching { join.dimensionType.getMinY(shardPlayer.user.clientVersion) }
     shardPlayer.entityId = entityId

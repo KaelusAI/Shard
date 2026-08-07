@@ -76,6 +76,6 @@ class TickBufferCopyCompletenessTest {
     const val SEQUENCE_ID = 4242
     const val ALL_TRACKED_BITS: Short = 0b11_1111_1111
     // extractWindow re-stamps the anchor offset on every copy by design.
-    val RESTAMPED = setOf("ticks_to_attack")
+    val RESTAMPED = setOf("ticks_to_attack", "window_start")
   }
 }

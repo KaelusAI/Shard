@@ -27,6 +27,9 @@ import ac.shard.utils.nmsutil.GetBoundingBox
 import ac.shard.utils.nmsutil.ReachUtils
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.manager.server.ServerVersion
+import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
+import com.github.retrooper.packetevents.protocol.item.type.ItemType
+import com.github.retrooper.packetevents.protocol.item.type.ItemTypes
 import com.github.retrooper.packetevents.protocol.player.ClientVersion
 
 @Suppress("TooManyFunctions")
@@ -105,6 +108,7 @@ class TickData {
   var swungThisTick: Boolean = false
   var attackCooldownProgress: Float = 0f
   private var serverCooldownProgress: Float = 1f
+  private val aimAxes = DoubleArray(2)
   var attackSpeed: Float = 4.0f
   var isSprintingOnAttack: Boolean = false
 
@@ -143,6 +147,40 @@ class TickData {
   var levitationAmplifier: Int = -1
   var swimFriction: Float = 0.8f
   var riptideActive: Boolean = false
+
+  var windowStartKind: Short = START_MELEE_PLAYER
+  var targetType: Short = TARGET_PLAYER
+
+  var crystalSpawnToAttack: Short = NO_TICKS
+  var useOffhand: Boolean = false
+  var nearbyCrystalCount: Int = 0
+  var anchorCharge: Short = NO_CHARGE
+  var anchorUseInterval: Short = NO_TICKS
+
+  var placeFace: Short = NO_FACE
+  var placeBlockClass: Short = PLACE_NONE
+  var placeBlockX: Int = 0
+  var placeBlockY: Int = 0
+  var placeBlockZ: Int = 0
+  var placeCursorX: Float = NO_CURSOR
+  var placeCursorY: Float = NO_CURSOR
+  var placeCursorZ: Float = NO_CURSOR
+  var placeInsideBlock: Boolean = false
+  var placesThisTick: Short = 0
+
+  var heldItemClass: Short = ITEM_UNKNOWN
+  var offhandItemClass: Short = ITEM_UNKNOWN
+  var slotSwitchesThisTick: Short = 0
+
+  var explosionKbX: Float = 0f
+  var explosionKbY: Float = 0f
+  var explosionKbZ: Float = 0f
+
+  var hittableEntitiesCount: Int = 0
+  var aimErrorYaw: Float = 0f
+  var aimErrorPitch: Float = 0f
+  var raytraceDirsHitCount: Short = 0
+  var raytraceHitStrict: Boolean = false
 
   fun capture(player: ShardPlayer) {
     val m = player.movement
@@ -273,6 +311,58 @@ class TickData {
     levitationAmplifier = tracking.levitationAmplifier
     swimFriction = computeSwimFriction(player, tracking)
     riptideActive = tracking.riptideActive
+
+    captureCrystalContext(player, tracking)
+  }
+
+  private fun captureCrystalContext(player: ShardPlayer, tracking: TrackingState) {
+    windowStartKind = START_MELEE_PLAYER
+
+    crystalSpawnToAttack = tracking.crystalSpawnToAttack.toShort()
+    useOffhand = tracking.placeOffhand || (tracking.isUsingItem && tracking.usingOffhand)
+    anchorCharge = tracking.anchorCharge.toShort()
+    anchorUseInterval = tracking.anchorUseInterval.toShort()
+
+    placeFace = tracking.placeFace.toShort()
+    placeBlockClass = tracking.placeBlockClass.toShort()
+    placeBlockX = tracking.placeBlockX
+    placeBlockY = tracking.placeBlockY
+    placeBlockZ = tracking.placeBlockZ
+    placeCursorX = tracking.placeCursorX
+    placeCursorY = tracking.placeCursorY
+    placeCursorZ = tracking.placeCursorZ
+    placeInsideBlock = tracking.placeInsideBlock
+    placesThisTick = tracking.placesThisTick.toShort()
+
+    targetType = tracking.attackTargetType
+    heldItemClass = classifyItem(tracking.hotbarItems.getOrNull(tracking.heldSlot))
+    offhandItemClass = classifyItem(tracking.offhandItem)
+    slotSwitchesThisTick = tracking.slotSwitchesThisTick.toShort()
+
+    if (tracking.receivedExplosionThisTick) {
+      explosionKbX = tracking.explosionKbX
+      explosionKbY = tracking.explosionKbY
+      explosionKbZ = tracking.explosionKbZ
+    } else {
+      explosionKbX = 0f
+      explosionKbY = 0f
+      explosionKbZ = 0f
+    }
+
+    var crystals = 0
+    var hittable = 0
+    for (entity in player.compensatedEntities.entityMap.values) {
+      if (!entity.canHit()) continue
+      val pos = entity.trackedServerPosition.pos
+      val dx = pos.x - player.movement.x
+      val dy = pos.y - player.movement.y
+      val dz = pos.z - player.movement.z
+      val distSq = dx * dx + dy * dy + dz * dz
+      if (distSq <= TARGETS_IN_RANGE_RADIUS_SQ) hittable++
+      if (entity.type == EntityTypes.END_CRYSTAL && distSq <= CRYSTAL_RADIUS_SQ) crystals++
+    }
+    nearbyCrystalCount = crystals
+    hittableEntitiesCount = hittable
   }
 
   private fun computeSwimFriction(player: ShardPlayer, tracking: TrackingState): Float {
@@ -318,6 +408,11 @@ class TickData {
         val hitPointUnion = computeRaytraceHitPoint(player, targetBox)
         raytraceHit = hitPointUnion != null
         val hitPointTight = computeRaytraceHitPoint(player, tightBox)
+        raytraceHitStrict = hitPointTight != null
+        raytraceDirsHitCount = countRaytraceHits(player, targetBox).toShort()
+        ReachUtils.aimErrorAxes(player, tightBox, aimAxes)
+        aimErrorYaw = aimAxes[0].toFloat()
+        aimErrorPitch = aimAxes[1].toFloat()
         raytraceMissDistance =
           if (hitPointTight != null) 0f else computeRaytraceMissDistance(player, tightBox).toFloat()
         if (hitPointTight != null) {
@@ -344,6 +439,10 @@ class TickData {
         isCritical = false
         attackRayOccluded = false
         exposureFraction = 0f
+        raytraceHitStrict = false
+        raytraceDirsHitCount = 0
+        aimErrorYaw = 0f
+        aimErrorPitch = 0f
       }
 
       targetsInRangeCount = countTargetsInRange(player)
@@ -366,6 +465,10 @@ class TickData {
       boxInflation = 0f
       aimError = 0f
       targetsInRangeCount = 0
+      raytraceHitStrict = false
+      raytraceDirsHitCount = 0
+      aimErrorYaw = 0f
+      aimErrorPitch = 0f
     }
   }
 
@@ -393,6 +496,29 @@ class TickData {
         ((tracking.cooldownTicks + 0.5f) / cooldownPeriod).coerceIn(0f, 1f)
       }
     attackCooldownProgress = if (isLegacyCombat) 0f else serverCooldownProgress
+  }
+
+  private fun countRaytraceHits(player: ShardPlayer, targetBox: SimpleCollisionBox): Int {
+    val maxDistance = raytraceMaxDistance(player)
+    val m = player.movement
+    var hits = 0
+    for (lookVec in ReachUtils.getPossibleLookDirs(player)) {
+      for (eyeHeight in ReachUtils.getPossibleEyeHeights()) {
+        val origin = Vector3dm(m.x, m.y + eyeHeight, m.z)
+        if (ReachUtils.isVecInside(targetBox, origin)) {
+          hits++
+          continue
+        }
+        val end =
+          Vector3dm(
+            origin.x + lookVec.x * maxDistance,
+            origin.y + lookVec.y * maxDistance,
+            origin.z + lookVec.z * maxDistance,
+          )
+        if (ReachUtils.calculateIntercept(targetBox, origin, end) != null) hits++
+      }
+    }
+    return hits
   }
 
   private fun computeRaytraceHitPoint(
@@ -458,6 +584,38 @@ class TickData {
     return true
   }
 
+  private fun classifyItem(item: ItemType?): Short {
+    if (item == null || item == ItemTypes.AIR) return ITEM_EMPTY
+    val exact = classifyExactItem(item)
+    return when {
+      exact != ITEM_UNKNOWN -> exact
+      item.hasAttribute(ItemTypes.ItemAttribute.SWORD) ||
+        item.hasAttribute(ItemTypes.ItemAttribute.AXE) -> ITEM_MELEE_WEAPON
+      item.hasAttribute(ItemTypes.ItemAttribute.EDIBLE) -> ITEM_CONSUMABLE
+      item.placedType != null -> ITEM_PLACEABLE_BLOCK
+      else -> ITEM_UNKNOWN
+    }
+  }
+
+  private fun classifyExactItem(item: ItemType): Short =
+    when (item) {
+      ItemTypes.END_CRYSTAL -> ITEM_END_CRYSTAL
+      ItemTypes.RESPAWN_ANCHOR -> ITEM_RESPAWN_ANCHOR
+      ItemTypes.GLOWSTONE -> ITEM_GLOWSTONE
+      ItemTypes.TOTEM_OF_UNDYING -> ITEM_TOTEM
+      ItemTypes.SHIELD -> ITEM_SHIELD
+      ItemTypes.OBSIDIAN,
+      ItemTypes.CRYING_OBSIDIAN,
+      ItemTypes.BEDROCK -> ITEM_CRYSTAL_BASE
+      ItemTypes.BOW,
+      ItemTypes.CROSSBOW,
+      ItemTypes.TRIDENT -> ITEM_RANGED
+      ItemTypes.ENDER_PEARL,
+      ItemTypes.SNOWBALL,
+      ItemTypes.EGG -> ITEM_PROJECTILE
+      else -> ITEM_UNKNOWN
+    }
+
   private fun countTargetsInRange(player: ShardPlayer): Int {
     var count = 0
     for (entity in player.compensatedEntities.entityMap.values) {
@@ -472,6 +630,47 @@ class TickData {
   }
 
   companion object {
+    const val START_MELEE_PLAYER: Short = 0
+    const val START_MELEE_LIVING_OTHER: Short = 1
+    const val START_ATTACK_END_CRYSTAL: Short = 2
+    const val START_ATTACK_ENTITY_OTHER: Short = 3
+    const val START_USE_RESPAWN_ANCHOR: Short = 4
+    const val START_PLACE_END_CRYSTAL: Short = 5
+    const val START_EXPLOSION_RECEIVED: Short = 6
+
+    const val TARGET_PLAYER: Short = 0
+    const val TARGET_LIVING_OTHER: Short = 1
+    const val TARGET_END_CRYSTAL: Short = 2
+    const val TARGET_VEHICLE: Short = 3
+    const val TARGET_OTHER: Short = 4
+    const val TARGET_UNKNOWN: Short = 5
+
+    const val ITEM_UNKNOWN: Short = 0
+    const val ITEM_EMPTY: Short = 1
+    const val ITEM_MELEE_WEAPON: Short = 2
+    const val ITEM_END_CRYSTAL: Short = 3
+    const val ITEM_CRYSTAL_BASE: Short = 4
+    const val ITEM_RESPAWN_ANCHOR: Short = 5
+    const val ITEM_GLOWSTONE: Short = 6
+    const val ITEM_TOTEM: Short = 7
+    const val ITEM_PLACEABLE_BLOCK: Short = 8
+    const val ITEM_RANGED: Short = 9
+    const val ITEM_PROJECTILE: Short = 10
+    const val ITEM_CONSUMABLE: Short = 11
+    const val ITEM_SHIELD: Short = 12
+
+    const val PLACE_NONE: Short = 0
+    const val PLACE_OBSIDIAN: Short = 1
+    const val PLACE_BEDROCK: Short = 2
+    const val PLACE_RESPAWN_ANCHOR: Short = 3
+    const val PLACE_OTHER_SOLID: Short = 4
+    const val PLACE_UNKNOWN: Short = 5
+
+    const val NO_TICKS: Short = -1
+    const val NO_CHARGE: Short = -1
+    const val NO_FACE: Short = -1
+    const val NO_CURSOR = -1f
+
     private val modernCombatServer by lazy {
       PacketEvents.getAPI().serverManager.version.isNewerThanOrEquals(ServerVersion.V_1_9)
     }
@@ -500,6 +699,7 @@ class TickData {
     private const val DEPTH_STRIDER_FRICTION = 0.546f
     private const val DOLPHINS_GRACE_FRICTION = 0.96f
     private const val TICKS_PER_SECOND = 20.0f
+    private const val CRYSTAL_RADIUS_SQ = 64.0
     private const val RAYTRACE_RANGE_MARGIN = 3.0
     private const val RAYTRACE_MIN_RANGE = 6.0
     private const val CRIT_COOLDOWN_THRESHOLD = 0.9f

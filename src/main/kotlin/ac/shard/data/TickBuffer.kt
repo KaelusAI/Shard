@@ -57,6 +57,7 @@ class TickBuffer(private val capacity: Int) {
     postWindow: Int,
     ticksSinceAttack: Int,
     attackIdx: Int = attackBufferIndex,
+    windowStartKind: Short = TickData.START_MELEE_PLAYER,
   ): List<TickData>? {
     if (attackIdx < 0) return null
     if (ticksSinceAttack >= capacity) return null
@@ -82,6 +83,7 @@ class TickBuffer(private val capacity: Int) {
       val copy = TickData()
       copyTickData(tick, copy)
       copy.ticksToAttack = (i - availablePre).toShort()
+      copy.windowStartKind = windowStartKind
       window.add(copy)
     }
 
@@ -183,6 +185,34 @@ class TickBuffer(private val capacity: Int) {
       dst.teleportTick = src.teleportTick
       dst.exposureFraction = src.exposureFraction
       dst.boxInflation = src.boxInflation
+      dst.windowStartKind = src.windowStartKind
+      dst.targetType = src.targetType
+      dst.crystalSpawnToAttack = src.crystalSpawnToAttack
+      dst.useOffhand = src.useOffhand
+      dst.nearbyCrystalCount = src.nearbyCrystalCount
+      dst.anchorCharge = src.anchorCharge
+      dst.anchorUseInterval = src.anchorUseInterval
+      dst.placeFace = src.placeFace
+      dst.placeBlockClass = src.placeBlockClass
+      dst.placeBlockX = src.placeBlockX
+      dst.placeBlockY = src.placeBlockY
+      dst.placeBlockZ = src.placeBlockZ
+      dst.placeCursorX = src.placeCursorX
+      dst.placeCursorY = src.placeCursorY
+      dst.placeCursorZ = src.placeCursorZ
+      dst.placeInsideBlock = src.placeInsideBlock
+      dst.placesThisTick = src.placesThisTick
+      dst.heldItemClass = src.heldItemClass
+      dst.offhandItemClass = src.offhandItemClass
+      dst.slotSwitchesThisTick = src.slotSwitchesThisTick
+      dst.explosionKbX = src.explosionKbX
+      dst.explosionKbY = src.explosionKbY
+      dst.explosionKbZ = src.explosionKbZ
+      dst.hittableEntitiesCount = src.hittableEntitiesCount
+      dst.aimErrorYaw = src.aimErrorYaw
+      dst.aimErrorPitch = src.aimErrorPitch
+      dst.raytraceDirsHitCount = src.raytraceDirsHitCount
+      dst.raytraceHitStrict = src.raytraceHitStrict
     }
   }
 }
