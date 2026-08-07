@@ -96,8 +96,8 @@ class ViewTagRendererFallbackTest {
     every { aiCheck.lastProbability } returns 0.954
     every { aiCheck.buffer } returns 12.5
     every { aiCheck.prob90 } returns 0
-    every { aiCheck.inferenceTicks } returns -1
-    every { aiCheck.inferencePostWindow } returns 32
+    every { aiCheck.inferenceProgress } returns null
+    every { aiCheck.labelBufferSnapshot() } returns emptyMap()
 
     val rendered =
       ViewTagRenderer(MonitorSampler(playerDataManager, noCollector())).render(target, "", config)

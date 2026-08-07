@@ -24,6 +24,7 @@ package ac.shard.config
 
 import ac.shard.Shard
 import ac.shard.connect.CredentialsStore
+import ac.shard.data.TickData
 import ac.shard.data.TickSchema
 import ac.shard.debug.DebugCategory
 import ac.shard.region.RegionCheckMode
@@ -84,6 +85,10 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     private set
 
   @Volatile
+  var aiLabels: List<String> = emptyList()
+    private set
+
+  @Volatile
   var aiColumnMask: LongArray = TickSchema.fullMask
     private set
 
@@ -124,15 +129,15 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   private var bedrockExemptEnabled = false
 
+  @Volatile
+  var enabledWindowStarts: Int = 1 shl TickData.START_MELEE_PLAYER.toInt()
+    private set
+
   var persistentBufferEnabled: Boolean = false
     private set
 
   var persistentBufferTtlMillis: Long = 0L
     private set
-  @Volatile
-  var enabledWindowStarts: Int = 1 shl TickData.START_MELEE_PLAYER.toInt()
-    private set
-
 
   var persistentBufferCap: Double = 0.0
     private set
@@ -198,21 +203,30 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   }
 
   @Synchronized
+  @Suppress("LongParameterList")
   fun updateAiParams(
     preWindow: Int?,
     postWindow: Int?,
     step: Int?,
     model: String? = null,
     columns: List<String>? = null,
+    labels: List<String>? = null,
   ) {
     var changed = columns != null && columns != aiColumns && applyAiColumns(columns)
+    if (labels != null && labels != aiLabels) {
+      plugin.logger.info("[Config] AI labels $aiLabels -> $labels (from server)")
+      aiLabels = labels
+      changed = true
+    }
     changed = applyAiWindow(preWindow, postWindow, step) || changed
     if (!model.isNullOrBlank() && model != aiModel) {
       plugin.logger.info("[Config] AI model $aiModel -> $model (from server)")
       aiModel = model
       changed = true
     }
-    if (changed) modelStore.write(aiPreWindow, aiPostWindow, aiStep, aiModel, aiColumns)
+    if (changed) {
+      modelStore.write(aiPreWindow, aiPostWindow, aiStep, aiModel, aiColumns, aiLabels)
+    }
   }
 
   private fun applyAiWindow(preWindow: Int?, postWindow: Int?, step: Int?): Boolean {
@@ -250,6 +264,7 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
       modelStore.readStep()
         ?: config.getInt("ai.inference.step", DEFAULT_AI_STEP).coerceAtLeast(MIN_AI_STEP)
     aiModel = modelStore.readModel()
+    aiLabels = modelStore.readLabels().orEmpty()
     modelStore.readColumns()?.let { applyAiColumns(it) }
   }
 
@@ -321,7 +336,7 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     val updateStream = javaClass.classLoader.getResourceAsStream(fileName) ?: return
 
     val currentVersion = ConfigMigrations.readVersion(file, fileName)
-    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(currentVersion, fileName)
+    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(currentVersion, fileName, file)
 
     val report =
       runCatching {
@@ -403,6 +418,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
     bedrockExemptEnabled = config.getBoolean("exemptions.bedrock", true)
 
+    enabledWindowStarts = loadWindowStarts()
+
     persistentBufferEnabled = config.getBoolean("ai.persistent-buffer.enabled", true)
     val ttlHours =
       config.getLong("ai.persistent-buffer.ttl-hours", DEFAULT_BUFFER_TTL_HOURS).also {
@@ -418,8 +435,6 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     persistentBufferDecayPerHour =
       config.getDouble("ai.persistent-buffer.decay-rate-per-hour", DEFAULT_BUFFER_DECAY)
     persistentBufferDisconnectWindowMillis =
-    enabledWindowStarts = loadWindowStarts()
-
       config.getLong(
         "ai.persistent-buffer.disconnect-window-seconds",
         DEFAULT_BUFFER_DISCONNECT_WINDOW_SECS,
@@ -466,6 +481,15 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     enabledDebugCategories = enabledCategories
   }
 
+  private fun loadWindowStarts(): Int {
+    var mask = 1 shl TickData.START_MELEE_PLAYER.toInt()
+    for ((key, kind) in OPTIONAL_WINDOW_STARTS) {
+      if (config.getBoolean("experimental.extra-window-starts.$key", false))
+        mask = mask or (1 shl kind)
+    }
+    return mask
+  }
+
   private fun loadDisabledRegions(): Map<String, List<String>> {
     val mapRegions = config.getStringListMap("ai.worldguard.disabled-regions")
     if (mapRegions.isNotEmpty()) {
@@ -480,15 +504,6 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   private fun parseLegacyDisabledRegions(): Map<String, List<String>> {
     val legacyList = config.getStringList("ai.worldguard.disabled-regions")
     if (legacyList.isEmpty()) return emptyMap()
-
-  private fun loadWindowStarts(): Int {
-    var mask = 1 shl TickData.START_MELEE_PLAYER.toInt()
-    for ((key, kind) in OPTIONAL_WINDOW_STARTS) {
-      if (config.getBoolean("experimental.extra-window-starts.$key", false))
-        mask = mask or (1 shl kind)
-    }
-    return mask
-  }
 
     plugin.logger.warning(
       "[Config] ai.worldguard.disabled-regions uses deprecated " +
@@ -519,6 +534,16 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   }
 
   private companion object {
+    private val OPTIONAL_WINDOW_STARTS =
+      listOf(
+        "melee-living-other" to TickData.START_MELEE_LIVING_OTHER.toInt(),
+        "attack-end-crystal" to TickData.START_ATTACK_END_CRYSTAL.toInt(),
+        "attack-entity-other" to TickData.START_ATTACK_ENTITY_OTHER.toInt(),
+        "use-respawn-anchor" to TickData.START_USE_RESPAWN_ANCHOR.toInt(),
+        "place-end-crystal" to TickData.START_PLACE_END_CRYSTAL.toInt(),
+        "explosion-received" to TickData.START_EXPLOSION_RECEIVED.toInt(),
+      )
+
     const val MIN_AI_WINDOW = 1
     const val MIN_AI_STEP = 1
     const val DEFAULT_AI_PRE_WINDOW = 32
@@ -534,16 +559,6 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     const val DEFAULT_BUFFER_SAVE_THRESHOLD = 1.0
 
     const val DEFAULT_BATCH_MAX_SIZE = 32
-    private val OPTIONAL_WINDOW_STARTS =
-      listOf(
-        "melee-living-other" to TickData.START_MELEE_LIVING_OTHER.toInt(),
-        "attack-end-crystal" to TickData.START_ATTACK_END_CRYSTAL.toInt(),
-        "attack-entity-other" to TickData.START_ATTACK_ENTITY_OTHER.toInt(),
-        "use-respawn-anchor" to TickData.START_USE_RESPAWN_ANCHOR.toInt(),
-        "place-end-crystal" to TickData.START_PLACE_END_CRYSTAL.toInt(),
-        "explosion-received" to TickData.START_EXPLOSION_RECEIVED.toInt(),
-      )
-
     const val DEFAULT_BATCH_MAX_DELAY_MS = 50L
 
     const val DEFAULT_RETRY_MAX_ATTEMPTS = 3

@@ -59,7 +59,7 @@ class PunishmentManager(
   private val scheduler: SchedulerService,
   private val coroutines: ShardCoroutines,
 ) {
-  private val punishmentGroups = HashMap<String, PunishGroup>()
+  private val punishmentGroups = LinkedHashMap<String, PunishGroup>()
   private val database: ViolationDatabase = databaseManager.database
 
   init {
@@ -83,6 +83,7 @@ class PunishmentManager(
       val groupSection = groupEntry.value
 
       val checkNamesFilters = getStringList(groupSection.node("checks"))
+      val labelFilters = getStringList(groupSection.node("labels"))
       val actionsSection = groupSection.node("actions")
       if (actionsSection.empty()) {
         continue
@@ -101,7 +102,7 @@ class PunishmentManager(
       }
 
       if (parsedActions.isNotEmpty()) {
-        val punishGroup = PunishGroup(groupName, checkNamesFilters, parsedActions)
+        val punishGroup = PunishGroup(groupName, checkNamesFilters, labelFilters, parsedActions)
         punishmentGroups[groupName] = punishGroup
       }
     }
@@ -115,32 +116,50 @@ class PunishmentManager(
     }
   }
 
-  fun handleFlag(check: ICheck, debug: String) {
-    if (
-      shardPlayer.exemptManager.isExempt(shardPlayer.player) ||
-        shardPlayer.exemptManager.isDisabled(shardPlayer.player)
-    ) {
-      return
-    }
-
+  @Suppress("ReturnCount")
+  fun handleFlag(check: ICheck, labels: Set<String>, debug: String) {
     val playerName = shardPlayer.player.name
     val checkName = check.checkName
 
-    for (group in punishmentGroups.values) {
-      if (group.isCheckAssociated(check)) {
-        coroutines.scope.launch(coroutines.async) {
-          val newVl = database.incrementViolationLevel(shardPlayer.uuid, group.groupName)
-          val entry = group.actions.floorEntry(newVl) ?: return@launch
-          try {
-            executeCommands(group, newVl, debug, entry.value, playerName, checkName)
-          } catch (e: Exception) {
-            plugin.logger.warning("Failed to execute punishment actions: ${e.message}")
-          }
+    if (shardPlayer.exemptManager.isDisabled(shardPlayer.player)) {
+      plugin.logger.info("[Punish] $checkName flag on $playerName ignored: checks disabled")
+      return
+    }
+    if (shardPlayer.exemptManager.isExempt(shardPlayer.player)) {
+      plugin.logger.info("[Punish] $checkName flag on $playerName ignored: player is exempt")
+      return
+    }
+
+    val matched = punishmentGroups.values.filter { it.matches(check, labels) }
+    if (matched.isEmpty()) {
+      plugin.logger.warning(
+        "[Punish] $checkName flag on $playerName matched no punishment group. " +
+          "Groups: ${punishmentGroups.keys}, labels: $labels"
+      )
+      return
+    }
+
+    val labelText = labels.joinToString(",")
+    coroutines.scope.launch(coroutines.async) {
+      for (group in matched) {
+        val newVl = database.incrementViolationLevel(shardPlayer.uuid, group.groupName)
+        val entry = group.actions.floorEntry(newVl)
+        if (entry == null) {
+          plugin.logger.warning(
+            "[Punish] group ${group.groupName} has no action at or below vl $newVl for $playerName"
+          )
+          continue
+        }
+        try {
+          executeCommands(group, newVl, debug, entry.value, playerName, checkName, labelText)
+        } catch (e: Exception) {
+          plugin.logger.warning("Failed to execute punishment actions: ${e.message}")
         }
       }
     }
   }
 
+  @Suppress("LongParameterList")
   private suspend fun executeCommands(
     group: PunishGroup,
     vl: Int,
@@ -148,6 +167,7 @@ class PunishmentManager(
     commands: List<String>,
     playerName: String,
     checkName: String,
+    labels: String,
   ) {
     val event =
       PunishmentTriggeredEvent(
@@ -164,10 +184,11 @@ class PunishmentManager(
       return
     }
     for (command in commands) {
-      executeCommand(group, vl, verbose, command, playerName, checkName)
+      executeCommand(group, vl, verbose, command, playerName, checkName, labels)
     }
   }
 
+  @Suppress("LongParameterList", "ReturnCount")
   private suspend fun executeCommand(
     group: PunishGroup,
     vl: Int,
@@ -175,16 +196,17 @@ class PunishmentManager(
     command: String,
     playerName: String,
     checkName: String,
+    labels: String,
   ) {
     val trimmed = command.trim()
     val lower = trimmed.lowercase(Locale.ROOT)
 
     if (lower == "[alert]") {
-      runSync { sendAlert(playerName, checkName, vl, verbose) }
+      runSync { sendAlert(playerName, checkName, vl, verbose, labels) }
       return
     }
     if (lower == "[log]") {
-      runAsync { database.logAlert(shardPlayer, verbose, checkName, vl) }
+      runAsync { database.logAlert(shardPlayer, verbose, checkName, vl, labels) }
       return
     }
     if (lower == "[reset]") {
@@ -206,6 +228,8 @@ class PunishmentManager(
           vl.toString(),
           "verbose",
           verbose,
+          "labels",
+          displayLabels(labels),
         )
       runSync { adventure.players().sendMessage(component) }
       return
@@ -296,7 +320,13 @@ class PunishmentManager(
     }
   }
 
-  private fun sendAlert(playerName: String, checkName: String, vl: Int, verbose: String) {
+  private fun sendAlert(
+    playerName: String,
+    checkName: String,
+    vl: Int,
+    verbose: String,
+    labels: String,
+  ) {
     val message =
       MessageUtil.getMessage(
         Message.ALERTS_FORMAT,
@@ -308,8 +338,20 @@ class PunishmentManager(
         vl.toString(),
         "verbose",
         verbose,
+        "labels",
+        displayLabels(labels),
       )
 
     alertManager.send(message, AlertType.REGULAR)
+  }
+
+  private fun displayLabels(labels: String): String =
+    labels
+      .split(',')
+      .filter { it.isNotBlank() && !it.startsWith(RESERVED_LABEL_PREFIX) }
+      .joinToString(", ")
+
+  private companion object {
+    private const val RESERVED_LABEL_PREFIX = "_"
   }
 }

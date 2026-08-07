@@ -33,6 +33,7 @@ import ac.shard.checks.type.TickCheck
 import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
 import ac.shard.data.AttackWindowTracker
+import ac.shard.data.TickData
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
 import ac.shard.player.ShardPlayer
@@ -43,6 +44,7 @@ import ac.shard.server.AIServer
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import com.github.retrooper.packetevents.PacketEvents
+import java.util.concurrent.ConcurrentHashMap
 
 @CheckData(name = "AI", legacyNames = ["AI (Aim)"])
 @Suppress("TooManyFunctions")
@@ -62,14 +64,63 @@ class AiCheck(
   private val window = AttackWindowTracker()
   private var ticksSinceLastInference = Int.MAX_VALUE / 2
 
-  @Volatile
-  var buffer: Double = 0.0
-    private set
+  private val labelBuffers = ConcurrentHashMap<String, ViolationBuffer>()
+
+  val buffer: Double
+    get() = labelBuffers.values.maxOfOrNull { it.value } ?: 0.0
+
+  fun labelBuffer(label: String): Double = labelBuffers[label]?.value ?: 0.0
+
+  fun labelBufferSnapshot(): Map<String, Double> =
+    labelBuffers.entries.associate { entry -> entry.key to entry.value.value }
 
   fun restoreBuffer(value: Double) {
-    val sanitized = kotlin.math.max(0.0, value)
-    buffer = kotlin.math.max(buffer, sanitized)
+    restoreLabelBuffer(UNATTRIBUTED_LABEL, value)
   }
+
+  fun restoreLabelBuffer(label: String, value: Double) {
+    labelBuffers.getOrPut(label) { ViolationBuffer() }.restore(value)
+  }
+
+  fun feedBuffers(probabilities: Map<String, Double>): Map<String, Double> {
+    val settings = bufferSettings()
+    val crossed = mutableMapOf<String, Double>()
+    for ((label, probability) in probabilities) {
+      val labelBuffer = labelBuffers.getOrPut(label) { ViolationBuffer() }
+      labelBuffer.feed(probability, settings)
+      if (labelBuffer.value > flag) {
+        crossed[label] = labelBuffer.value
+        labelBuffer.consumeFlag(bufferResetOnFlag)
+      }
+    }
+    return crossed
+  }
+
+  private fun labelledProbabilities(
+    probabilities: List<Double>?,
+    probability: Double,
+  ): Map<String, Double> {
+    val labels = configManager.aiLabels
+    if (probabilities != null && labels.isNotEmpty() && probabilities.size != labels.size) {
+      plugin.logger.warning(
+        "[AiCheck] Model declares ${labels.size} label(s) but the response carries " +
+          "${probabilities.size} probabilities; falling back to the overall verdict"
+      )
+    }
+    return if (probabilities != null && probabilities.size == labels.size && labels.isNotEmpty()) {
+      labels.zip(probabilities).toMap()
+    } else {
+      mapOf(UNATTRIBUTED_LABEL to probability)
+    }
+  }
+
+  private fun bufferSettings() =
+    ViolationBuffer.Settings(
+      CHEAT_PROBABILITY,
+      LEGIT_PROBABILITY,
+      bufferMultiplier,
+      bufferDecrease,
+    )
 
   @Volatile
   var lastProbability: Double = 0.0
@@ -82,6 +133,20 @@ class AiCheck(
 
   val inferencePostWindow: Int
     get() = configManager.aiPostWindow
+
+  val inferenceProgress: IntArray?
+    get() {
+      val anchored = window.ticksSinceAttack >= 0
+      val stepThrottles = configManager.aiStep > configManager.aiPostWindow
+      val leftWindow = if (anchored) configManager.aiPostWindow - window.ticksSinceAttack else -1
+      val leftStep = configManager.aiStep - ticksSinceLastInference
+      return when {
+        stepThrottles && leftStep > leftWindow && leftStep > 0 ->
+          intArrayOf(ticksSinceLastInference, configManager.aiStep)
+        anchored -> intArrayOf(window.ticksSinceAttack, configManager.aiPostWindow)
+        else -> null
+      }
+    }
 
   private var flag = 0.0
   private var bufferResetOnFlag = 0.0
@@ -136,20 +201,6 @@ class AiCheck(
         ticksSinceAttack,
         attackIndex,
       ) ?: return
-
-  val inferenceProgress: IntArray?
-    get() {
-      val anchored = window.ticksSinceAttack >= 0
-      val stepThrottles = configManager.aiStep > configManager.aiPostWindow
-      val leftWindow = if (anchored) configManager.aiPostWindow - window.ticksSinceAttack else -1
-      val leftStep = configManager.aiStep - ticksSinceLastInference
-      return when {
-        stepThrottles && leftStep > leftWindow && leftStep > 0 ->
-          intArrayOf(ticksSinceLastInference, configManager.aiStep)
-        anchored -> intArrayOf(window.ticksSinceAttack, configManager.aiPostWindow)
-        else -> null
-      }
-    }
 
     if (configManager.regionCheckMode == RegionCheckMode.SKIP_DETECTION && inDisabledRegion()) {
       debugManager.log(
@@ -210,8 +261,14 @@ class AiCheck(
       return
     }
 
-    apiResponse.expectedColumns?.let {
-      configManager.updateAiParams(null, null, null, columns = it)
+    if (apiResponse.expectedColumns != null || apiResponse.labels != null) {
+      configManager.updateAiParams(
+        null,
+        null,
+        null,
+        columns = apiResponse.expectedColumns,
+        labels = apiResponse.labels,
+      )
     }
 
     val probability = apiResponse.probability
@@ -223,12 +280,7 @@ class AiCheck(
     }
 
     val oldBuffer = buffer
-
-    if (probability > CHEAT_PROBABILITY) {
-      buffer += (probability - CHEAT_PROBABILITY) * bufferMultiplier
-    } else if (probability < LEGIT_PROBABILITY) {
-      buffer = kotlin.math.max(0.0, buffer - bufferDecrease)
-    }
+    val crossed = feedBuffers(labelledProbabilities(apiResponse.probabilities, probability))
 
     if (buffer > suspiciousAlertBuffer && oldBuffer <= suspiciousAlertBuffer) {
       alertManager.send(
@@ -257,7 +309,7 @@ class AiCheck(
     }
 
     var flagged = false
-    if (buffer > flag) {
+    if (crossed.isNotEmpty()) {
       if (configManager.regionCheckMode == RegionCheckMode.SKIP_PUNISHMENT && inDisabledRegion()) {
         debugManager.log(
           DebugCategory.WORLDGUARD,
@@ -265,9 +317,8 @@ class AiCheck(
         )
       } else {
         flagged = true
-        flag(buildAiFlagDebug(probability, buffer))
+        flag(buildAiFlagDebug(probability, crossed.values.max()), crossed.keys)
       }
-      buffer = bufferResetOnFlag
     }
 
     shardPlayer.eventBus.post(
@@ -281,6 +332,7 @@ class AiCheck(
         shardPlayer.combat.damageMultiplier,
         prob90,
         flagged,
+        labelBufferSnapshot(),
       )
     )
   }
@@ -337,6 +389,8 @@ class AiCheck(
     }
 
   companion object {
+    const val UNATTRIBUTED_LABEL = "_unattributed"
+
     private const val CHEAT_PROBABILITY = 0.90
     private const val LEGIT_PROBABILITY = 0.10
   }

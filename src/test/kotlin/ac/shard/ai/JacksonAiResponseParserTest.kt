@@ -45,4 +45,21 @@ class JacksonAiResponseParserTest {
   fun `throws for invalid probability type`() {
     assertFailsWith<IllegalArgumentException> { parser.parse("""{"probability":{"value":0.5}}""") }
   }
+
+  @Test
+  fun `parses labels and probabilities`() {
+    val response =
+      parser.parse(
+        """{"probability":0.62,"probabilities":[0.62,0.04],"labels":["AIM_AURA","AUTOCRYSTAL"]}"""
+      )
+    assertEquals(listOf(0.62, 0.04), response.probabilities)
+    assertEquals(listOf("AIM_AURA", "AUTOCRYSTAL"), response.labels)
+  }
+
+  @Test
+  fun `keeps labels null for a single-headed model`() {
+    val response = parser.parse("""{"probability":0.93}""")
+    assertEquals(null, response.labels)
+    assertEquals(null, response.probabilities)
+  }
 }

@@ -67,7 +67,7 @@ class AiCheckResponseTest {
     fixture.invokeOnResponse(0.95)
 
     verify(exactly = 1) {
-      fixture.punishmentManager.handleFlag(fixture.check, "prob=0.95 buffer=1.0")
+      fixture.punishmentManager.handleFlag(fixture.check, any(), "prob=0.95 buffer=1.0")
     }
     assertEquals(0.0, fixture.check.buffer)
   }

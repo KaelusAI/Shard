@@ -100,12 +100,12 @@ class BatchingAiTransport(
         items.forEach { it.future.completeExceptionally(cause) }
         return@whenComplete
       }
-      dispatchBatchResults(items, responseBody)
+      val results = tryParseBatch(responseBody, items)
+      if (results != null) dispatchBatchResults(items, results)
     }
   }
 
-  private fun dispatchBatchResults(items: List<PendingItem>, responseBody: String) {
-    val results = tryParseBatch(responseBody, items) ?: return
+  private fun dispatchBatchResults(items: List<PendingItem>, results: List<BatchItemResult>) {
     if (results.size != items.size) {
       val mismatch =
         AIServer.RequestException(
@@ -138,7 +138,7 @@ class BatchingAiTransport(
   private fun completeItem(item: PendingItem, result: BatchItemResult) {
     val probability = result.probability
     if (probability != null) {
-      item.future.complete(probabilityResponseJson(probability, result.expectedColumns))
+      item.future.complete(probabilityResponseJson(probability, result))
       return
     }
     val errorNode = result.error
@@ -179,20 +179,25 @@ class BatchingAiTransport(
     val results = root.get("results") ?: error("Missing 'results' field in batch response")
     if (!results.isArray) error("'results' is not an array")
     val expectedColumns = root.get("expected_columns")?.takeIf { it.isArray }
+    val labels = root.get("labels")?.takeIf { it.isArray }
     return results.map { node ->
       BatchItemResult(
         probability = node.get("probability")?.takeIf { it.isNumber }?.asDouble(),
         error = node.get("error")?.takeIf { it.isObject },
         expectedColumns = expectedColumns,
+        probabilities = node.get("probabilities")?.takeIf { it.isArray },
+        labels = labels,
       )
     }
   }
 
-  private fun probabilityResponseJson(probability: Double, expectedColumns: JsonNode?): String =
-    if (expectedColumns == null) {
-      """{"probability":$probability}"""
-    } else {
-      """{"probability":$probability,"expected_columns":$expectedColumns}"""
+  private fun probabilityResponseJson(probability: Double, result: BatchItemResult): String =
+    buildString {
+      append("""{"probability":""").append(probability)
+      result.expectedColumns?.let { append(""","expected_columns":""").append(it) }
+      result.probabilities?.let { append(""","probabilities":""").append(it) }
+      result.labels?.let { append(""","labels":""").append(it) }
+      append('}')
     }
 
   private fun failPending(reason: Throwable) {
@@ -220,6 +225,8 @@ class BatchingAiTransport(
     val probability: Double?,
     val error: JsonNode?,
     val expectedColumns: JsonNode? = null,
+    val probabilities: JsonNode? = null,
+    val labels: JsonNode? = null,
   )
 
   companion object {

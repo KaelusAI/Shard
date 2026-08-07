@@ -208,12 +208,19 @@ class TelemetryService(
       val postWindow = field("post_window")?.asInt()
       val step = field("step")?.asInt()
       val model = field("model")?.asText()
-      if (preWindow != null || postWindow != null || step != null || model != null) {
-        configManager.updateAiParams(preWindow, postWindow, step, model)
+      val labels = stringList(field("labels"))
+      if (listOf(preWindow, postWindow, step, model, labels).any { it != null }) {
+        configManager.updateAiParams(preWindow, postWindow, step, model, labels = labels)
       }
     }
     return used
   }
+
+  private fun stringList(node: JsonNode?): List<String>? =
+    node
+      ?.takeIf { it.isArray }
+      ?.mapNotNull { it.takeIf(JsonNode::isTextual)?.textValue()?.takeIf(String::isNotBlank) }
+      ?.takeIf { it.isNotEmpty() }
 
   private fun deviceUrl(path: String): String? {
     val inference = configManager.aiServerUrl.trim().trimEnd('/')

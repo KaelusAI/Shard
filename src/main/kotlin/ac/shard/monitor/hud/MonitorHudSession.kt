@@ -19,6 +19,7 @@ package ac.shard.monitor.hud
 
 import ac.shard.api.event.AiPredictionEvent
 import ac.shard.monitor.core.MonitorChatStyle
+import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSettings
@@ -180,6 +181,7 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
       rawPing = state.ping,
       damageMultiplier = event.damageMultiplier,
       prob90 = event.prob90,
+      leadingLabel = MonitorLabelInfo.leading(event.labelBuffers),
     )
 }
 

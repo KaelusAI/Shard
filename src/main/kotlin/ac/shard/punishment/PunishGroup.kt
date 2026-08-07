@@ -29,12 +29,18 @@ import java.util.NavigableMap
 class PunishGroup(
   val groupName: String,
   checkNames: List<String>,
+  labels: List<String>,
   val actions: NavigableMap<Int, List<String>>,
 ) {
   val associatedCheckNames: Set<String> = checkNames.map { it.lowercase(Locale.ROOT) }.toSet()
+  val associatedLabels: Set<String> = labels.map { it.lowercase(Locale.ROOT) }.toSet()
 
   fun isCheckAssociated(check: ICheck): Boolean {
     val names = (listOf(check.checkName) + check.legacyCheckNames).map { it.lowercase(Locale.ROOT) }
     return associatedCheckNames.any { filter -> names.any { it.contains(filter) } }
   }
+
+  fun matches(check: ICheck, labels: Set<String>): Boolean =
+    isCheckAssociated(check) &&
+      (associatedLabels.isEmpty() || labels.any { it.lowercase(Locale.ROOT) in associatedLabels })
 }

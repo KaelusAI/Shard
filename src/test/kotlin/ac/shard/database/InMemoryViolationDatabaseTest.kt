@@ -42,7 +42,7 @@ class InMemoryViolationDatabaseTest {
     val secondPlayer =
       createPlayer(UUID.fromString("00000000-0000-0000-0000-000000000002"), "Bravo")
 
-    database.logAlert(firstPlayer, "first", "Aim", 1)
+    database.logAlert(firstPlayer, "first", "Aim", 1, "")
     val afterFirstInsert =
       database
         .getViolations(firstPlayer.uuid, page = 1, limit = 1)
@@ -50,7 +50,7 @@ class InMemoryViolationDatabaseTest {
         .createdAt
         .toEpochMilli() + 1
     Thread.sleep(5)
-    database.logAlert(secondPlayer, "second", "Reach", 2)
+    database.logAlert(secondPlayer, "second", "Reach", 2, "")
 
     assertEquals(1, database.getLogCount(firstPlayer.uuid))
     assertEquals(1, database.getLogCount(secondPlayer.uuid))

@@ -31,12 +31,28 @@ class JacksonAiResponseParser : AiResponseParser {
         node.isTextual -> node.textValue().toDoubleOrNull()
         else -> null
       } ?: throw IllegalArgumentException("AI response does not contain a valid probability")
-    return AIResponse(probability, expectedColumns(root))
+    return AIResponse(probability, expectedColumns(root), probabilities(root), labels(root))
   }
 
-  private fun expectedColumns(root: com.fasterxml.jackson.databind.JsonNode): List<String>? =
+  private fun labels(root: com.fasterxml.jackson.databind.JsonNode): List<String>? =
+    stringList(root, "labels")
+
+  private fun probabilities(root: com.fasterxml.jackson.databind.JsonNode): List<Double>? =
     root
-      .get("expected_columns")
+      .get("probabilities")
+      ?.takeIf { it.isArray }
+      ?.map { it.takeIf(com.fasterxml.jackson.databind.JsonNode::isNumber)?.doubleValue() ?: 0.0 }
+      ?.takeIf { it.isNotEmpty() }
+
+  private fun expectedColumns(root: com.fasterxml.jackson.databind.JsonNode): List<String>? =
+    stringList(root, "expected_columns")
+
+  private fun stringList(
+    root: com.fasterxml.jackson.databind.JsonNode,
+    field: String,
+  ): List<String>? =
+    root
+      .get(field)
       ?.takeIf { it.isArray }
       ?.mapNotNull { it.takeIf { node -> node.isTextual }?.textValue()?.takeIf(String::isNotBlank) }
       ?.takeIf { it.isNotEmpty() }

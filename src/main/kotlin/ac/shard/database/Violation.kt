@@ -35,6 +35,7 @@ data class Violation(
   val verbose: String,
   val vl: Int,
   val createdAt: Instant,
+  val labels: String = "",
 ) {
   companion object {
     @Throws(SQLException::class)
@@ -49,7 +50,10 @@ data class Violation(
         val verbose = resultSet.getString("verbose")
         val vl = resultSet.getInt("vl")
         val createdAt = Instant.ofEpochMilli(resultSet.getLong("created_at"))
-        violations.add(Violation(server, player, playerName, checkName, verbose, vl, createdAt))
+        val labels = runCatching { resultSet.getString("labels") }.getOrNull().orEmpty()
+        violations.add(
+          Violation(server, player, playerName, checkName, verbose, vl, createdAt, labels)
+        )
       }
       return violations
     }

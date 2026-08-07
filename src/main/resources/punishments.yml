@@ -5,6 +5,9 @@
 # <uuid> - player UUID
 # [alert] - special command to alert
 # [broadcast] message - special command to broadcast message to all players on the server
+# <labels> - labels the model attached to this detection, comma separated, empty when it had none
+# labels: - optional list under a group; the group then only fires when the detection carries one
+#           of those labels. Leave it out and the group fires on every detection of its checks.
 # [reset] - special command to reset the check violations in check group
 # [wait] <time> - wait a duration (e.g. 10s, 40t)
 

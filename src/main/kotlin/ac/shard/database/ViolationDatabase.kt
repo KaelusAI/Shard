@@ -27,7 +27,13 @@ import ac.shard.player.ShardPlayer
 import java.util.UUID
 
 interface ViolationDatabase {
-  fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int)
+  fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    labels: String,
+  )
 
   fun getLogCount(player: UUID): Int
 
@@ -42,6 +48,10 @@ interface ViolationDatabase {
   fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long)
 
   fun loadAiBuffer(playerUUID: UUID): AiBufferState?
+
+  fun saveAiLabelBuffers(playerUUID: UUID, buffers: Map<String, Double>, updatedAt: Long)
+
+  fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState>
 
   fun getLogCount(since: Long): Int
 

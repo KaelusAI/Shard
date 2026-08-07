@@ -33,10 +33,17 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private val punishmentLevels = ConcurrentHashMap<PunishmentKey, Int>()
   private val playerLogins = ConcurrentHashMap<UUID, Long>()
   private val aiBuffers = ConcurrentHashMap<UUID, AiBufferState>()
+  private val aiLabelBuffers = ConcurrentHashMap<UUID, ConcurrentHashMap<String, AiBufferState>>()
   private val violations = ArrayDeque<Violation>()
   private val violationsLock = Any()
 
-  override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) {
+  override fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    labels: String,
+  ) {
     val entry =
       Violation(
         serverName = configManager.config.getString("history.server-name", "server"),
@@ -46,6 +53,7 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
         verbose = verbose,
         vl = vls,
         createdAt = Instant.now(),
+        labels = labels,
       )
 
     synchronized(violationsLock) {
@@ -89,6 +97,21 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   }
 
   override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = aiBuffers[playerUUID]
+
+  override fun saveAiLabelBuffers(
+    playerUUID: UUID,
+    buffers: Map<String, Double>,
+    updatedAt: Long,
+  ) {
+    if (buffers.isEmpty()) return
+    val stored = aiLabelBuffers.getOrPut(playerUUID) { ConcurrentHashMap() }
+    for ((label, value) in buffers) {
+      stored[label] = AiBufferState(value, updatedAt)
+    }
+  }
+
+  override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> =
+    aiLabelBuffers[playerUUID]?.toMap() ?: emptyMap()
 
   override fun getLogCount(since: Long): Int {
     return snapshotViolations().count { violation -> violation.createdAt.toEpochMilli() >= since }

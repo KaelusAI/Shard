@@ -43,12 +43,13 @@ class MonitorSampler(
       damageMultiplier = shardTarget?.combat?.damageMultiplier ?: 1.0,
       prob90 = aiCheck?.prob90 ?: 0,
       collect = collectInfo(target),
-      inference =
-        aiCheck?.let {
-          MonitorInferenceInfo(tickStatus(it.inferenceTicks, it.inferencePostWindow))
-        },
+      inference = aiCheck?.let { MonitorInferenceInfo(inferenceStatus(it.inferenceProgress)) },
+      leadingLabel = aiCheck?.let { leadingLabel(it.labelBufferSnapshot()) },
     )
   }
+
+  private fun leadingLabel(buffers: Map<String, Double>): MonitorLabelInfo? =
+    MonitorLabelInfo.leading(buffers)
 
   private fun collectInfo(target: Player): MonitorCollectInfo? {
     val session = collectManager.getSession(target.uniqueId) ?: return null
@@ -67,6 +68,9 @@ class MonitorSampler(
 
   private fun tickStatus(progress: Int, postWindow: Int): String =
     if (progress < 0) WAITING else "$progress/$postWindow"
+
+  private fun inferenceStatus(progress: IntArray?): String =
+    if (progress == null) WAITING else "${progress[0]}/${progress[1]}"
 
   private companion object {
     const val WAITING = "waiting"

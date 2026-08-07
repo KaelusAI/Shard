@@ -31,7 +31,21 @@ data class MonitorSample(
   val prob90: Int,
   val collect: MonitorCollectInfo? = null,
   val inference: MonitorInferenceInfo? = null,
+  val leadingLabel: MonitorLabelInfo? = null,
 )
+
+data class MonitorLabelInfo(val label: String, val buffer: Double) {
+  companion object {
+    fun leading(buffers: Map<String, Double>): MonitorLabelInfo? =
+      buffers
+        .filterKeys { !it.startsWith(RESERVED_PREFIX) }
+        .maxByOrNull { it.value }
+        ?.takeIf { it.value > 0.0 }
+        ?.let { MonitorLabelInfo(it.key, it.value) }
+
+    private const val RESERVED_PREFIX = "_"
+  }
+}
 
 data class MonitorCollectInfo(
   val status: String,

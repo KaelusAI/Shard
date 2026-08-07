@@ -44,13 +44,13 @@ abstract class AbstractCheck(protected val shardPlayer: ShardPlayer) : ICheck {
     legacyCheckNamesInternal = data.legacyNames.toList()
   }
 
-  protected fun flag(debug: String) {
+  protected fun flag(debug: String, labels: Set<String> = emptySet()) {
     val event =
       CheckFlagEvent(shardPlayer.uuid, shardPlayer.player.name, checkName, configName, debug)
     shardPlayer.eventBus.post(event)
     if (event.cancelled) {
       return
     }
-    shardPlayer.punishmentManager.handleFlag(this, debug)
+    shardPlayer.punishmentManager.handleFlag(this, labels, debug)
   }
 }

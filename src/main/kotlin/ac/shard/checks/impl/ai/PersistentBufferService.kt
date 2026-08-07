@@ -56,13 +56,20 @@ class PersistentBufferService(
 
       if (!shardPlayer.player.isOnline) return@runAsync
 
+      val labelStates = databaseManager.database.loadAiLabelBuffers(shardPlayer.uuid)
+
       if (ageMillis < configManager.persistentBufferDisconnectWindowMillis) {
         scheduler.runSync(shardPlayer.player) {
-          if (shardPlayer.player.isOnline) aiCheck.restoreBuffer(state.buffer)
+          if (!shardPlayer.player.isOnline) return@runSync
+          aiCheck.restoreBuffer(state.buffer)
+          for ((label, labelState) in labelStates) {
+            aiCheck.restoreLabelBuffer(label, labelState.buffer)
+          }
         }
         debugManager.log(
           DebugCategory.AI_PERSISTENT_BUFFER,
-          "$playerName reconnected within disconnect window; buffer ${format(state.buffer)} kept",
+          "$playerName reconnected within disconnect window; buffer ${format(state.buffer)} " +
+            "and ${labelStates.size} label buffer(s) kept",
         )
         return@runAsync
       }
@@ -81,7 +88,11 @@ class PersistentBufferService(
       val finalBuffer = max(0.0, capped)
 
       scheduler.runSync(shardPlayer.player) {
-        if (shardPlayer.player.isOnline) aiCheck.restoreBuffer(finalBuffer)
+        if (!shardPlayer.player.isOnline) return@runSync
+        aiCheck.restoreBuffer(finalBuffer)
+        for ((label, labelState) in labelStates) {
+          aiCheck.restoreLabelBuffer(label, decayAndCap(labelState.buffer, ageHours))
+        }
       }
       debugManager.log(
         DebugCategory.AI_PERSISTENT_BUFFER,
@@ -91,21 +102,28 @@ class PersistentBufferService(
   }
 
   fun saveOnQuit(shardPlayer: ShardPlayer) {
-    val buffer = bufferToPersist(shardPlayer) ?: return
-    databaseManager.database.saveAiBuffer(shardPlayer.uuid, buffer, System.currentTimeMillis())
+    if (!configManager.persistentBufferEnabled) return
+    val now = System.currentTimeMillis()
+    val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java) ?: return
+
+    val threshold = configManager.persistentBufferSaveThreshold
+    if (aiCheck.buffer >= threshold) {
+      databaseManager.database.saveAiBuffer(shardPlayer.uuid, aiCheck.buffer, now)
+    }
+
+    val labelBuffers = aiCheck.labelBufferSnapshot().filterValues { it >= threshold }
+    if (labelBuffers.isNotEmpty()) {
+      databaseManager.database.saveAiLabelBuffers(shardPlayer.uuid, labelBuffers, now)
+    }
   }
 
   fun saveOnShutdown(shardPlayer: ShardPlayer) {
     saveOnQuit(shardPlayer)
   }
 
-  private fun bufferToPersist(shardPlayer: ShardPlayer): Double? {
-    val buffer = shardPlayer.checkManager.getCheck(AiCheck::class.java)?.buffer
-    return when {
-      !configManager.persistentBufferEnabled -> null
-      buffer == null || buffer < configManager.persistentBufferSaveThreshold -> null
-      else -> buffer
-    }
+  private fun decayAndCap(saved: Double, ageHours: Double): Double {
+    val decayed = saved - configManager.persistentBufferDecayPerHour * ageHours
+    return max(0.0, min(decayed, configManager.persistentBufferCap))
   }
 
   private fun format(value: Double): String = String.format(Locale.US, "%.2f", value)

@@ -113,8 +113,13 @@ class ResilientViolationDatabaseTest {
   }
 
   private class AlwaysFailingViolationDatabase : ViolationDatabase {
-    override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) =
-      error("db down")
+    override fun logAlert(
+      player: ShardPlayer,
+      verbose: String,
+      checkName: String,
+      vls: Int,
+      labels: String,
+    ) = error("db down")
 
     override fun getLogCount(player: UUID): Int = error("db down")
 
@@ -130,6 +135,14 @@ class ResilientViolationDatabaseTest {
     override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) = error("db down")
 
     override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = error("db down")
+
+    override fun saveAiLabelBuffers(
+      playerUUID: UUID,
+      buffers: Map<String, Double>,
+      updatedAt: Long,
+    ) = error("db down")
+
+    override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = error("db down")
 
     override fun getLogCount(since: Long): Int = error("db down")
 
@@ -156,8 +169,13 @@ class ResilientViolationDatabaseTest {
   private class CountingFailingViolationDatabase : ViolationDatabase {
     val incrementAttempts = AtomicInteger()
 
-    override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) =
-      error("db down")
+    override fun logAlert(
+      player: ShardPlayer,
+      verbose: String,
+      checkName: String,
+      vls: Int,
+      labels: String,
+    ) = error("db down")
 
     override fun getLogCount(player: UUID): Int = error("db down")
 
@@ -173,6 +191,14 @@ class ResilientViolationDatabaseTest {
     override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) = error("db down")
 
     override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = error("db down")
+
+    override fun saveAiLabelBuffers(
+      playerUUID: UUID,
+      buffers: Map<String, Double>,
+      updatedAt: Long,
+    ) = error("db down")
+
+    override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = error("db down")
 
     override fun getLogCount(since: Long): Int = error("db down")
 

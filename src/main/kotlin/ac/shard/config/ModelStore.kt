@@ -24,7 +24,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
-@Suppress("TooGenericExceptionCaught")
+@Suppress("TooGenericExceptionCaught", "TooManyFunctions")
 class ModelStore(private val plugin: Shard) {
   private val file = File(plugin.dataFolder, FILE_NAME)
 
@@ -39,9 +39,13 @@ class ModelStore(private val plugin: Shard) {
     return node.node("model").getString("").takeIf { it.isNotBlank() }
   }
 
-  fun readColumns(): List<String>? =
+  fun readLabels(): List<String>? = readStringList("labels")
+
+  fun readColumns(): List<String>? = readStringList("columns")
+
+  private fun readStringList(key: String): List<String>? =
     loadCurrentFormat()
-      ?.node("columns")
+      ?.node(key)
       ?.takeIf { it.isList }
       ?.childrenList()
       ?.mapNotNull { it.getString("").takeIf { name -> name.isNotBlank() } }
@@ -60,12 +64,14 @@ class ModelStore(private val plugin: Shard) {
   }
 
   @Synchronized
+  @Suppress("LongParameterList")
   fun write(
     preWindow: Int,
     postWindow: Int,
     step: Int,
     model: String?,
     columns: List<String>? = null,
+    labels: List<String>? = null,
   ) {
     val tmp = File(plugin.dataFolder, "$FILE_NAME.tmp")
     try {
@@ -81,6 +87,7 @@ class ModelStore(private val plugin: Shard) {
       node.node("step").set(step)
       if (model != null) node.node("model").set(model)
       if (columns != null) node.node("columns").set(columns)
+      if (labels != null) node.node("labels").set(labels)
       loader.save(node)
       moveIntoPlace(tmp)
     } catch (e: Exception) {

@@ -34,4 +34,5 @@ data class AiPredictionEvent(
   val damageMultiplier: Double,
   val prob90: Int,
   val flagged: Boolean,
+  val labelBuffers: Map<String, Double> = emptyMap(),
 ) : ShardEvent

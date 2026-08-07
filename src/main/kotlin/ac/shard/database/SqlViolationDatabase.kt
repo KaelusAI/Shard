@@ -58,7 +58,13 @@ class SqlViolationDatabase(
   private val database: Database,
 ) : ViolationDatabase {
 
-  override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) {
+  override fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    labels: String,
+  ) {
     transaction(database) {
       val now = Instant.now()
       Violations.insert {
@@ -70,6 +76,7 @@ class SqlViolationDatabase(
         it[vl] = vls
         it[createdAt] = now.toEpochMilli()
         it[createdAtInstant] = now
+        it[Violations.labels] = labels
       }
     }
   }
@@ -219,6 +226,46 @@ class SqlViolationDatabase(
     }
   }
 
+  override fun saveAiLabelBuffers(
+    playerUUID: UUID,
+    buffers: Map<String, Double>,
+    updatedAt: Long,
+  ) {
+    if (buffers.isEmpty()) return
+    transaction(database) {
+      val uuidString = playerUUID.toString()
+      for ((label, value) in buffers) {
+        val updated =
+          AiLabelBuffers.update({
+            (AiLabelBuffers.uuid eq uuidString) and (AiLabelBuffers.label eq label)
+          }) {
+            it[buffer] = value
+            it[AiLabelBuffers.updatedAt] = updatedAt
+          }
+        if (updated > 0) continue
+        AiLabelBuffers.insert {
+          it[uuid] = uuidString
+          it[AiLabelBuffers.label] = label
+          it[buffer] = value
+          it[AiLabelBuffers.updatedAt] = updatedAt
+        }
+      }
+    }
+  }
+
+  override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> {
+    return transaction(database) {
+      AiLabelBuffers.select(AiLabelBuffers.label, AiLabelBuffers.buffer, AiLabelBuffers.updatedAt)
+        .where { AiLabelBuffers.uuid eq playerUUID.toString() }
+        .mapNotNull { row ->
+          val updatedAt = row[AiLabelBuffers.updatedAt]
+          if (updatedAt == 0L) null
+          else row[AiLabelBuffers.label] to AiBufferState(row[AiLabelBuffers.buffer], updatedAt)
+        }
+        .toMap()
+    }
+  }
+
   override fun loadAiBuffer(playerUUID: UUID): AiBufferState? {
     return transaction(database) {
       PlayerLogins.select(PlayerLogins.aiBuffer, PlayerLogins.aiBufferUpdatedAt)
@@ -323,6 +370,7 @@ class SqlViolationDatabase(
     val createdAt: Column<Long> = long("created_at")
     val createdAtInstant: Column<Instant> =
       registerColumn("created_at_instant", ShardInstantColumnType()).default(Instant.EPOCH)
+    val labels: Column<String> = varchar("labels", 255).default("")
 
     override val primaryKey = PrimaryKey(id)
 
@@ -340,6 +388,15 @@ class SqlViolationDatabase(
     val vl: Column<Int> = integer("vl")
 
     override val primaryKey = PrimaryKey(uuid, punishGroup)
+  }
+
+  private object AiLabelBuffers : Table("ai_label_buffers") {
+    val uuid: Column<String> = varchar("uuid", UUID_LENGTH)
+    val label: Column<String> = varchar("label", LABEL_LENGTH)
+    val buffer: Column<Double> = double("buffer").default(0.0)
+    val updatedAt: Column<Long> = long("updated_at").default(0L)
+
+    override val primaryKey = PrimaryKey(uuid, label)
   }
 
   private object PlayerLogins : Table("player_logins") {
@@ -372,6 +429,9 @@ class SqlViolationDatabase(
   }
 
   private companion object {
+    private const val UUID_LENGTH = 36
+    private const val LABEL_LENGTH = 64
+
     private val VIOLATION_READ_COLUMNS =
       listOf<Expression<*>>(
         Violations.server,
@@ -382,6 +442,7 @@ class SqlViolationDatabase(
         Violations.vl,
         Violations.createdAt,
         Violations.createdAtInstant,
+        Violations.labels,
       )
 
     private class ShardInstantColumnType : InstantColumnType<Instant>() {
