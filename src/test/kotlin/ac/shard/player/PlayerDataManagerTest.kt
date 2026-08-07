@@ -48,10 +48,14 @@ class PlayerDataManagerTest {
   @Test
   fun `getPlayer keeps tracked player after shard disable is granted mid-session`() {
     val fixture = createFixture()
+    val user = mockk<User>(relaxed = true)
     val trackedPlayer = mockk<ShardPlayer>(relaxed = true)
     every { trackedPlayer.player } returns fixture.player
+    every { trackedPlayer.isAttached } returns true
+    every { trackedPlayer.user } returns user
+    every { trackedPlayer.uuid } returns fixture.player.uniqueId
 
-    trackedPlayers(fixture.manager)[fixture.player.uniqueId] = trackedPlayer
+    trackedPlayers(fixture.manager)[user] = trackedPlayer
 
     assertNotNull(fixture.manager.getPlayer(fixture.player))
 
@@ -155,8 +159,8 @@ class PlayerDataManagerTest {
       PlayerDataManager::class.java.getDeclaredField("players").apply { isAccessible = true }
 
     @Suppress("UNCHECKED_CAST")
-    fun trackedPlayers(manager: PlayerDataManager): MutableMap<UUID, ShardPlayer> {
-      return playersField.get(manager) as MutableMap<UUID, ShardPlayer>
+    fun trackedPlayers(manager: PlayerDataManager): MutableMap<User, ShardPlayer> {
+      return playersField.get(manager) as MutableMap<User, ShardPlayer>
     }
   }
 }

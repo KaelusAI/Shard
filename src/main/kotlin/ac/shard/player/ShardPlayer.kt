@@ -58,7 +58,6 @@ import org.bukkit.entity.Player
 class ShardPlayer
 @Suppress("LongParameterList")
 constructor(
-  val player: Player,
   val user: User,
   private val plugin: Shard,
   private val configManager: ConfigManager,
@@ -70,7 +69,27 @@ constructor(
   punishmentManagerFactory: PunishmentManager.Factory,
   val eventBus: ShardEventBus,
 ) {
-  val uuid: UUID = player.uniqueId
+  val uuid: UUID = user.uuid
+  val name: String = user.profile?.name ?: uuid.toString()
+
+  @Volatile private var attachedPlayer: Player? = null
+
+  val playerOrNull: Player?
+    get() = attachedPlayer
+
+  val isAttached: Boolean
+    get() = attachedPlayer != null
+
+  val player: Player
+    get() = attachedPlayer ?: error("Bukkit player for $name is not attached yet")
+
+  fun attach(bukkitPlayer: Player) {
+    val now = System.currentTimeMillis()
+    transactions.lastTransSentTime.set(now)
+    transactions.lastTransReceivedTime.set(now)
+    attachedPlayer = bukkitPlayer
+  }
+
   val packetStateData: PacketStateData = PacketStateData()
   val rotationUpdate: RotationUpdate = RotationUpdate(HeadRotation(), HeadRotation(), 0f, 0f)
   val joinTime: Long = System.currentTimeMillis()
@@ -94,6 +113,7 @@ constructor(
   val pendingTeleports: Queue<TeleportData> = ConcurrentLinkedQueue()
   val pendingRotations: Queue<RotationData> = ConcurrentLinkedQueue()
 
+  val crystalTracker: CrystalTracker = CrystalTracker()
   val compensatedEntities: CompensatedEntities = CompensatedEntities(this)
   val compensatedFireworks: CompensatedFireworks = CompensatedFireworks()
   val compensatedWorld: CompensatedWorld = CompensatedWorld(this)
@@ -113,7 +133,6 @@ constructor(
 
   fun isPointThree(): Boolean = user.clientVersion.isOlderThan(ClientVersion.V_1_18_2)
 
-  val crystalTracker: CrystalTracker = CrystalTracker()
   fun getMovementThreshold(): Double = if (isPointThree()) 0.03 else 0.0002
 
   fun isCancelDuplicatePacket(): Boolean = cancelDuplicatePacket
@@ -150,11 +169,12 @@ constructor(
         com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(reason)
       )
     } catch (e: Exception) {
-      plugin.logger.warning("[Shard] Disconnect packet for ${player.name} failed: ${e.message}")
+      plugin.logger.warning("[Shard] Disconnect packet for $name failed: ${e.message}")
     }
     user.closeConnection()
 
-    scheduler.runSync(player) { player.kick(reason) }
+    val bukkitPlayer = attachedPlayer ?: return
+    scheduler.runSync(bukkitPlayer) { bukkitPlayer.kick(reason) }
   }
 
   fun reload() {
@@ -177,6 +197,7 @@ constructor(
       1
 
   private fun refreshDuplicatePacketSettings() {
+    tracking.enabledWindowStarts = configManager.enabledWindowStarts
     cancelDuplicatePacket = configManager.cancelDuplicatePacket
     forceCancelDuplicatePacket = configManager.forceCancelDuplicatePacket
     ignoreDuplicatePacketRotation = configManager.ignoreDuplicatePacketRotation
@@ -197,7 +218,6 @@ constructor(
 
     fun isRelativePos(): Boolean = isRelativeX() || isRelativeY() || isRelativeZ()
 
-    tracking.enabledWindowStarts = configManager.enabledWindowStarts
     fun rotationMatches(actualYaw: Float, actualPitch: Float): Boolean =
       (flags.has(RelativeFlag.YAW) || angleMatches(actualYaw, yaw, yaw % FULL_TURN)) &&
         (flags.has(RelativeFlag.PITCH) ||

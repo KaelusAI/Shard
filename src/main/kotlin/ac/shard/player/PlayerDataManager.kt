@@ -35,12 +35,11 @@ import ac.shard.integration.GeyserUtil
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
+import com.github.retrooper.packetevents.PacketEvents
+import com.github.retrooper.packetevents.protocol.player.User
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import org.bukkit.entity.Player
-import org.bukkit.event.EventHandler
-import org.bukkit.event.Listener
-import org.bukkit.event.player.PlayerQuitEvent
 
 @Suppress("TooManyFunctions")
 class PlayerDataManager
@@ -58,25 +57,20 @@ constructor(
   private val eventBus: ShardEventBus,
   private val databaseManager: DatabaseManager,
   private val persistentBufferService: PersistentBufferService,
-) : Listener {
-  private val players = ConcurrentHashMap<UUID, ShardPlayer>()
+) {
+  private val players = ConcurrentHashMap<User, ShardPlayer>()
   private val unsavedBuffers = ConcurrentHashMap.newKeySet<ShardPlayer>()
 
-  init {
-    plugin.server.pluginManager.registerEvents(this, plugin)
-  }
-
-  @EventHandler
-  fun onQuit(event: PlayerQuitEvent) {
-    cleanupPlayer(event.player.uniqueId, event.player, players[event.player.uniqueId])
-  }
-
-  private fun cleanupPlayer(uuid: UUID, player: Player?, tracked: ShardPlayer?) {
-    // A late close of an old channel must not evict the session that replaced it.
-    val removed = tracked != null && players.remove(uuid, tracked)
-    if (tracked != null && !removed) {
+  @Suppress("ReturnCount")
+  private fun cleanupPlayer(tracked: ShardPlayer) {
+    if (!players.remove(tracked.user, tracked)) {
       return
     }
+    val uuid = tracked.uuid
+    if (players.values.any { it.uuid == uuid }) {
+      return
+    }
+    val player = tracked.playerOrNull
     if (collectManager.getSession(uuid) != null) {
       collectManager.stopCollecting(uuid)
     }
@@ -90,7 +84,7 @@ constructor(
           )
         }
     }
-    if (tracked == null) return
+    if (!tracked.isAttached) return
     // runAsync only starts on the next heartbeat, so the write is not guaranteed by shutdown.
     unsavedBuffers.add(tracked)
     scheduler.runAsync {
@@ -102,7 +96,9 @@ constructor(
 
   fun saveAllBuffersSync() {
     for (shardPlayer in players.values) {
-      persistentBufferService.saveOnShutdown(shardPlayer)
+      if (shardPlayer.isAttached) {
+        persistentBufferService.saveOnShutdown(shardPlayer)
+      }
     }
     val iterator = unsavedBuffers.iterator()
     while (iterator.hasNext()) {
@@ -116,57 +112,81 @@ constructor(
     if (player == null) {
       return null
     }
-    return players[player.uniqueId]
+    return getPlayer(player.uniqueId)
   }
 
   fun getPlayer(uuid: UUID): ShardPlayer? {
-    return players[uuid]
+    val byChannel = resolveUser(uuid)?.let { players[it] }
+    val tracked = byChannel ?: players.values.firstOrNull { it.uuid == uuid }
+    return tracked?.takeIf { it.isAttached }
+  }
+
+  fun getPlayer(user: User?): ShardPlayer? {
+    if (user == null) {
+      return null
+    }
+    return players[user]
+  }
+
+  private fun resolveUser(uuid: UUID): User? =
+    runCatching {
+        val protocol = PacketEvents.getAPI().protocolManager
+        val channel = protocol.getChannel(uuid) ?: return@runCatching null
+        protocol.getUser(channel)
+      }
+      .getOrNull()
+
+  fun handleUserConnect(user: User) {
+    if (user.uuid == null || players.containsKey(user)) {
+      return
+    }
+    players[user] =
+      ShardPlayer(
+        user = user,
+        plugin = plugin,
+        configManager = configManager,
+        alertManager = alertManager,
+        aiServerProvider = aiServerProvider,
+        exemptManager = exemptManager,
+        scheduler = scheduler,
+        checkManagerFactory = checkManagerFactory,
+        punishmentManagerFactory = punishmentManagerFactory,
+        eventBus = eventBus,
+      )
   }
 
   fun getPlayers(): Collection<ShardPlayer> {
-    return players.values
+    return players.values.filter { it.isAttached }
   }
 
-  fun handleUserLogin(
-    user: com.github.retrooper.packetevents.protocol.player.User,
-    player: Player,
-  ) {
+  fun getSessions(): Collection<ShardPlayer> {
+    return players.values.toList()
+  }
+
+  fun handleUserLogin(user: User, player: Player) {
     scheduler.runSync(
       player,
       Runnable {
         if (!player.isOnline) {
           return@Runnable
         }
-        val existing = players[player.uniqueId]
-        if (existing != null) {
-          if (existing.user === user) {
-            return@Runnable
-          }
-          cleanupPlayer(player.uniqueId, existing.player, existing)
+        handleUserConnect(user)
+        val shardPlayer = players[user] ?: return@Runnable
+        if (shardPlayer.isAttached) {
+          return@Runnable
         }
-
-        val loginTimestamp = System.currentTimeMillis()
         val playerUuid = player.uniqueId
-        scheduler.runAsync { databaseManager.database.recordLogin(playerUuid, loginTimestamp) }
-
-        val shardPlayer =
-          ShardPlayer(
-            player = player,
-            user = user,
-            plugin = plugin,
-            configManager = configManager,
-            alertManager = alertManager,
-            aiServerProvider = aiServerProvider,
-            exemptManager = exemptManager,
-            scheduler = scheduler,
-            checkManagerFactory = checkManagerFactory,
-            punishmentManagerFactory = punishmentManagerFactory,
-            eventBus = eventBus,
-          )
         shardPlayer.entityId = user.entityId.takeIf { it > 0 } ?: player.entityId
         applyInitialWorldState(shardPlayer, player)
         shardPlayer.isBedrock = GeyserUtil.isBedrockPlayer(playerUuid)
-        players[player.uniqueId] = shardPlayer
+
+        if (players[user] !== shardPlayer) {
+          return@Runnable
+        }
+        shardPlayer.attach(player)
+
+        val loginTimestamp = System.currentTimeMillis()
+        scheduler.runAsync { databaseManager.database.recordLogin(playerUuid, loginTimestamp) }
         persistentBufferService.restoreOnLogin(shardPlayer)
 
         enableAlertsOnJoin(player, "shard.alerts", AlertType.REGULAR)
@@ -195,13 +215,9 @@ constructor(
     shardPlayer.compensatedWorld.updateMinHeight(player.world.minHeight)
   }
 
-  fun handleUserDisconnect(user: com.github.retrooper.packetevents.protocol.player.User) {
-    val uuid = user.uuid ?: return
-    val tracked = players[uuid]
-    if (tracked != null && tracked.user !== user) {
-      return
-    }
-    cleanupPlayer(uuid, tracked?.player, tracked)
+  fun handleUserDisconnect(user: User) {
+    val tracked = players[user] ?: return
+    cleanupPlayer(tracked)
   }
 
   fun reloadAllPlayers() {

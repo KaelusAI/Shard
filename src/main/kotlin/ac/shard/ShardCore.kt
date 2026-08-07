@@ -141,15 +141,15 @@ constructor(
 
   @Suppress("TooGenericExceptionCaught")
   private fun pollAllPlayers() {
-    for (shardPlayer in playerDataManager.getPlayers()) {
+    for (shardPlayer in playerDataManager.getSessions()) {
       try {
         if (!ChannelHelper.isOpen(shardPlayer.user.channel)) {
           playerDataManager.handleUserDisconnect(shardPlayer.user)
-        } else {
+        } else if (shardPlayer.isAttached) {
           shardPlayer.pollData()
         }
       } catch (e: Exception) {
-        logger.log(Level.WARNING, "Polling ${shardPlayer.player.name} failed", e)
+        logger.log(Level.WARNING, "Polling ${shardPlayer.name} failed", e)
       }
     }
   }

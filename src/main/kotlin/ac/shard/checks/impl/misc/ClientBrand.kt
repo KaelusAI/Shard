@@ -97,7 +97,7 @@ class ClientBrand(
         MessageUtil.getMessage(
           Message.BRAND_NOTIFICATION,
           "player",
-          shardPlayer.player.name,
+          shardPlayer.name,
           "brand",
           brand,
         )
