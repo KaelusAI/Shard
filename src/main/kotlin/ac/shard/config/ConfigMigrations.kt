@@ -30,6 +30,9 @@ internal object ConfigMigrations {
 
   private val VERSION_RE = Regex("""^\s*config-version:\s*(\d+)""", RegexOption.MULTILINE)
 
+  private val LEGACY_V1_URL_RE =
+    Regex("""^\s*server:\s*"https://api\.shard\.ac/v1/inference"\s*$""", RegexOption.MULTILINE)
+
   fun latestVersion(fileName: String): Int = LATEST_BY_FILE[fileName] ?: LATEST_VERSION
 
   fun readVersion(file: File, fileName: String = "config.yml"): Int {
@@ -42,10 +45,19 @@ internal object ConfigMigrations {
   fun forcedDropsForUpgradeFrom(
     currentVersion: Int,
     fileName: String = "config.yml",
+    file: File? = null,
   ): List<String> {
     if (currentVersion >= latestVersion(fileName)) return emptyList()
     val drops = mutableListOf("config-version")
-    if (currentVersion < VERSION_WITH_ATTACK_WINDOWS) drops += "ai/continuous"
+    if (currentVersion < VERSION_WITH_ATTACK_WINDOWS) {
+      drops += "ai/continuous"
+      if (file != null && holdsLegacyInferenceUrl(file)) drops += "ai/server"
+    }
     return drops
+  }
+
+  private fun holdsLegacyInferenceUrl(file: File): Boolean {
+    val text = runCatching { file.readText(Charsets.UTF_8) }.getOrNull() ?: return false
+    return LEGACY_V1_URL_RE.containsMatchIn(text)
   }
 }

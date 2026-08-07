@@ -38,7 +38,7 @@ class ConfigMigrationsTest {
 
   private fun runMigration(file: File, name: String = "config.yml") {
     val version = ConfigMigrations.readVersion(file, name)
-    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(version, name)
+    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(version, name, file)
     YamlUpdater.create(file, bundledTemplate(name)).backup(false).deleteProps(drops).update()
   }
 
@@ -236,6 +236,42 @@ class ConfigMigrationsTest {
     val merged = userFile.readText()
     assertFalse(merged.contains("continuous:"))
     assertContains(merged, "config-version: ${ConfigMigrations.LATEST_VERSION}")
+  }
+
+  @Test
+  fun `shipped v1 inference url is replaced on upgrade`(@TempDir tempDir: Path) {
+    val userFile = tempDir.resolve("config.yml").toFile()
+    userFile.writeText(
+      """
+      config-version: 3
+      ai:
+        enabled: true
+        server: "https://api.shard.ac/v1/inference"
+      """
+        .trimIndent() + "\n"
+    )
+    runMigration(userFile)
+    val merged = userFile.readText()
+    assertContains(merged, "https://api.shard.ac/v2/inference")
+    assertFalse(merged.contains("api.shard.ac/v1/inference"))
+  }
+
+  @Test
+  fun `self-hosted inference url survives the upgrade`(@TempDir tempDir: Path) {
+    val userFile = tempDir.resolve("config.yml").toFile()
+    userFile.writeText(
+      """
+      config-version: 3
+      ai:
+        enabled: true
+        server: "https://my-own-box.example/v1/inference"
+      """
+        .trimIndent() + "\n"
+    )
+    runMigration(userFile)
+    val merged = userFile.readText()
+    assertContains(merged, "https://my-own-box.example/v1/inference")
+    assertFalse(merged.contains("api.shard.ac/v2/inference"))
   }
 
   @Test
