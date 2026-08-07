@@ -11,7 +11,7 @@
 Punishments:
   AI:
     checks:
-      - "AI (Aim)"
+      - "AI"
     actions:
       1: # 20 часов
         - "[alert]"

@@ -32,10 +32,16 @@ abstract class AbstractCheck(protected val shardPlayer: ShardPlayer) : ICheck {
   override val checkName: String
     get() = checkNameInternal
 
+  private val legacyCheckNamesInternal: List<String>
+
+  override val legacyCheckNames: List<String>
+    get() = legacyCheckNamesInternal
+
   init {
     val data = javaClass.getAnnotation(CheckData::class.java)
     checkNameInternal = data.name
     configName = if (data.configName == "DEFAULT") data.name else data.configName
+    legacyCheckNamesInternal = data.legacyNames.toList()
   }
 
   protected fun flag(debug: String) {

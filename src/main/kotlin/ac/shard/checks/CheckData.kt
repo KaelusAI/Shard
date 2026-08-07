@@ -24,4 +24,8 @@ package ac.shard.checks
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
-annotation class CheckData(val name: String, val configName: String = "DEFAULT")
+annotation class CheckData(
+  val name: String,
+  val configName: String = "DEFAULT",
+  val legacyNames: Array<String> = [],
+)

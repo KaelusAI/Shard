@@ -34,12 +34,7 @@ class PunishGroup(
   val associatedCheckNames: Set<String> = checkNames.map { it.lowercase(Locale.ROOT) }.toSet()
 
   fun isCheckAssociated(check: ICheck): Boolean {
-    val checkNameLower = check.checkName.lowercase(Locale.ROOT)
-    for (filter in associatedCheckNames) {
-      if (checkNameLower.contains(filter)) {
-        return true
-      }
-    }
-    return false
+    val names = (listOf(check.checkName) + check.legacyCheckNames).map { it.lowercase(Locale.ROOT) }
+    return associatedCheckNames.any { filter -> names.any { it.contains(filter) } }
   }
 }

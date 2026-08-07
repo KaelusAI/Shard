@@ -19,4 +19,7 @@ package ac.shard.checks
 
 interface ICheck {
   val checkName: String
+
+  val legacyCheckNames: List<String>
+    get() = emptyList()
 }

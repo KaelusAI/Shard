@@ -44,7 +44,7 @@ import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import com.github.retrooper.packetevents.PacketEvents
 
-@CheckData(name = "AI (Aim)")
+@CheckData(name = "AI", legacyNames = ["AI (Aim)"])
 @Suppress("TooManyFunctions")
 class AiCheck(
   shardPlayer: ShardPlayer,
