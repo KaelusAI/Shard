@@ -25,6 +25,8 @@ import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
 import com.github.retrooper.packetevents.protocol.player.ClientVersion
 import com.github.retrooper.packetevents.util.Vector3d
 import java.util.UUID
+import kotlin.math.abs
+import kotlin.math.max
 
 open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: EntityType) {
   val isPlayer: Boolean = type == EntityTypes.PLAYER
@@ -51,6 +53,11 @@ open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: Entit
 
   var lastTransactionHung: Int = 0
 
+  val interpVelEstimate: DoubleArray = DoubleArray(AXIS_COUNT)
+  private var lastTrackedTargetPos: Vector3d? = null
+
+  var lastTeleportJump: DoubleArray? = null
+
   fun canHit(): Boolean = !isDead
 
   fun mount(vehicle: PacketEntity) {
@@ -70,6 +77,7 @@ open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: Entit
     deltaZ: Double,
     player: ShardPlayer,
   ) {
+    val preMovePos = trackedServerPosition.pos
     val old = newPacketLocation
     val startBox =
       if (old != null) {
@@ -101,6 +109,8 @@ open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: Entit
         }
     }
 
+    if (hasPos) updateInterpolationBounds(relative, preMovePos, player.user.clientVersion)
+
     oldPacketLocation = old
     newPacketLocation =
       if (!hasPos && rotationFreezesInterpolation(player.user.clientVersion)) {
@@ -111,6 +121,36 @@ open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: Entit
     if (hasPos && !relative) {
       applyNonRelativeStall(deltaX, deltaY, deltaZ)
     }
+  }
+
+  private fun updateInterpolationBounds(
+    relative: Boolean,
+    preMovePos: Vector3d,
+    clientVersion: ClientVersion,
+  ) {
+    val now = trackedServerPosition.pos
+    val last = lastTrackedTargetPos
+    if (last != null) {
+      val steps = ReachInterpolationData.interpolationStepsFor(this, clientVersion)
+      val decay = if (steps <= 1) 0.0 else (steps - 1.0) / steps
+      val deltas = doubleArrayOf(abs(now.x - last.x), abs(now.y - last.y), abs(now.z - last.z))
+      for (axis in deltas.indices) {
+        val decayed = interpVelEstimate[axis] * decay
+        val delta = deltas[axis]
+        interpVelEstimate[axis] =
+          if (delta < SNAP_VELOCITY_SAMPLE_CAP) max(decayed, delta) else decayed
+      }
+    }
+    lastTrackedTargetPos = now
+
+    val jumpX = abs(now.x - preMovePos.x)
+    val jumpY = abs(now.y - preMovePos.y)
+    val jumpZ = abs(now.z - preMovePos.z)
+    val lerped =
+      jumpX < TELEPORT_SNAP_DISTANCE &&
+        jumpY < TELEPORT_SNAP_DISTANCE &&
+        jumpZ < TELEPORT_SNAP_DISTANCE
+    lastTeleportJump = if (relative || !lerped) null else doubleArrayOf(jumpX, jumpY, jumpZ)
   }
 
   // In versions < 1.16.2 when the client receives non-relative teleport for an entity
@@ -150,9 +190,14 @@ open class PacketEntity(val player: ShardPlayer, val uuid: UUID, val type: Entit
   }
 
   private companion object {
+    const val AXIS_COUNT = 3
     const val LEGACY_TELEPORT_SCALE = 32.0
     const val NON_RELATIVE_THRESHOLD_XZ = 0.03125
     const val NON_RELATIVE_THRESHOLD_Y = 0.015625
+
+    const val SNAP_VELOCITY_SAMPLE_CAP = 8.0
+
+    const val TELEPORT_SNAP_DISTANCE = 64.0
   }
 
   fun getPossibleCollisionBoxes(): SimpleCollisionBox {

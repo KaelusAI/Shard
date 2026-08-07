@@ -24,6 +24,7 @@ import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.manager.server.ServerVersion
 import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
 import com.github.retrooper.packetevents.protocol.player.ClientVersion
+import kotlin.math.max
 import kotlin.math.min
 
 class ReachInterpolationData {
@@ -34,6 +35,12 @@ class ReachInterpolationData {
   private var interpolationStepsHighBound: Int = 0
   private var interpolationSteps: Int = 1
   private var expandNonRelative: Boolean = false
+
+  private var maxOffsetX: Double = 0.0
+  private var maxOffsetY: Double = 0.0
+  private var maxOffsetZ: Double = 0.0
+  private var hasMaxOffset: Boolean = false
+  private var teleportActive: Boolean = false
 
   constructor(
     player: ShardPlayer,
@@ -56,16 +63,12 @@ class ReachInterpolationData {
       targetLocation.expand(0.03125)
     }
 
-    interpolationSteps =
-      when {
-        entity.isBoat -> 10
-        entity.isMinecart -> 5
-        entity.type == EntityTypes.SHULKER -> 1
-        entity.isLivingEntity -> 3
-        else -> 1
-      }
+    interpolationSteps = interpolationStepsFor(entity, player.user.clientVersion)
 
     if (unreliableTicking) interpolationStepsHighBound = interpolationSteps
+
+    buildMaxOffset(player.user.clientVersion)
+    clampStartToTarget()
   }
 
   constructor(startingLocation: SimpleCollisionBox, entity: PacketEntity) {
@@ -121,10 +124,98 @@ class ReachInterpolationData {
 
   fun updatePossibleStartingLocation(possibleLocationCombined: SimpleCollisionBox) {
     startingLocation = SimpleCollisionBox.combine(startingLocation, possibleLocationCombined)
+    clampStartToTarget()
   }
 
   fun expandNonRelative() {
     expandNonRelative = true
+  }
+
+  private fun buildMaxOffset(clientVersion: ClientVersion) {
+    val steps = interpolationSteps
+    val legacy =
+      clientVersion.isOlderThan(ClientVersion.V_1_9) &&
+        PacketEvents.getAPI().serverManager.version.isNewerThanOrEquals(ServerVersion.V_1_9)
+    val jitterXZ = if (legacy) LEGACY_JITTER_XZ else JITTER
+    val jitterY = if (legacy) LEGACY_JITTER_Y else JITTER
+
+    var offsetX = steps * max(entity.interpVelEstimate[0], VELOCITY_FLOOR_XZ) * SAFETY + jitterXZ
+    var offsetY = steps * max(entity.interpVelEstimate[1], VELOCITY_FLOOR_Y) * SAFETY + jitterY
+    var offsetZ = steps * max(entity.interpVelEstimate[2], VELOCITY_FLOOR_XZ) * SAFETY + jitterXZ
+
+    val jump = entity.lastTeleportJump
+    if (jump != null) {
+      offsetX = max(offsetX, jump[0] + jitterXZ)
+      offsetY = max(offsetY, jump[1] + jitterY)
+      offsetZ = max(offsetZ, jump[2] + jitterXZ)
+      teleportActive = true
+    }
+    entity.lastTeleportJump = null
+
+    maxOffsetX = offsetX
+    maxOffsetY = offsetY
+    maxOffsetZ = offsetZ
+    hasMaxOffset = true
+  }
+
+  private fun clampStartToTarget() {
+    if (!hasMaxOffset) return
+
+    val box = startingLocation
+    val centerX = (targetLocation.minX + targetLocation.maxX) * HALF
+    val centerY = (targetLocation.minY + targetLocation.maxY) * HALF
+    val centerZ = (targetLocation.minZ + targetLocation.maxZ) * HALF
+
+    var minX = max(box.minX, centerX - maxOffsetX)
+    var maxX = min(box.maxX, centerX + maxOffsetX)
+    var minY = max(box.minY, centerY - maxOffsetY)
+    var maxY = min(box.maxY, centerY + maxOffsetY)
+    var minZ = max(box.minZ, centerZ - maxOffsetZ)
+    var maxZ = min(box.maxZ, centerZ + maxOffsetZ)
+
+    if (minX > maxX) {
+      minX = if (teleportActive) box.minX else centerX
+      maxX = if (teleportActive) box.maxX else centerX
+    }
+    if (minY > maxY) {
+      minY = if (teleportActive) box.minY else centerY
+      maxY = if (teleportActive) box.maxY else centerY
+    }
+    if (minZ > maxZ) {
+      minZ = if (teleportActive) box.minZ else centerZ
+      maxZ = if (teleportActive) box.maxZ else centerZ
+    }
+
+    box.minX = minX
+    box.minY = minY
+    box.minZ = minZ
+    box.maxX = maxX
+    box.maxY = maxY
+    box.maxZ = maxZ
+  }
+
+  companion object {
+    fun interpolationStepsFor(entity: PacketEntity, clientVersion: ClientVersion): Int =
+      when {
+        entity.isBoat ->
+          if (clientVersion.isNewerThanOrEquals(ClientVersion.V_1_21_2)) GENERIC_STEPS
+          else BOAT_STEPS
+        entity.isMinecart -> MINECART_STEPS
+        entity.type == EntityTypes.SHULKER -> 1
+        entity.isLivingEntity -> GENERIC_STEPS
+        else -> 1
+      }
+
+    private const val BOAT_STEPS = 10
+    private const val MINECART_STEPS = 5
+    private const val GENERIC_STEPS = 3
+    private const val HALF = 0.5
+    private const val VELOCITY_FLOOR_XZ = 0.05
+    private const val VELOCITY_FLOOR_Y = 0.08
+    private const val JITTER = 1e-3
+    private const val LEGACY_JITTER_XZ = 0.03125
+    private const val LEGACY_JITTER_Y = 0.015625
+    private const val SAFETY = 1.1
   }
 
   private fun boxAtStep(
