@@ -33,7 +33,6 @@ import ac.shard.utils.math.ShardMath
 import ac.shard.utils.update.RotationUpdate
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.ulp
 
 @CheckData(name = "AimProcessor_Internal")
@@ -75,14 +74,11 @@ class AimProcessor(shardPlayer: ShardPlayer) : AbstractCheck(shardPlayer), Rotat
       deltaYawAbs > 0 && deltaYawAbs < MAX_SAMPLE_DELTA && divisorX > ShardMath.getMinimumDivisor()
     ) {
       val yawUlp = max(abs(rotationUpdate.from.yaw), abs(rotationUpdate.to.yaw)).ulp.toDouble()
-      if (yawUlp < min(RunningMode.THRESHOLD, divisorX * YAW_ULP_DIVISOR_FRACTION)) {
+      if (yawUlp < divisorX * YAW_ULP_DIVISOR_FRACTION) {
         if (lastXRot != 0.0) {
-          xRotMode.add(divisorX)
+          xRotMode.add(divisorX, max(RunningMode.THRESHOLD, yawUlp * YAW_BUCKET_ULP_FACTOR))
         }
         lastXRot = deltaYawAbs
-      } else {
-        xRotMode.decay()
-        xRotMode.updateMode()
       }
     }
 
@@ -147,5 +143,6 @@ class AimProcessor(shardPlayer: ShardPlayer) : AbstractCheck(shardPlayer), Rotat
     const val TOTAL_SAMPLES_THRESHOLD = 80
     const val MAX_SAMPLE_DELTA = 5.0
     const val YAW_ULP_DIVISOR_FRACTION = 1.0 / 16.0
+    const val YAW_BUCKET_ULP_FACTOR = 2.0
   }
 }

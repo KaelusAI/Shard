@@ -44,11 +44,11 @@ class RunningMode(val maxSize: Int) {
 
   fun size(): Int = addList.size
 
-  fun add(value: Double) {
+  fun add(value: Double, bucketWidth: Double = THRESHOLD) {
     pop()
 
     for (entry in popularityMap.double2IntEntrySet()) {
-      if (kotlin.math.abs(entry.doubleKey - value) < THRESHOLD) {
+      if (kotlin.math.abs(entry.doubleKey - value) < bucketWidth) {
         entry.setValue(entry.intValue + 1)
         addList.add(entry.doubleKey)
         return

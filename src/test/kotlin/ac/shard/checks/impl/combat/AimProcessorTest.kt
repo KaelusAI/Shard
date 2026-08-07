@@ -100,11 +100,26 @@ class AimProcessorTest {
   }
 
   @Test
-  fun `high absolute yaw stream never settles on a fragmented garbage mode`() {
+  fun `high absolute yaw still resolves the real step`() {
     val aim = newProcessor()
     var yaw = 40000f
     repeat(80) { i ->
       val next = yaw + (1 + i % 3) * 0.15f
+      aim.feedAbsolute(yaw, next)
+      yaw = next
+    }
+
+    assertTrue(aim.modeYawValid)
+    assertEquals(0.1484375, aim.modeX, 1e-9)
+    assertTrue(aim.modePitchValid)
+  }
+
+  @Test
+  fun `mode refuses samples once float resolution outgrows the step`() {
+    val aim = newProcessor()
+    var yaw = 200000f
+    repeat(120) {
+      val next = yaw + 0.15f
       aim.feedAbsolute(yaw, next)
       yaw = next
     }
@@ -133,7 +148,7 @@ class AimProcessorTest {
   }
 
   @Test
-  fun `mode stays valid up to the degradation boundary and fades honestly after crossing`() {
+  fun `a learned mode survives samples that are too coarse to measure`() {
     val aim = newProcessor()
     var yaw = 16000f
     repeat(90) {
@@ -144,20 +159,15 @@ class AimProcessorTest {
     assertTrue(aim.modeYawValid)
     assertEquals(4.0, aim.modeX, 1e-9)
 
-    repeat(30) {
-      val next = yaw + 4.0f
+    yaw = 300000f
+    repeat(90) {
+      val next = yaw + 0.15f
       aim.feedAbsolute(yaw, next)
       yaw = next
     }
-    assertEquals(4.0, aim.modeX, 1e-9)
 
-    repeat(170) {
-      val next = yaw + 4.0f
-      aim.feedAbsolute(yaw, next)
-      yaw = next
-    }
-    assertFalse(aim.modeYawValid)
-    assertTrue(aim.modePitchValid)
+    assertTrue(aim.modeYawValid)
+    assertEquals(4.0, aim.modeX, 1e-9)
   }
 
   @Test
