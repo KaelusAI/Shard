@@ -1,6 +1,22 @@
 <div align="center">
-  <h1>Shard</h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
+    <img alt="Shard" src=".github/assets/banner-light.svg" width="420">
+  </picture>
+
   <p>Свободный AI-античит с открытым исходным кодом для Minecraft-серверов.</p>
+
+  <p>
+    <a href="README.md">English</a>
+    ·
+    <a href="README.ru.md"><b>Русский</b></a>
+    ·
+    <a href="https://shard.ac">shard.ac</a>
+    ·
+    <a href="https://app.shard.ac">Панель</a>
+    ·
+    <a href="https://discord.gg/kaelus">Discord</a>
+  </p>
 
   <p>
     <a href="https://github.com/KaelusAI/Shard/actions/workflows/ci.yml">
@@ -12,27 +28,26 @@
     <a href="https://discord.gg/kaelus">
       <img alt="Discord" src="https://img.shields.io/discord/1297490292349468715?style=flat&label=Discord&logo=discord&color=7289DA&logoColor=white">
     </a>
-    <a href="https://github.com/KaelusMC/Shard/">
-      <img alt="Views" src="https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2FKaelusMC%2FShard%2FREADME.md&label=Views&countColor=%23555555&style=flat&labelStyle=none">
+    <a href="https://github.com/KaelusAI/Shard/">
+      <img alt="Views" src="https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2FKaelusMC%2FSlothAC%2FREADME.md&label=Views&countColor=%23555555&style=flat&labelStyle=none">
     </a>
-  </p>
-
-  <p>
-    <a href="README.md">English</a>
-    ·
-    <a href="README.ru.md"><b>Русский</b></a>
   </p>
 </div>
 
 ## Что такое Shard
 
-Shard - это AI-античит с открытым исходным кодом для Minecraft-серверов.
+Shard - combat-античит с открытым исходным кодом для Minecraft-серверов. AI-модель проверяет движения мыши игрока и обнаруживает killaura и aim assist.
 
 ## Важный момент перед установкой
 
-AI-проверка Shard использует официальный Shard API. Доступ запрашивается в [Discord](https://discord.gg/kaelus).
+AI-проверка Shard использует официальный Shard API. Зарегистрируйтесь на [app.shard.ac](https://app.shard.ac), чтобы получить доступ.
 
-Чтобы подключить сервер к API, выполните `/shard connect` и подтвердите привязку в [панели Shard](https://panel.shard.ac).
+Доступны две модели, выбрать нужную можно в панели:
+
+- **Flash** - на всех тарифах, включая бесплатный, верификация не нужна
+- **Pro** - обнаруживает больше читов, дороже
+
+Чтобы подключить сервер к API, выполните `/shard connect` и подтвердите привязку в панели.
 
 При отсутствии доступа к API AI-проверку следует временно отключить.
 
@@ -41,7 +56,6 @@ AI-проверка Shard использует официальный Shard API.
 - Java 17+ для запуска плагина
 - JDK 21+ для сборки проекта
 - сервер на Paper или Folia
-- настроенный AI API при включённой AI-проверке
 
 ## Установка
 
@@ -58,7 +72,7 @@ AI-проверка Shard использует официальный Shard API.
 ## Файлы конфигурации
 
 - [`config.yml`](src/main/resources/config.yml): AI, база данных, Redis, межсерверные оповещения, алерты и обработка дублирующихся пакетов движения
-- [`monitor.yml`](src/main/resources/monitor.yml): формат `/shard monitor` и `/shard view`
+- [`monitor.yml`](src/main/resources/monitor.yml): выводы, лимиты, темы и формат `/shard monitor` и `/shard view`
 - [`punishments.yml`](src/main/resources/punishments.yml): правила наказаний
 - [`messages/messages_en.yml`](src/main/resources/messages/messages_en.yml): английская локализация
 - [`messages/messages_ru.yml`](src/main/resources/messages/messages_ru.yml): русская локализация
@@ -94,11 +108,7 @@ cd Shard
 ./gradlew shadowJar
 ```
 
-Основной jar-файл:
-
-```text
-build/libs/Shard-<version>.jar
-```
+Готовый jar появится в `build/libs/Shard-<version>.jar`.
 
 ## Помощь, баг-репорты и обсуждение
 
@@ -113,8 +123,6 @@ build/libs/Shard-<version>.jar
 - важные фрагменты конфига
 - логи, stack trace и шаги воспроизведения
 
-Это ускоряет воспроизведение и исправление проблемы.
-
 ## Благодарности
 
 У Shard собственная, независимо разработанная кодовая база. Тем не менее часть его кода адаптирована из open-source проекта [GrimAC](https://github.com/GrimAnticheat/Grim), и Shard опирается на идеи, разработанные GrimAC, DefineOutside и другими участниками проекта GrimAC - им полная признательность и благодарность за работу.
@@ -122,3 +130,6 @@ build/libs/Shard-<version>.jar
 ## Лицензия
 
 Shard распространяется на условиях лицензии [GNU General Public License v3.0](LICENSE).
+
+<img src="https://api.visitorbadge.io/api/visitors?path=shard-ac&label=&countColor=%23555555&style=flat&labelStyle=none" alt="" width="1" height="1">
+
