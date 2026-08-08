@@ -25,6 +25,7 @@ import ac.shard.entity.PacketEntity
 import ac.shard.player.ShardPlayer
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
 import com.github.retrooper.packetevents.protocol.packettype.PacketType
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAttack
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity
 
 @CheckData(name = "ActionManager_Internal")
@@ -34,16 +35,23 @@ class ActionManager(player: ShardPlayer) : AbstractCheck(player), PacketCheck {
   }
 
   override fun onPacketReceive(event: PacketReceiveEvent) {
-    if (event.packetType == PacketType.Play.Client.INTERACT_ENTITY) {
-      val action = WrapperPlayClientInteractEntity(event)
-      if (action.action == WrapperPlayClientInteractEntity.InteractAction.ATTACK) {
-        val entity: PacketEntity =
-          shardPlayer.compensatedEntities.getEntity(action.entityId) ?: return
-
-        if (entity.isPlayer) {
-          shardPlayer.combat.ticksSinceAttack = 0
+    when (event.packetType) {
+      PacketType.Play.Client.INTERACT_ENTITY -> {
+        val interact = WrapperPlayClientInteractEntity(event)
+        if (interact.action == WrapperPlayClientInteractEntity.InteractAction.ATTACK) {
+          handleAttack(interact.entityId)
         }
       }
+      // 26.1 split the attack out of INTERACT_ENTITY.
+      PacketType.Play.Client.ATTACK -> handleAttack(WrapperPlayClientAttack(event).entityId)
+      else -> Unit
+    }
+  }
+
+  private fun handleAttack(entityId: Int) {
+    val entity: PacketEntity = shardPlayer.compensatedEntities.getEntity(entityId) ?: return
+    if (entity.isPlayer) {
+      shardPlayer.combat.ticksSinceAttack = 0
     }
   }
 }
