@@ -97,6 +97,10 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     private set
 
   private var aiWorldGuardEnabled = false
+
+  var aiWorldGuardFlagOverridesList: Boolean = true
+    private set
+
   var aiDisabledRegions: Map<String, List<String>> = emptyMap()
     private set
 
@@ -320,6 +324,7 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     aiDamageReductionMultiplier = config.getDouble("ai.damage-reduction.multiplier", 1.0)
 
     aiWorldGuardEnabled = config.getBoolean("ai.worldguard.enabled", true)
+    aiWorldGuardFlagOverridesList = config.getBoolean("ai.worldguard.flag-overrides-list", true)
     aiDisabledRegions = loadDisabledRegions()
     regionCheckMode =
       RegionCheckMode.fromConfig(config.getString("ai.worldguard.mode", "skip-detection"))

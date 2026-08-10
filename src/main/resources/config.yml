@@ -41,6 +41,10 @@ ai:
     # skip-detection - nothing is sent to the API, so there is no probability at all
     # skip-punishment - detection keeps running and stays visible, only punishments stop
     mode: skip-detection
+    # When a region has the shard-checks flag and is also listed below:
+    # true - the flag is read first, so setting it to allow re-enables the check there
+    # false - the list is read first, a listed region stays disabled whatever the flag says
+    flag-overrides-list: true
     # Regions where the AI check is disabled, grouped by world name.
     # Use "*" to disable a region in all worlds, "__global__" for a whole world.
     # Example:
