@@ -19,6 +19,7 @@ package ac.shard.command.commands.info
 
 import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.command.ShardCommand
+import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
 import ac.shard.database.ViolationDatabase
 import ac.shard.player.PlayerDataManager
@@ -40,7 +41,6 @@ import org.incendo.cloud.parser.standard.StringParser
 import org.incendo.cloud.suggestion.Suggestion
 import org.incendo.cloud.suggestion.SuggestionProvider
 
-private const val SUSPICIOUS_BUFFER_THRESHOLD = 10.0
 private const val PERCENT_MULTIPLIER = 100.0
 private const val WHOLE_PERCENT_DISPLAY_THRESHOLD = 10.0
 private const val WHOLE_NUMBER_REMAINDER = 1.0
@@ -86,6 +86,7 @@ class StatsCommand(
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
   private val playerDataManager: PlayerDataManager,
+  private val configManager: ConfigManager,
 ) : ShardCommand {
   private data class StatsSnapshot(
     val period: StatsPeriod,
@@ -255,7 +256,7 @@ class StatsCommand(
             "online_players",
             snapshot.onlinePlayers.toString(),
             "suspicious_threshold",
-            formatThreshold(SUSPICIOUS_BUFFER_THRESHOLD),
+            formatThreshold(configManager.suspiciousAlertsBuffer),
           )
         )
       )
@@ -267,7 +268,7 @@ class StatsCommand(
       .asSequence()
       .filter { sp ->
         val check = sp.checkManager.getCheck(AiCheck::class.java)
-        check != null && check.buffer > SUSPICIOUS_BUFFER_THRESHOLD
+        check != null && check.buffer > configManager.suspiciousAlertsBuffer
       }
       .count()
       .toLong()
