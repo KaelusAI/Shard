@@ -273,11 +273,15 @@ class MonitorTargetsTest {
     assertNull(hud.session(viewerId))
   }
 
+  private val compactSidebarYaml =
+    "outputs:\n  sidebar:\n    enabled: true\n    lines:\n" +
+      (1..3).joinToString("") { "      - \"line $it\"\n" }
+
   @Test
   fun `capacity follows the roomiest output, not the narrowest`() {
     val hud =
       hud(
-        yaml = "outputs:\n  sidebar:\n    enabled: true\n",
+        yaml = compactSidebarYaml,
         outputs =
           listOf(
             RoomyOutput(1, MonitorOutputKind.ACTIONBAR),
@@ -291,6 +295,23 @@ class MonitorTargetsTest {
 
     assertEquals(4, targets.capacity(viewerId))
     assertEquals(TargetChange.APPLIED, targets.add(viewer, player("Alex")))
+  }
+
+  @Test
+  fun `a taller sidebar template fits fewer targets`() {
+    val hud =
+      hud(
+        yaml =
+          "outputs:\n  sidebar:\n    enabled: true\n    lines:\n" +
+            (1..7).joinToString("") { "      - \"line $it\"\n" },
+        outputs = listOf(RoomyOutput(4, MonitorOutputKind.SIDEBAR)),
+        stored = MonitorOutputKind.SIDEBAR,
+      )
+    val targets = targetsService(hud)
+    val viewer = player("Admin", viewerId)
+    hud.start(viewer, player("Steve"))
+
+    assertEquals(2, targets.capacity(viewerId))
   }
 
   @Test

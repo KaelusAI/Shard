@@ -80,8 +80,20 @@ internal fun withinLimits(
 internal fun outputCapacity(output: MonitorOutput, config: MonitorHudRuntimeConfig): Int {
   val declared = output.capabilities.maxTargets
   val configured =
-    if (output.kind == MonitorOutputKind.BOSSBAR) config.bossBar.maxBars else declared
+    when (output.kind) {
+      MonitorOutputKind.BOSSBAR -> config.bossBar.maxBars
+      MonitorOutputKind.SIDEBAR -> sidebarCapacity(config.sidebar)
+      else -> declared
+    }
   return minOf(declared, configured).coerceAtLeast(1)
+}
+
+private fun sidebarCapacity(sidebar: SidebarConfig): Int {
+  val perTarget = sidebar.lines.size
+  if (perTarget <= 0) {
+    return 1
+  }
+  return (SIDEBAR_MAX_LINES + 1) / (perTarget + 1)
 }
 
 internal fun effectiveCapacity(outputs: List<MonitorOutput>, config: MonitorHudRuntimeConfig): Int =
