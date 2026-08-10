@@ -51,9 +51,6 @@ ai:
     #       - "arena"
     #     world_nether:
     #       - "nether_hub"
-    disabled-regions:
-      world:
-        - "spawn"
   backoff:
     # Initial wait time after server error.
     initial-duration: 5
