@@ -17,7 +17,7 @@ BuildConfig.init(project)
 
 group = "ac.shard"
 
-version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "1.2.1"
+version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "1.3.0"
 
 val packetEventsSpigot = "com.github.retrooper:packetevents-spigot:2.13.0"
 
