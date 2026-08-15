@@ -21,11 +21,41 @@ import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+
+private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "::1")
+
+internal const val MAX_RESPONSE_BYTES = 1024 * 1024
+private const val READ_CHUNK_BYTES = 8 * 1024
+
+internal fun readCapped(stream: InputStream): String {
+  val out = ByteArrayOutputStream()
+  val chunk = ByteArray(READ_CHUNK_BYTES)
+  while (out.size() < MAX_RESPONSE_BYTES) {
+    val read = stream.read(chunk, 0, minOf(chunk.size, MAX_RESPONSE_BYTES - out.size()))
+    if (read < 0) break
+    out.write(chunk, 0, read)
+  }
+  return out.toString(Charsets.UTF_8)
+}
+
+internal fun isSecurePanelUrl(url: String): Boolean =
+  try {
+    val uri = URI.create(url.trim())
+    when (uri.scheme?.lowercase()) {
+      "https" -> true
+      "http" -> uri.host?.lowercase()?.removeSurrounding("[", "]") in LOOPBACK_HOSTS
+      else -> false
+    }
+  } catch (_: IllegalArgumentException) {
+    false
+  }
 
 sealed interface StartResult {
   data class Started(
@@ -80,12 +110,20 @@ sealed interface LinkResult {
   data class Error(val message: String) : LinkResult
 }
 
+enum class LinkIntent(val wire: String) {
+  CONNECT("connect"),
+  SETUP("setup"),
+}
+
 @Suppress("TooGenericExceptionCaught", "ReturnCount")
 class ConnectService(private val plugin: Shard, private val configManager: ConfigManager) {
   private val mapper = ObjectMapper()
   private val client: HttpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build()
 
-  fun start(instanceId: String? = null): StartResult {
+  fun start(
+    instanceId: String? = null,
+    intent: LinkIntent = LinkIntent.CONNECT,
+  ): StartResult {
     return try {
       val (code, node) =
         post(
@@ -94,6 +132,7 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
             "client_id" to CLIENT_ID,
             "plugin_version" to plugin.description.version,
             "instance_id" to instanceId,
+            "intent" to intent.wire,
           ),
         ) ?: return StartResult.Error("Panel URL is not configured.")
       when (code) {
@@ -239,7 +278,7 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
 
   private fun post(path: String, body: Map<String, Any?>): Pair<Int, JsonNode>? {
     val base = configManager.connectPanelUrl.trim().trimEnd('/')
-    if (base.isBlank()) return null
+    if (!isUsablePanelUrl(base)) return null
     val request =
       HttpRequest.newBuilder(URI.create("$base$path"))
         .header("Content-Type", "application/json")
@@ -248,13 +287,23 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
         .timeout(REQUEST_TIMEOUT)
         .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
         .build()
-    val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-    val payload = response.body()
+    val response = client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+    val payload = response.body().use(::readCapped)
     val node =
-      if (payload.isNullOrBlank()) mapper.createObjectNode()
+      if (payload.isBlank()) mapper.createObjectNode()
       else runCatching { mapper.readTree(payload) }.getOrElse { mapper.createObjectNode() }
     return response.statusCode() to node
   }
+
+  private fun isUsablePanelUrl(base: String): Boolean =
+    when {
+      base.isBlank() -> false
+      !isSecurePanelUrl(base) -> {
+        plugin.logger.warning("[Connect] Refusing to contact the panel over an insecure URL: $base")
+        false
+      }
+      else -> true
+    }
 
   private companion object {
     const val CLIENT_ID = "shard-plugin"
