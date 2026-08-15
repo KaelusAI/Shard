@@ -62,6 +62,7 @@ class MonitorLiveChatListenerTest {
       settingsService,
       MonitorFrameBuilder(),
       scheduler,
+      mockk(relaxed = true),
       Logger.getLogger("live-chat-listener"),
     )
 

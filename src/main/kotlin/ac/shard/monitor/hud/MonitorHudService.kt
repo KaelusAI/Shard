@@ -22,6 +22,8 @@ import ac.shard.config.LocaleManager
 import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.MonitorSettingsService
+import ac.shard.monitor.core.MonitorTargetMode
+import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -46,8 +48,10 @@ class MonitorHudService(
   private val index: MonitorTargetIndex,
   private val configManager: ConfigManager,
   private val localeManager: LocaleManager,
+  private val playerDataManager: PlayerDataManager,
   private val logger: Logger,
 ) : MonitorOutputFailureSink {
+  private val autoTargets = MonitorAutoTargets(playerDataManager, index)
   private val sessions = ConcurrentHashMap<UUID, MonitorHudSession>()
   private val sessionIds = AtomicLong()
 
@@ -56,12 +60,16 @@ class MonitorHudService(
     MonitorHudRuntimeConfig.fromManager(configManager, logger)
     private set
 
-  fun start(viewer: Player, target: Player): StartResult {
+  fun start(
+    viewer: Player,
+    target: Player?,
+    mode: MonitorTargetMode = MonitorTargetMode.MANUAL,
+  ): StartResult {
     val viewerId = viewer.uniqueId
     stop(viewerId, viewer)
-    val allowed =
-      withinLimits(runtimeConfig.limits, sessions.size, index.viewersOf(target.uniqueId).size)
-    val session = if (allowed) openSession(viewer, target) else null
+    val watchers = target?.let { index.viewersOf(it.uniqueId).size } ?: 0
+    val allowed = withinLimits(runtimeConfig.limits, sessions.size, watchers)
+    val session = if (allowed) openSession(viewer, target, mode) else null
     if (session == null) {
       return if (allowed) StartResult.NO_OUTPUT else StartResult.LIMIT_REACHED
     }
@@ -88,9 +96,10 @@ class MonitorHudService(
     val session = sessions[viewerId] ?: return
     val viewer = session.viewer
     val carried = session.targets.ids()
+    val mode = session.targetMode
     stop(viewerId, viewer)
     if (viewer.isOnline) {
-      scheduler.runSync(viewer) { reopen(viewer, carried) }
+      scheduler.runSync(viewer) { reopen(viewer, carried, mode) }
     }
   }
 
@@ -124,7 +133,11 @@ class MonitorHudService(
     }
   }
 
-  private fun openSession(viewer: Player, target: Player): MonitorHudSession? {
+  private fun openSession(
+    viewer: Player,
+    target: Player?,
+    mode: MonitorTargetMode = MonitorTargetMode.MANUAL,
+  ): MonitorHudSession? {
     val config = runtimeConfig
     val settings = settingsService.getSettings(viewer.uniqueId)
     val resolved =
@@ -139,10 +152,11 @@ class MonitorHudService(
           sessionId = sessionIds.incrementAndGet(),
           chatStyle = settings.chatStyle,
           config = config,
+          targetMode = mode,
         ),
         resolved,
       )
-    session.trackTarget(target, targetTexts(localeManager, target.name))
+    target?.let { session.trackTarget(it, targetTexts(localeManager, it.name)) }
     session.outputs.toList().forEach { output ->
       if (!output.attach(session.context)) {
         output.detach(session.context)
@@ -152,16 +166,19 @@ class MonitorHudService(
     return session.takeIf { it.outputs.isNotEmpty() }
   }
 
-  private fun reopen(viewer: Player, carried: List<UUID>) {
+  private fun reopen(viewer: Player, carried: List<UUID>, mode: MonitorTargetMode) {
     val players = carried.mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }
-    val session =
-      players
-        .firstOrNull()
-        ?.takeIf { start(viewer, it) == StartResult.STARTED }
-        ?.let { sessions[viewer.uniqueId] }
+    val started =
+      if (mode.isAuto) {
+        start(viewer, null, mode) == StartResult.STARTED
+      } else {
+        players.firstOrNull()?.let { start(viewer, it, mode) == StartResult.STARTED } == true
+      }
+    val session = if (started) sessions[viewer.uniqueId] else null
     if (session != null) {
       val capacity = effectiveCapacity(session.outputs, session.config)
-      players.drop(1).take(capacity - 1).forEach {
+      val rest = if (mode.isAuto) players else players.drop(1)
+      rest.take(capacity - session.targets.size).forEach {
         session.trackTarget(it, targetTexts(localeManager, it.name))
       }
       index.set(viewer.uniqueId, session.targets.ids())
@@ -173,15 +190,20 @@ class MonitorHudService(
     if (session == null || session.cancelled.get()) {
       return
     }
-    val targets = session.targets.ids().mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }
-    if (!session.viewer.isOnline || targets.isEmpty()) {
+    if (!session.viewer.isOnline) {
       stop(viewerId, session.viewer)
       return
     }
-    session.render(
-      targets.map(sampler::sample),
-      settingsService.getSettings(viewerId),
-      frameBuilder,
-    )
+    val targets = autoTargets.resolve(session, viewerId, localeManager)
+    when {
+      targets.isNotEmpty() ->
+        session.render(
+          targets.map(sampler::sample),
+          settingsService.getSettings(viewerId),
+          frameBuilder,
+        )
+      session.targetMode.isAuto -> session.blank()
+      else -> stop(viewerId, session.viewer)
+    }
   }
 }

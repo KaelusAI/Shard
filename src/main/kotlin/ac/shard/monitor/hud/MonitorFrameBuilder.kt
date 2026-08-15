@@ -83,6 +83,7 @@ class MonitorFrameBuilder {
       MonitorToken.PING to ping,
       MonitorToken.DMG to formatDecimal(sample.damageMultiplier, format.dmgDecimals),
       MonitorToken.PROB90 to sample.prob90.toString(),
+      MonitorToken.TIER to sample.tier,
     )
   }
 

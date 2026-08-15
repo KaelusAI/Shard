@@ -19,6 +19,7 @@ package ac.shard.monitor.view
 
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.mitigation.MitigationState
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
@@ -70,6 +71,7 @@ class ViewTagRendererFallbackTest {
     every { playerDataManager.getPlayer(target) } returns shardPlayer
     every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.combat } returns mockk(relaxed = true)
+    every { shardPlayer.mitigation } returns MitigationState()
     every { checkManager.getCheck(AiCheck::class.java) } returns null
 
     val rendered = ViewTagRenderer(MonitorSampler(playerDataManager)).render(target, "", config)
@@ -89,6 +91,7 @@ class ViewTagRendererFallbackTest {
     every { playerDataManager.getPlayer(target) } returns shardPlayer
     every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.combat } returns mockk(relaxed = true)
+    every { shardPlayer.mitigation } returns MitigationState()
     every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
     every { aiCheck.lastProbability } returns 0.954
     every { aiCheck.buffer } returns 12.5

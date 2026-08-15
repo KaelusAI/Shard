@@ -42,6 +42,8 @@ class MonitorTargetState(
   var trend = 0.0
     private set
 
+  var idleCycles = 0
+
   fun advance(sample: MonitorSample, refreshCycles: Int, bucketMs: Int) {
     ping = pingSampler.sampleValue(sample.rawPing, refreshCycles, bucketMs)
     trend = trendTracker.update(sample.probability)
@@ -65,6 +67,21 @@ class MonitorTargets {
   fun add(state: MonitorTargetState): Boolean = states.putIfAbsent(state.targetId, state) == null
 
   fun remove(targetId: UUID): Boolean = states.remove(targetId) != null
+
+  fun retain(keep: Set<UUID>, lingerCycles: Int) {
+    val iterator = states.entries.iterator()
+    while (iterator.hasNext()) {
+      val state = iterator.next().value
+      if (state.targetId in keep) {
+        state.idleCycles = 0
+        continue
+      }
+      state.idleCycles++
+      if (state.idleCycles > lingerCycles) {
+        iterator.remove()
+      }
+    }
+  }
 }
 
 internal fun withinLimits(

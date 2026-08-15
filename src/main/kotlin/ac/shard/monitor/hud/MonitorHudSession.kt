@@ -22,6 +22,7 @@ import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSettings
+import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.platform.scheduler.TaskHandle
 import java.util.concurrent.atomic.AtomicBoolean
 import org.bukkit.entity.Player
@@ -31,12 +32,22 @@ data class MonitorSessionSpec(
   val sessionId: Long,
   val chatStyle: MonitorChatStyle,
   val config: MonitorHudRuntimeConfig,
+  val targetMode: MonitorTargetMode = MonitorTargetMode.MANUAL,
 )
 
 class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<MonitorOutput>) {
   val cancelled = AtomicBoolean(false)
 
   val targets = MonitorTargets()
+
+  var targetMode: MonitorTargetMode = spec.targetMode
+
+  var blanked = false
+    private set
+
+  var autoCycles = Int.MAX_VALUE
+
+  var autoTargets: List<Player> = emptyList()
 
   val viewer: Player
     get() = spec.viewer
@@ -81,6 +92,7 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
     settings: MonitorSettings,
     builder: MonitorFrameBuilder,
   ) {
+    blanked = false
     val frames = samples.mapNotNull { sample ->
       targets.state(sample.targetId)?.let { state ->
         state.advance(
@@ -110,6 +122,22 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
     return outputs.removeIf { it.kind == kind }
   }
 
+  fun leaveAutoMode() {
+    if (targetMode.isAuto) {
+      targetMode = MonitorTargetMode.MANUAL
+      autoTargets = emptyList()
+    }
+  }
+
+  fun blank() {
+    if (blanked) {
+      return
+    }
+    blanked = true
+    sendStates.clear()
+    outputs.forEach { it.clear(context) }
+  }
+
   fun teardown() {
     outputs.forEach {
       it.clear(context)
@@ -121,9 +149,10 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
     event: AiPredictionEvent,
     settings: MonitorSettings,
     builder: MonitorFrameBuilder,
+    tier: String,
   ): MonitorFrame? {
     val state = targets.state(event.playerId) ?: return null
-    return frameFor(state, sampleOf(event, state), settings, builder)
+    return frameFor(state, sampleOf(event, state, tier), settings, builder)
   }
 
   private fun frameFor(
@@ -168,7 +197,11 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
     }
   }
 
-  private fun sampleOf(event: AiPredictionEvent, state: MonitorTargetState): MonitorSample =
+  private fun sampleOf(
+    event: AiPredictionEvent,
+    state: MonitorTargetState,
+    tier: String,
+  ): MonitorSample =
     MonitorSample(
       targetId = event.playerId,
       targetName = event.playerName,
@@ -179,5 +212,6 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
       rawPing = state.ping,
       damageMultiplier = event.damageMultiplier,
       prob90 = event.prob90,
+      tier = tier,
     )
 }

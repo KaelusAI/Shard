@@ -339,7 +339,22 @@ bukkit {
           "shard.monitor.others",
           "shard.monitor.multi",
           "shard.monitor.output",
+          "shard.monitor.all",
+          "shard.monitor.suspicious",
+          "shard.monitor.auto",
         )
+    }
+    register("shard.monitor.auto") {
+      description = "Allows watching whoever is fighting or already suspicious"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.all") {
+      description = "Allows watching every online player at once"
+      default = Permission.Default.FALSE
+    }
+    register("shard.monitor.suspicious") {
+      description = "Allows watching the players whose AI buffer is over the threshold"
+      default = Permission.Default.FALSE
     }
     register("shard.monitor.others") {
       description = "Allows monitoring players other than yourself"
@@ -500,6 +515,9 @@ bukkit {
         "monitor.output.sidebar",
         "monitor.output.chat",
         "monitor.output.tablist",
+        "monitor.all",
+        "monitor.suspicious",
+        "monitor.auto",
         "view",
         "profile",
         "brand",

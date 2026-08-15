@@ -17,6 +17,8 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.checks.CheckManager
+import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
 import ac.shard.config.LocaleManager
@@ -26,17 +28,25 @@ import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.core.MonitorSettingsService
+import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.monitor.core.MonitorTheme
+import ac.shard.player.PlayerDataManager
+import ac.shard.player.ShardPlayer
+import ac.shard.player.state.CombatState
 import ac.shard.scheduler.SchedulerService
 import ac.shard.utils.Message
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
+import io.mockk.unmockkStatic
 import java.util.UUID
 import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
@@ -49,9 +59,14 @@ class MonitorHudServiceTest {
   private val sampler = mockk<MonitorSampler>(relaxed = true)
   private val scheduler = mockk<SchedulerService>()
   private val index = MonitorTargetIndex()
+  private val playerDataManager = mockk<PlayerDataManager>(relaxed = true)
+  private val tickSlot = slot<Runnable>()
 
-  private class FakeOutput(override val kind: MonitorOutputKind, val available: Boolean = true) :
-    MonitorOutput {
+  private class FakeOutput(
+    override val kind: MonitorOutputKind,
+    val available: Boolean = true,
+    room: Int = 1,
+  ) : MonitorOutput {
     var attaches = 0
     var detaches = 0
     var clears = 0
@@ -59,7 +74,7 @@ class MonitorHudServiceTest {
 
     override val capabilities =
       MonitorOutputCapabilities(
-        maxTargets = 1,
+        maxTargets = room,
         claimsClientSlot = false,
         eventDriven = false,
         requiresClear = true,
@@ -97,10 +112,12 @@ class MonitorHudServiceTest {
   ): MonitorHudService {
     val loader = YamlConfigurationLoader.builder().source { yaml.reader().buffered() }.build()
     every { configManager.monitorConfig } returns ConfigView(loader.load())
+    every { configManager.suspiciousAlertsBuffer } returns 25.0
     every { localeManager.getRawMessage(any()) } returns "text"
     every { settingsService.getSettings(any()) } returns settings(storedOutputs)
     every { settingsService.defaults() } returns settings(setOf(MonitorOutputKind.ACTIONBAR))
-    every { scheduler.runTimer(any<Player>(), any(), any(), any()) } returns mockk(relaxed = true)
+    every { scheduler.runTimer(any<Player>(), capture(tickSlot), any(), any()) } returns
+      mockk(relaxed = true)
     every { scheduler.runSync(any<Player>(), any()) } answers
       {
         secondArg<Runnable>().run()
@@ -115,8 +132,40 @@ class MonitorHudServiceTest {
       index,
       configManager,
       localeManager,
+      playerDataManager,
       Logger.getLogger("hud-service-test"),
     )
+  }
+
+  private fun online(name: String, buffer: Double): ShardPlayer {
+    val check = mockk<AiCheck>(relaxed = true)
+    every { check.buffer } returns buffer
+    return online(name, check)
+  }
+
+  private fun online(
+    name: String,
+    buffer: Double,
+    ticksSinceAttack: Int,
+    hasAttacked: Boolean = true,
+  ): ShardPlayer {
+    val check = mockk<AiCheck>(relaxed = true)
+    every { check.buffer } returns buffer
+    val shardPlayer = online(name, check)
+    val combat = CombatState(ticksSinceAttack)
+    combat.hasAttacked = hasAttacked
+    every { shardPlayer.combat } returns combat
+    return shardPlayer
+  }
+
+  private fun online(name: String, check: AiCheck): ShardPlayer {
+    val player = player(UUID.randomUUID(), name)
+    val checkManager = mockk<CheckManager>(relaxed = true)
+    every { checkManager.getCheck(AiCheck::class.java) } returns check
+    val shardPlayer = mockk<ShardPlayer>(relaxed = true)
+    every { shardPlayer.player } returns player
+    every { shardPlayer.checkManager } returns checkManager
+    return shardPlayer
   }
 
   private fun settings(outputs: Set<MonitorOutputKind>) =
@@ -351,6 +400,209 @@ class MonitorHudServiceTest {
     val again = hud.start(viewer, player(UUID.randomUUID(), "Alex"))
 
     assertEquals(StartResult.STARTED, again)
+  }
+
+  @Test
+  fun `an auto mode survives a tick with nobody to watch`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns emptyList()
+    val viewer = player(viewerId, "Admin")
+
+    assertEquals(StartResult.STARTED, service.start(viewer, null, MonitorTargetMode.ALL))
+    tickSlot.captured.run()
+
+    assertNotNull(service.session(viewerId))
+    assertEquals(0, service.session(viewerId)?.targets?.size)
+  }
+
+  @Test
+  fun `a manual session still ends once its last target is gone`() {
+    val service = service()
+    val viewer = player(viewerId, "Admin")
+    service.start(viewer, player(UUID.randomUUID(), "Steve"))
+    service.session(viewerId)?.targets?.remove(service.session(viewerId)!!.targets.ids().first())
+
+    tickSlot.captured.run()
+
+    assertNull(service.session(viewerId))
+  }
+
+  @Test
+  fun `watching everyone picks the highest buffers first`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns
+      listOf(online("Calm", 1.0), online("Notch", 90.0), online("Steve", 40.0))
+    val viewer = player(viewerId, "Admin")
+
+    service.start(viewer, null, MonitorTargetMode.ALL)
+    tickSlot.captured.run()
+
+    assertEquals(listOf("Notch"), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `watching the suspicious leaves out everyone under the threshold`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns
+      listOf(online("Calm", 1.0), online("Steve", 40.0))
+    val viewer = player(viewerId, "Admin")
+
+    service.start(viewer, null, MonitorTargetMode.SUSPICIOUS)
+    tickSlot.captured.run()
+
+    assertEquals(listOf("Steve"), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `a watched player stays until the buffer falls past the exit ratio`() {
+    val service = service(yaml = "auto:\n  refresh-ticks: 1\n")
+    val check = mockk<AiCheck>(relaxed = true)
+    every { check.buffer } returns 40.0
+    every { playerDataManager.getPlayers() } returns listOf(online("Steve", check))
+    val viewer = player(viewerId, "Admin")
+    service.start(viewer, null, MonitorTargetMode.SUSPICIOUS)
+    tickSlot.captured.run()
+
+    every { check.buffer } returns 22.0
+    tickSlot.captured.run()
+    tickSlot.captured.run()
+
+    assertEquals(listOf("Steve"), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `a watched player leaves once the buffer drops below the exit ratio`() {
+    val service = service(yaml = "auto:\n  refresh-ticks: 1\n  linger-ticks: 0\n")
+    val check = mockk<AiCheck>(relaxed = true)
+    every { check.buffer } returns 40.0
+    every { playerDataManager.getPlayers() } returns listOf(online("Steve", check))
+    val viewer = player(viewerId, "Admin")
+    service.start(viewer, null, MonitorTargetMode.SUSPICIOUS)
+    tickSlot.captured.run()
+
+    every { check.buffer } returns 19.0
+    tickSlot.captured.run()
+    tickSlot.captured.run()
+
+    assertEquals(emptyList(), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `the bigger buffer wins even when its owner stopped fighting`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns
+      listOf(online("Stale", 90.0, ticksSinceAttack = 500), online("Fighting", 5.0, 0))
+    val viewer = player(viewerId, "Admin")
+
+    service.start(viewer, null, MonitorTargetMode.ALL)
+    tickSlot.captured.run()
+
+    assertEquals(listOf("Stale"), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `on equal buffers the one still fighting comes first`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns
+      listOf(online("Idle", 5.0, ticksSinceAttack = 500), online("Fighting", 5.0, 0))
+    val viewer = player(viewerId, "Admin")
+
+    service.start(viewer, null, MonitorTargetMode.ALL)
+    tickSlot.captured.run()
+
+    assertEquals(listOf("Fighting"), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `a player who just joined does not count as fighting`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns
+      listOf(online("Fresh", 0.0, ticksSinceAttack = 41, hasAttacked = false))
+    val viewer = player(viewerId, "Admin")
+
+    service.start(viewer, null, MonitorTargetMode.AUTO)
+    tickSlot.captured.run()
+
+    assertEquals(emptyList(), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `removing a target by hand drops the auto mode instead of fighting it`() {
+    val service =
+      service(
+        storedOutput = MonitorOutputKind.BOSSBAR,
+        outputs = listOf(FakeOutput(MonitorOutputKind.BOSSBAR, room = 3)),
+        yaml = "outputs:\n  bossbar:\n    enabled: true\n    max-bars: 3\n",
+      )
+    every { playerDataManager.getPlayers() } returns
+      listOf(online("Steve", 40.0, 0), online("Alex", 30.0, 0))
+    val viewer = player(viewerId, "Admin")
+    service.start(viewer, null, MonitorTargetMode.AUTO)
+    tickSlot.captured.run()
+
+    MonitorTargetsService(service, index, localeManager).remove(viewer, "Steve")
+
+    assertEquals(MonitorTargetMode.MANUAL, service.session(viewerId)?.targetMode)
+    assertEquals(listOf("Alex"), service.session(viewerId)?.targets?.names())
+  }
+
+  @Test
+  fun `a reload keeps the auto mode instead of dropping to manual`() {
+    val service = service()
+    val steve = online("Steve", 40.0, 0)
+    every { playerDataManager.getPlayers() } returns listOf(steve)
+    val viewer = player(viewerId, "Admin")
+    service.start(viewer, null, MonitorTargetMode.ALL)
+    tickSlot.captured.run()
+
+    mockkStatic(Bukkit::class)
+    try {
+      every { Bukkit.getPlayer(any<UUID>()) } answers { steve.player }
+      service.reload()
+    } finally {
+      unmockkStatic(Bukkit::class)
+    }
+
+    assertEquals(MonitorTargetMode.ALL, service.session(viewerId)?.targetMode)
+  }
+
+  @Test
+  fun `a reload keeps an auto session that has nobody to watch yet`() {
+    val service = service()
+    every { playerDataManager.getPlayers() } returns emptyList()
+    val viewer = player(viewerId, "Admin")
+    service.start(viewer, null, MonitorTargetMode.AUTO)
+    tickSlot.captured.run()
+
+    service.reload()
+
+    assertEquals(
+      MonitorTargetMode.AUTO,
+      service.session(viewerId)?.targetMode,
+      "an empty target set must not make the session disappear",
+    )
+  }
+
+  @Test
+  fun `auto takes both the fighting and the suspicious`() {
+    val service =
+      service(
+        yaml = "outputs:\n  bossbar:\n    enabled: true\n    max-bars: 3\n",
+        storedOutput = MonitorOutputKind.BOSSBAR,
+        outputs = listOf(FakeOutput(MonitorOutputKind.BOSSBAR, room = 3)),
+      )
+    every { playerDataManager.getPlayers() } returns
+      listOf(
+        online("Idle", 1.0, ticksSinceAttack = 500),
+        online("Stale", 90.0, ticksSinceAttack = 500),
+        online("Fighting", 2.0, 0),
+      )
+    val viewer = player(viewerId, "Admin")
+
+    service.start(viewer, null, MonitorTargetMode.AUTO)
+    tickSlot.captured.run()
+
+    assertEquals(listOf("Stale", "Fighting"), service.session(viewerId)?.targets?.names())
   }
 
   @Test

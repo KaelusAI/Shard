@@ -13,6 +13,20 @@ limits:
   max-sessions: 32
   # Max viewers watching the same player. 0 = unlimited.
   max-viewers-per-target: 0
+
+# Settings for "/shard monitor all" and "/shard monitor suspicious".
+auto:
+  # Buffer a player needs to enter the suspicious list.
+  # -1 takes suspicious.alerts.buffer from config.yml.
+  suspicious-buffer: -1
+  # A listed player stays until the buffer drops below this share of the value above.
+  exit-ratio: 0.8
+  # How often the watched set is recalculated, in ticks.
+  refresh-ticks: 20
+  # How long a dropped player's data is kept, in ticks, so a return keeps the trend.
+  linger-ticks: 60
+  # Ticks after the last hit during which a player still counts as fighting. They list first.
+  combat-ticks: 100
 view:
   update: 2
   rebind-ticks: 100

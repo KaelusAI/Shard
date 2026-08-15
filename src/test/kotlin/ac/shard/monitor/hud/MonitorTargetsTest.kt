@@ -83,6 +83,7 @@ class MonitorTargetsTest {
   ): MonitorHudService {
     val loader = YamlConfigurationLoader.builder().source { yaml.reader().buffered() }.build()
     every { configManager.monitorConfig } returns ConfigView(loader.load())
+    every { configManager.suspiciousAlertsBuffer } returns 25.0
     every { localeManager.getRawMessage(any()) } returns "text"
     every { settingsService.getSettings(any()) } returns settings(storedOutputs)
     every { settingsService.defaults() } returns settings(storedOutputs)
@@ -101,6 +102,7 @@ class MonitorTargetsTest {
       index,
       configManager,
       localeManager,
+      mockk<ac.shard.player.PlayerDataManager>(relaxed = true),
       Logger.getLogger("targets-test"),
     )
   }

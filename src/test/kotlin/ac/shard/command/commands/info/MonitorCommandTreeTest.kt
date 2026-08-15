@@ -23,6 +23,7 @@ import ac.shard.monitor.hud.MonitorOutputRegistry
 import ac.shard.sender.Sender
 import io.mockk.mockk
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.execution.ExecutionCoordinator
@@ -67,6 +68,7 @@ class MonitorCommandTreeTest {
     val registered = chains(registerAll())
 
     assertTrue(registered.isNotEmpty())
+    assertEquals(registered.size, registered.toSet().size, "two commands claim the same chain")
   }
 
   @Test
@@ -80,6 +82,10 @@ class MonitorCommandTreeTest {
         "shard monitor add target",
         "shard monitor remove target",
         "shard monitor clear",
+        "shard monitor auto",
+        "shard monitor all",
+        "shard monitor suspicious",
+        "shard monitor manual",
         "shard monitor stop",
         "shard monitor list",
         "shard monitor reset",

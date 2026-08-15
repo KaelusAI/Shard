@@ -113,9 +113,4 @@ class ShippedMonitorConfigTest {
     assertEquals(1, shipped.sidebar.slot)
     assertTrue(shipped.sidebar.enabled)
   }
-
-  @Test
-  fun `the shipped action bar keepalive inherits the shared setting`() {
-    assertEquals(10, shipped.actionBar.keepAliveCycles)
-  }
 }

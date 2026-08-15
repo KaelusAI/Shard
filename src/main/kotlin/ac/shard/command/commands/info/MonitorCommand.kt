@@ -19,6 +19,7 @@ package ac.shard.command.commands.info
 
 import ac.shard.command.ShardCommand
 import ac.shard.monitor.core.MonitorSettingsService
+import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.MonitorTargetsService
 import ac.shard.monitor.hud.StartResult
@@ -33,11 +34,14 @@ import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.suggestionProvider
 import org.incendo.cloud.parser.standard.StringParser
 
+@Suppress("TooManyFunctions")
 class MonitorCommand(
   private val hudService: MonitorHudService,
   private val targetsService: MonitorTargetsService,
   private val settingsService: MonitorSettingsService,
 ) : ShardCommand {
+  private val autoCommand = MonitorAutoCommand(hudService, settingsService)
+
   @Suppress("LongMethod")
   override fun register(manager: CommandManager<Sender>) {
     val watched = MonitorSuggestions.watched(targetsService)
@@ -55,6 +59,12 @@ class MonitorCommand(
       required("target", StringParser.stringParser()) { suggestionProvider = watched }
       handler(this@MonitorCommand::removeTarget)
     }
+    monitorCommand(manager, path = listOf("auto")) { handler(this@MonitorCommand::watchAuto) }
+    monitorCommand(manager, path = listOf("all")) { handler(this@MonitorCommand::watchAll) }
+    monitorCommand(manager, path = listOf("suspicious")) {
+      handler(this@MonitorCommand::watchSuspicious)
+    }
+    monitorCommand(manager, path = listOf("manual")) { handler(this@MonitorCommand::watchManual) }
     monitorCommand(manager, path = listOf("clear")) { handler(this@MonitorCommand::clearTargets) }
     monitorCommand(manager, path = listOf("stop")) { handler(this@MonitorCommand::stopMonitor) }
     monitorCommand(
@@ -129,6 +139,30 @@ class MonitorCommand(
           name,
         )
     }
+  }
+
+  private fun watchAuto(context: CommandContext<Sender>) {
+    val sender = context.sender()
+    val player = sender.player ?: return
+    autoCommand.toggle(player, sender.nativeSender, MonitorTargetMode.AUTO)
+  }
+
+  private fun watchAll(context: CommandContext<Sender>) {
+    val sender = context.sender()
+    val player = sender.player ?: return
+    autoCommand.toggle(player, sender.nativeSender, MonitorTargetMode.ALL)
+  }
+
+  private fun watchSuspicious(context: CommandContext<Sender>) {
+    val sender = context.sender()
+    val player = sender.player ?: return
+    autoCommand.toggle(player, sender.nativeSender, MonitorTargetMode.SUSPICIOUS)
+  }
+
+  private fun watchManual(context: CommandContext<Sender>) {
+    val sender = context.sender()
+    val player = sender.player ?: return
+    autoCommand.manual(player, sender.nativeSender)
   }
 
   private fun clearTargets(context: CommandContext<Sender>) {
