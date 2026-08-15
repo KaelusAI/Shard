@@ -103,6 +103,8 @@ class CrossServerSuspiciousService(
               buffer = check.buffer,
               ping = player.ping,
               updatedAt = System.currentTimeMillis(),
+              level = shardPlayer.mitigation.matched?.let { shardPlayer.mitigation.tierName },
+              score = shardPlayer.mitigation.score,
             )
           )
         }

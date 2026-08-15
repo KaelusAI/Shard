@@ -45,7 +45,13 @@ internal class ViewTagRenderer(private val sampler: MonitorSampler) {
         ZERO_BELOW_SCORE
       }
 
-    val values = mapOf("prob" to probabilityValue, "buffer" to bufferValue, "ping" to pingDisplay)
+    val values =
+      mapOf(
+        "prob" to probabilityValue,
+        "buffer" to bufferValue,
+        "ping" to pingDisplay,
+        "tier" to sample.tier,
+      )
 
     return RenderedTag(
       applyTemplate(config.prefixTemplate, values),

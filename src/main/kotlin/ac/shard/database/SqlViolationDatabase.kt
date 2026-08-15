@@ -41,6 +41,7 @@ import kotlin.time.toJavaInstant
 import kotlin.time.toKotlinInstant
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.datetime.InstantColumnType
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.core.statements.api.RowApi
 import org.jetbrains.exposed.v1.core.vendors.SQLiteDialect
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -183,6 +184,32 @@ class SqlViolationDatabase(
     }
   }
 
+  override fun recordAttack(playerUUID: UUID, timestamp: Long) {
+    transaction(database) {
+      PlayerLogins.upsert(
+        onUpdate = {
+          it[PlayerLogins.lastSeen] = timestamp
+          it[PlayerLogins.lastAttack] = timestamp
+        }
+      ) {
+        it[uuid] = playerUUID.toString()
+        it[lastSeen] = timestamp
+        it[lastAttack] = timestamp
+      }
+    }
+  }
+
+  override fun countAttackersSince(since: Long): Int {
+    return transaction(database) {
+      val total = PlayerLogins.uuid.count()
+      PlayerLogins.select(total)
+        .where { PlayerLogins.lastAttack greaterEq since }
+        .firstOrNull()
+        ?.get(total)
+        ?.toInt() ?: 0
+    }
+  }
+
   override fun countUniquePlayersSince(since: Long): Int {
     return transaction(database) {
       val total = PlayerLogins.uuid.count()
@@ -228,6 +255,58 @@ class SqlViolationDatabase(
           val updatedAt = row[PlayerLogins.aiBufferUpdatedAt]
           if (updatedAt == 0L) null
           else AiBufferState(buffer = row[PlayerLogins.aiBuffer], updatedAt = updatedAt)
+        }
+    }
+  }
+
+  private fun writeScore(statement: UpdateBuilder<*>, state: StoredScore) {
+    statement[PlayerLogins.mitigationScore] = state.score
+    statement[PlayerLogins.mitigationScoreAt] = state.updatedAt
+    statement[PlayerLogins.mitigationSessions] = state.sessions
+    statement[PlayerLogins.mitigationDays] = state.days
+    statement[PlayerLogins.mitigationLastDay] = state.lastDay
+  }
+
+  override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) {
+    transaction(database) {
+      val uuidString = playerUUID.toString()
+      val updated =
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) { writeScore(it, state) }
+      if (updated > 0) return@transaction
+      try {
+        PlayerLogins.insert {
+          it[uuid] = uuidString
+          it[lastSeen] = state.updatedAt
+          writeScore(it, state)
+        }
+      } catch (_: java.sql.SQLException) {
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) { writeScore(it, state) }
+      }
+    }
+  }
+
+  override fun loadMitigationScore(playerUUID: UUID): StoredScore? {
+    return transaction(database) {
+      PlayerLogins.select(
+          PlayerLogins.mitigationScore,
+          PlayerLogins.mitigationScoreAt,
+          PlayerLogins.mitigationSessions,
+          PlayerLogins.mitigationDays,
+          PlayerLogins.mitigationLastDay,
+        )
+        .where { PlayerLogins.uuid eq playerUUID.toString() }
+        .firstOrNull()
+        ?.let { row ->
+          val updatedAt = row[PlayerLogins.mitigationScoreAt]
+          if (updatedAt == 0L) null
+          else
+            StoredScore(
+              score = row[PlayerLogins.mitigationScore],
+              updatedAt = updatedAt,
+              sessions = row[PlayerLogins.mitigationSessions],
+              days = row[PlayerLogins.mitigationDays],
+              lastDay = row[PlayerLogins.mitigationLastDay],
+            )
         }
     }
   }
@@ -339,8 +418,14 @@ class SqlViolationDatabase(
   private object PlayerLogins : Table("player_logins") {
     val uuid: Column<String> = varchar("uuid", 36)
     val lastSeen: Column<Long> = long("last_seen")
+    val lastAttack: Column<Long> = long("last_attack").default(0L)
     val aiBuffer: Column<Double> = double("ai_buffer").default(0.0)
     val aiBufferUpdatedAt: Column<Long> = long("ai_buffer_updated_at").default(0L)
+    val mitigationScore: Column<Double> = double("mitigation_score").default(0.0)
+    val mitigationScoreAt: Column<Long> = long("mitigation_score_at").default(0L)
+    val mitigationSessions: Column<Int> = integer("mitigation_sessions").default(0)
+    val mitigationDays: Column<Int> = integer("mitigation_days").default(0)
+    val mitigationLastDay: Column<Long> = long("mitigation_last_day").default(0L)
 
     override val primaryKey = PrimaryKey(uuid)
 

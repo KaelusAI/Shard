@@ -20,11 +20,19 @@ package ac.shard.config
 import java.io.File
 
 internal object ConfigMigrations {
-  const val LATEST_VERSION = 3
+  const val LATEST_VERSION = 4
   const val MONITOR_LATEST_VERSION = 2
+  const val MITIGATIONS_LATEST_VERSION = 1
+
+  private val DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH =
+    listOf("debug/categories/api-error/timeout", "debug/categories/api-error/service-unavailable")
 
   private val LATEST_BY_FILE =
-    mapOf("config.yml" to LATEST_VERSION, "monitor.yml" to MONITOR_LATEST_VERSION)
+    mapOf(
+      "config.yml" to LATEST_VERSION,
+      "monitor.yml" to MONITOR_LATEST_VERSION,
+      "mitigations.yml" to MITIGATIONS_LATEST_VERSION,
+    )
 
   private val VERSION_RE = Regex("""^\s*config-version:\s*(\d+)""", RegexOption.MULTILINE)
 
@@ -43,7 +51,12 @@ internal object ConfigMigrations {
   ): List<String> {
     if (currentVersion >= latestVersion(fileName)) return emptyList()
     val drops = mutableListOf("config-version")
-    // if (currentVersion < 2) drops += "ai/legacy-path"
+    if (fileName == "config.yml") {
+      drops += "debug/enabled"
+      drops += DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH
+      drops += "ai/damage-reduction"
+      drops += "mitigation"
+    }
     return drops
   }
 }

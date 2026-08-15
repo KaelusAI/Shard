@@ -130,7 +130,8 @@ class SuspiciousCommand(
     val entries = ArrayList<SuspiciousSnapshot>()
     for (sp in playerDataManager.getPlayers()) {
       val check = sp.checkManager.getCheck(AiCheck::class.java) ?: continue
-      if (check.buffer > 0.0) {
+      val mitigation = sp.mitigation
+      if (check.buffer > 0.0 || mitigation.matched != null) {
         entries.add(
           SuspiciousSnapshot(
             server,
@@ -139,6 +140,8 @@ class SuspiciousCommand(
             check.buffer,
             sp.player.ping,
             Long.MAX_VALUE,
+            mitigation.matched?.let { mitigation.tierName },
+            mitigation.score,
           )
         )
       }
@@ -169,6 +172,10 @@ class SuspiciousCommand(
             String.format(Locale.US, "%.1f", entry.buffer),
             "ping",
             entry.ping.toString(),
+            "level",
+            entry.level ?: "-",
+            "score",
+            String.format(Locale.US, "%.1f", entry.score),
           )
           .hoverEvent(
             HoverEvent.showText(MessageUtil.getMessage(Message.SUSPICIOUS_LIST_ENTRY_HOVER))

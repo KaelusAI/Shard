@@ -270,12 +270,36 @@ bukkit {
       description = "Allows linking/unlinking this server to the Shard web panel"
       default = Permission.Default.OP
     }
+    register("shard.setup") {
+      description = "Allows running the setup wizard"
+      default = Permission.Default.OP
+    }
+    register("shard.editor") {
+      description = "Allows opening the configuration editor"
+      default = Permission.Default.OP
+    }
+    register("shard.editor.apply") {
+      description = "Allows writing what the editor produced to the config files"
+      default = Permission.Default.OP
+    }
     register("shard.exempt") {
-      description = "Exempt from all checks"
+      description = "Keeps the checks running but never punishes the player"
       default = Permission.Default.FALSE
     }
+    register("shard.nomitigate") {
+      description = "Keeps the checks running but never mitigates the player"
+      default = Permission.Default.FALSE
+    }
+    register("shard.mitigations") {
+      description = "Allows listing who is currently mitigated and why"
+      default = Permission.Default.OP
+    }
+    register("shard.mitigations.clear") {
+      description = "Allows resetting a player's mitigation score by hand"
+      default = Permission.Default.OP
+    }
     register("shard.disable") {
-      description = "Disables anti-cheat tracking for the player"
+      description = "Stops every check for the player, nothing is sent to the API"
       default = Permission.Default.FALSE
     }
     register("shard.datacollect") {

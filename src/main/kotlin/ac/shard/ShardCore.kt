@@ -25,7 +25,7 @@ import ac.shard.config.LocaleManager
 import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
-import ac.shard.event.DamageEvent
+import ac.shard.mitigation.MitigationRuntime
 import ac.shard.monitor.core.ScoreboardSlotObserver
 import ac.shard.monitor.hud.MonitorRuntime
 import ac.shard.monitor.view.MonitorViewService
@@ -61,7 +61,7 @@ constructor(
   private val monitorViewService: MonitorViewService,
   private val monitorRuntime: MonitorRuntime,
   private val slotObserver: ScoreboardSlotObserver,
-  private val damageEvent: DamageEvent,
+  private val mitigationRuntime: MitigationRuntime,
   private val shardApi: ShardApi,
   private val adventure: BukkitAudiences,
   private val coroutines: ShardCoroutines,
@@ -74,7 +74,7 @@ constructor(
     MessageUtil.init(localeManager, adventure, plugin.logger)
 
     initializePacketRuntime()
-    plugin.server.pluginManager.registerEvents(damageEvent, plugin)
+    mitigationRuntime.enable()
     monitorRuntime.enable()
     plugin.server.servicesManager.register(
       ShardApi::class.java,
@@ -93,6 +93,7 @@ constructor(
     runCatching { telemetryService.stop() }
     plugin.server.servicesManager.unregister(ShardApi::class.java, shardApi)
     runCatching { playerDataManager.saveAllBuffersSync() }
+    runCatching { mitigationRuntime.disable() }
     runCatching { aiServerProvider.shutdownTransport() }
     runCatching { crossServerAlertService.shutdown() }
     runCatching { crossServerSuspiciousService.shutdown() }
@@ -111,6 +112,7 @@ constructor(
     alertManager.reload()
     aiServerProvider.reload()
     playerDataManager.reloadAllPlayers()
+    mitigationRuntime.reload()
     monitorRuntime.reload()
     monitorViewService.reload()
     crossServerAlertService.shutdown()

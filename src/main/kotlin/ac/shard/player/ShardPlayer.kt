@@ -29,6 +29,7 @@ import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.config.ConfigManager
 import ac.shard.entity.CompensatedEntities
+import ac.shard.mitigation.MitigationState
 import ac.shard.player.state.CombatState
 import ac.shard.player.state.MovementState
 import ac.shard.player.state.TransactionTracker
@@ -80,6 +81,7 @@ constructor(
 
   val movement: MovementState = MovementState()
   val combat: CombatState = CombatState(aiSequence + 1)
+  val mitigation: MitigationState = MitigationState()
   val transactions: TransactionTracker = TransactionTracker()
 
   val pendingTeleports: Queue<TeleportData> = ConcurrentLinkedQueue()

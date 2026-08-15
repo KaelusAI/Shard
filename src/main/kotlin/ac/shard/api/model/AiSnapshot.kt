@@ -17,10 +17,11 @@
  */
 package ac.shard.api.model
 
-/** Snapshot of the latest AI prediction values for a player. */
 data class AiSnapshot(
   val probability: Double,
   val buffer: Double,
   val damageMultiplier: Double,
   val prob90: Int,
+  val mitigationTier: String = "NONE",
+  val mitigationScore: Double = 0.0,
 )

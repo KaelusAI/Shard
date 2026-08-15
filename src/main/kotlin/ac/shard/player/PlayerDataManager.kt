@@ -32,6 +32,7 @@ import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
 import ac.shard.integration.GeyserUtil
+import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
@@ -57,6 +58,7 @@ constructor(
   private val eventBus: ShardEventBus,
   private val databaseManager: DatabaseManager,
   private val persistentBufferService: PersistentBufferService,
+  private val mitigationScoreStore: MitigationScoreStore,
 ) : Listener {
   private val players = ConcurrentHashMap<UUID, ShardPlayer>()
 
@@ -84,12 +86,16 @@ constructor(
         }
     }
     val tracked = players.remove(uuid) ?: return
-    scheduler.runAsync { persistentBufferService.saveOnQuit(tracked) }
+    scheduler.runAsync {
+      persistentBufferService.saveOnQuit(tracked)
+      mitigationScoreStore.save(tracked)
+    }
   }
 
   fun saveAllBuffersSync() {
     for (shardPlayer in players.values) {
       persistentBufferService.saveOnShutdown(shardPlayer)
+      mitigationScoreStore.save(shardPlayer)
     }
   }
 
@@ -142,6 +148,7 @@ constructor(
         shardPlayer.isBedrock = GeyserUtil.isBedrockPlayer(playerUuid)
         players[player.uniqueId] = shardPlayer
         persistentBufferService.restoreOnLogin(shardPlayer)
+        mitigationScoreStore.restoreOnLogin(shardPlayer)
 
         if (
           player.hasPermission("shard.alerts") &&

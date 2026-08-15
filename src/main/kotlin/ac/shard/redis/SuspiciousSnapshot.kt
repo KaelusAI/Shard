@@ -29,4 +29,6 @@ constructor(
   @param:JsonProperty("buffer") val buffer: Double,
   @param:JsonProperty("ping") val ping: Int,
   @param:JsonProperty("updatedAt") val updatedAt: Long,
+  @param:JsonProperty("level") val level: String? = null,
+  @param:JsonProperty("score") val score: Double = 0.0,
 )

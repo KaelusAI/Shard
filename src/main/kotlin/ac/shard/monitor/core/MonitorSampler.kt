@@ -35,6 +35,7 @@ class MonitorSampler(private val playerDataManager: PlayerDataManager) {
       rawPing = target.ping,
       damageMultiplier = shardTarget?.combat?.damageMultiplier ?: 1.0,
       prob90 = aiCheck?.prob90 ?: 0,
+      tier = shardTarget?.mitigation?.appliedTier?.name ?: "NONE",
     )
   }
 }

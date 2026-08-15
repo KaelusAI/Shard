@@ -27,4 +27,5 @@ enum class DebugCategory(val configKey: String) {
   RATE_LIMIT("rate-limit"),
   WORLDGUARD("worldguard"),
   PACKET_DUPLICATION("packet-duplication"),
+  MITIGATION("mitigation"),
 }
