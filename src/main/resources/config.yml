@@ -132,9 +132,15 @@ database:
     password: "password"
     use-ssl: false
 
-# Redis connection, used by cross-server alerting.
+editor:
+  # Every result waits for the server console and nothing is applied from in-game chat.
+  console-only: false
+  # The same, but only for results that add a console command to punishments.yml.
+  console-for-commands: false
+
+# Redis connection, used by the network section below.
 redis:
-  # Enable the Redis connection. Required for cross-server alerts below.
+  # Enable the Redis connection. Required by the network section below.
   enabled: false
   host: "localhost"
   port: 6379
