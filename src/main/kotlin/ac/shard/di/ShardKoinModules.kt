@@ -52,9 +52,12 @@ import ac.shard.command.commands.admin.AlertsCommand
 import ac.shard.command.commands.admin.BrandsCommand
 import ac.shard.command.commands.admin.ConnectCommand
 import ac.shard.command.commands.admin.DataCollectCommand
+import ac.shard.command.commands.admin.EditorCommand
 import ac.shard.command.commands.admin.ExemptCommand
+import ac.shard.command.commands.admin.MitigationsCommand
 import ac.shard.command.commands.admin.PunishCommand
 import ac.shard.command.commands.admin.ReloadCommand
+import ac.shard.command.commands.admin.SetupCommand
 import ac.shard.command.commands.admin.SuspiciousCommand
 import ac.shard.command.commands.info.HelpCommand
 import ac.shard.command.commands.info.HistoryCommand
@@ -69,15 +72,26 @@ import ac.shard.command.commands.info.ViewCommand
 import ac.shard.command.handler.ShardCommandFailureHandler
 import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
+import ac.shard.config.yaml.YamlFileStore
 import ac.shard.connect.ConnectService
 import ac.shard.connect.CredentialsStore
 import ac.shard.coroutines.ShardCoroutines
-import ac.shard.damage.AiDamageProcessor
 import ac.shard.damage.DamageProcessor
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
-import ac.shard.event.DamageEvent
+import ac.shard.editor.EditorApply
+import ac.shard.editor.EditorSessionStore
+import ac.shard.editor.EditorSnapshotBuilder
+import ac.shard.editor.ResultGuard
+import ac.shard.editor.SessionKind
 import ac.shard.integration.WorldGuardManager
+import ac.shard.mitigation.HitStamps
+import ac.shard.mitigation.MitigationDamageProcessor
+import ac.shard.mitigation.MitigationRuntime
+import ac.shard.mitigation.MitigationScoreStore
+import ac.shard.mitigation.MitigationScorer
+import ac.shard.mitigation.MitigationSkip
+import ac.shard.mitigation.RuleEngine
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.MonitorSettingsService
@@ -102,6 +116,11 @@ import ac.shard.monitor.hud.output.SidebarOutput
 import ac.shard.monitor.hud.output.TabListOutput
 import ac.shard.monitor.view.MonitorViewService
 import ac.shard.packet.PacketListener
+import ac.shard.panel.PanelClient
+import ac.shard.panel.PanelSessionService
+import ac.shard.panel.PendingLinkStore
+import ac.shard.panel.ServerLink
+import ac.shard.panel.SessionRunner
 import ac.shard.platform.scheduler.PlatformScheduler
 import ac.shard.platform.scheduler.PlatformSchedulerFactory
 import ac.shard.player.ExemptManager
@@ -136,6 +155,7 @@ fun shardModules(plugin: Shard) =
     checkModule(),
   )
 
+@Suppress("LongMethod")
 private fun coreModule(plugin: Shard) = module {
   single { plugin }
   single { BukkitAudiences.create(plugin) }
@@ -148,6 +168,26 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::CredentialsStore)
   singleOf(::ConfigManager)
   singleOf(::ConnectService)
+  singleOf(::PanelClient)
+  singleOf(::PanelSessionService)
+  single { PendingLinkStore(get<Shard>().dataFolder) }
+  singleOf(::ServerLink)
+  single {
+    val shard = get<Shard>()
+    val folder = shard.dataFolder
+    SessionRunner(
+      shard,
+      get(),
+      EditorSnapshotBuilder(folder),
+      EditorApply(folder, YamlFileStore(folder, shard.logger)),
+      ResultGuard(),
+      get(),
+      mapOf(
+        SessionKind.SETUP to EditorSessionStore(folder, SessionKind.SETUP),
+        SessionKind.EDITOR to EditorSessionStore(folder, SessionKind.EDITOR),
+      ),
+    )
+  }
   singleOf(::TelemetryService)
   singleOf(::LocaleManager)
   singleOf(::DatabaseManager)
@@ -169,7 +209,30 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::PersistentBufferService)
   singleOf(::WorldGuardManager)
   single<RegionProvider> { get<WorldGuardManager>() }
-  single<DamageProcessor> { AiDamageProcessor(get()) }
+
+  single { { get<ConfigManager>().mitigationSettings } }
+  singleOf(::HitStamps)
+  single { MitigationScorer(get(), get()) }
+  single { MitigationSkip(get(), get(), get()) }
+  single { RuleEngine(get(), System::currentTimeMillis) }
+  single { MitigationDamageProcessor() }
+  single<DamageProcessor> { get<MitigationDamageProcessor>() }
+  single { MitigationScoreStore(get(), get(), get()) }
+  single {
+    MitigationRuntime(
+      plugin = get(),
+      playerDataManager = get(),
+      configManager = get(),
+      alertManager = get(),
+      skip = get(),
+      engine = get(),
+      damageProcessor = get(),
+      stamps = get(),
+      debugManager = get(),
+      scheduler = get(),
+      settings = get(),
+    )
+  }
 
   singleOf(::SenderFactory).bind<SenderMapper<CommandSender, Sender>>()
 
@@ -177,7 +240,6 @@ private fun coreModule(plugin: Shard) = module {
 
   singleOf(::PlayerDataManager)
   singleOf(::PacketListener)
-  singleOf(::DamageEvent)
 
   singleOf(::ShardCore)
 }
@@ -242,6 +304,9 @@ private fun adminCommandsModule() = module {
   singleOf(::BrandsCommand).bind<ShardCommand>()
   singleOf(::ConnectCommand).bind<ShardCommand>()
   singleOf(::DataCollectCommand).bind<ShardCommand>()
+  singleOf(::EditorCommand).bind<ShardCommand>()
+  singleOf(::MitigationsCommand).bind<ShardCommand>()
+  singleOf(::SetupCommand).bind<ShardCommand>()
   singleOf(::ExemptCommand).bind<ShardCommand>()
   singleOf(::PunishCommand).bind<ShardCommand>()
   singleOf(::ReloadCommand).bind<ShardCommand>()
@@ -261,10 +326,12 @@ private fun infoCommandsModule() = module {
 }
 
 private fun checkModule() = module {
-  single<CheckFactory>(named("action")) { CheckFactory { player -> ActionManager(player) } }
+  single<CheckFactory>(named("action")) {
+    CheckFactory { player -> ActionManager(player, get(), get()) }
+  }
   single<CheckFactory>(named("ai")) {
     CheckFactory { player ->
-      AiCheck(player, get(), get(), get(), get(), get(), get(), get(), get())
+      AiCheck(player, get(), get(), get(), get(), get(), get(), get(), get(), get())
     }
   }
   single<CheckFactory>(named("collector")) {
