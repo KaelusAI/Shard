@@ -200,17 +200,16 @@ force-cancel-duplicate-packet: false
 ignore-duplicate-packet-rotation: true
 
 debug:
-  # Switch for all debug output
-  enabled: false
   # Category toggles
   categories:
     probability: false    # AI probability values per check
     api-error:
-      timeout: true              # Request timed out
+      timeout: false             # Request timed out
       network: false             # Connection refused/reset
       rate-limited: false        # HTTP 429
-      service-unavailable: true  # HTTP 503
+      service-unavailable: false # HTTP 503
     persistent-buffer: false  # AI buffer save/restore on quit/login
     rate-limit: false     # Rate limiting events
     worldguard: false     # WorldGuard region checks
     packet-duplication: false  # Mojang packet duplication bugs
+    mitigation: false     # Mitigation tier changes per player
