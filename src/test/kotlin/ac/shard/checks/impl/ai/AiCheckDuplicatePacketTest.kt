@@ -24,6 +24,7 @@ import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
+import ac.shard.mitigation.MitigationScorer
 import ac.shard.player.ShardPlayer
 import ac.shard.region.RegionProvider
 import ac.shard.scheduler.SchedulerService
@@ -70,11 +71,7 @@ class AiCheckDuplicatePacketTest {
 
   @Test
   fun `duplicate flying packet logs only when packet duplication debug is enabled`() {
-    val fixture =
-      createFixture(
-        debugEnabled = true,
-        enabledCategories = setOf(DebugCategory.PACKET_DUPLICATION),
-      )
+    val fixture = createFixture(enabledCategories = setOf(DebugCategory.PACKET_DUPLICATION))
 
     fixture.check.onPacketReceive(fixture.event)
 
@@ -88,10 +85,7 @@ class AiCheckDuplicatePacketTest {
     }
   }
 
-  private fun createFixture(
-    debugEnabled: Boolean = false,
-    enabledCategories: Set<DebugCategory> = emptySet(),
-  ): Fixture {
+  private fun createFixture(enabledCategories: Set<DebugCategory> = emptySet()): Fixture {
     val logger = mockk<Logger>(relaxed = true)
     val plugin = mockk<Shard>(relaxed = true)
     every { plugin.logger } returns logger
@@ -108,7 +102,6 @@ class AiCheckDuplicatePacketTest {
     every { configManager.aiBufferDecrease } returns 0.25
     every { configManager.suspiciousAlertsBuffer } returns 25.0
     every { configManager.enabledDebugCategories } returns enabledCategories
-    every { configManager.isDebugEnabled() } returns debugEnabled
 
     val packetStateData = PacketStateData().apply { lastPacketWasOnePointSeventeenDuplicate = true }
     val player = mockk<Player>(relaxed = true)
@@ -133,6 +126,7 @@ class AiCheckDuplicatePacketTest {
         damageProcessor = mockk<DamageProcessor>(relaxed = true),
         debugManager = debugManager,
         scheduler = mockk<SchedulerService>(relaxed = true),
+        mitigationScorer = mockk<MitigationScorer>(relaxed = true),
       )
 
     return Fixture(check, aiService, event, logger)

@@ -28,6 +28,7 @@ import ac.shard.debug.DebugManager
 import ac.shard.entity.CompensatedEntities
 import ac.shard.entity.PacketEntity
 import ac.shard.entity.types.PacketEntitySelf
+import ac.shard.mitigation.MitigationScorer
 import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.CombatState
@@ -96,7 +97,6 @@ class AiCheckRidingExemptionTest {
     every { configManager.aiStep } returns 1
     every { configManager.aiContinuous } returns false
     every { configManager.isAiWorldGuardEnabled() } returns false
-    every { configManager.isDebugEnabled() } returns false
 
     val packetStateData = PacketStateData()
     val player = mockk<Player>(relaxed = true)
@@ -142,6 +142,7 @@ class AiCheckRidingExemptionTest {
         damageProcessor = mockk<DamageProcessor>(relaxed = true),
         debugManager = DebugManager(plugin, configManager),
         scheduler = scheduler,
+        mitigationScorer = mockk<MitigationScorer>(relaxed = true),
       )
 
     return Fixture(check, aiService, event, ridingHolder)

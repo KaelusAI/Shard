@@ -25,6 +25,7 @@ import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
+import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
@@ -120,6 +121,7 @@ class PlayerDataManagerTest {
         eventBus = mockk<ShardEventBus>(relaxed = true),
         databaseManager = mockk<DatabaseManager>(relaxed = true),
         persistentBufferService = mockk<PersistentBufferService>(relaxed = true),
+        mitigationScoreStore = mockk<MitigationScoreStore>(relaxed = true),
       )
 
     return Fixture(

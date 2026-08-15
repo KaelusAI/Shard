@@ -96,16 +96,10 @@ class TickRingBufferTest {
   @Test
   fun `U5 multi-wrap`() {
     val ring = TickRingBuffer(3)
-    ring.pushTick(a)
-    ring.pushTick(b)
-    ring.pushTick(c)
-    assertEquals(expected(a, b, c).toList(), ring.snapshotFloats().toList())
+    listOf(a, b, c, d, e, f, g, h).forEach { ring.pushTick(it) }
 
-    ring.pushTick(d)
-    assertEquals(expected(b, c, d).toList(), ring.snapshotFloats().toList())
-
-    ring.pushTick(e)
-    assertEquals(expected(c, d, e).toList(), ring.snapshotFloats().toList())
+    assertEquals(3, ring.count)
+    assertEquals(expected(f, g, h).toList(), ring.snapshotFloats().toList())
   }
 
   @Test

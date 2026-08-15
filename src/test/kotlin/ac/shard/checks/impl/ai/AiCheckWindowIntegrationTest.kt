@@ -28,6 +28,7 @@ import ac.shard.debug.DebugManager
 import ac.shard.entity.CompensatedEntities
 import ac.shard.entity.PacketEntity
 import ac.shard.entity.types.PacketEntitySelf
+import ac.shard.mitigation.MitigationScorer
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.CombatState
 import ac.shard.player.state.MovementState
@@ -103,7 +104,6 @@ class AiCheckWindowIntegrationTest {
     every { configManager.aiStep } returns step
     every { configManager.aiContinuous } returns continuous
     every { configManager.isAiWorldGuardEnabled() } returns false
-    every { configManager.isDebugEnabled() } returns false
 
     val packetStateData = PacketStateData()
     val player = mockk<Player>(relaxed = true)
@@ -151,6 +151,7 @@ class AiCheckWindowIntegrationTest {
         damageProcessor = mockk<DamageProcessor>(relaxed = true),
         debugManager = DebugManager(plugin, configManager),
         scheduler = scheduler,
+        mitigationScorer = mockk<MitigationScorer>(relaxed = true),
       )
 
     return Fixture(

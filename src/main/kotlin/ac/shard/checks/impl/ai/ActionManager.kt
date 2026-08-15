@@ -21,17 +21,32 @@ import ac.shard.checks.AbstractCheck
 import ac.shard.checks.CheckData
 import ac.shard.checks.CheckFactory
 import ac.shard.checks.type.PacketCheck
+import ac.shard.database.DatabaseManager
 import ac.shard.entity.PacketEntity
 import ac.shard.player.ShardPlayer
+import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
 import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAttack
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity
 
 @CheckData(name = "ActionManager_Internal")
-class ActionManager(player: ShardPlayer) : AbstractCheck(player), PacketCheck {
+class ActionManager(
+  player: ShardPlayer,
+  private val databaseManager: DatabaseManager,
+  private val scheduler: SchedulerService,
+) : AbstractCheck(player), PacketCheck {
   interface Factory : CheckFactory {
     override fun create(player: ShardPlayer): ActionManager
+  }
+
+  fun onAttack() {
+    shardPlayer.combat.ticksSinceAttack = 0
+    if (shardPlayer.combat.hasAttacked) return
+    shardPlayer.combat.hasAttacked = true
+    val attacker = shardPlayer.uuid
+    val now = System.currentTimeMillis()
+    scheduler.runAsync { databaseManager.database.recordAttack(attacker, now) }
   }
 
   override fun onPacketReceive(event: PacketReceiveEvent) {
@@ -51,7 +66,7 @@ class ActionManager(player: ShardPlayer) : AbstractCheck(player), PacketCheck {
   private fun handleAttack(entityId: Int) {
     val entity: PacketEntity = shardPlayer.compensatedEntities.getEntity(entityId) ?: return
     if (entity.isPlayer) {
-      shardPlayer.combat.ticksSinceAttack = 0
+      onAttack()
     }
   }
 }

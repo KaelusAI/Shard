@@ -55,7 +55,10 @@ class ActionManagerTest {
     every { shardPlayer.compensatedEntities } returns compensatedEntities
     every { shardPlayer.combat } returns combat
 
-    return Fixture(ActionManager(shardPlayer), combat)
+    return Fixture(
+      ActionManager(shardPlayer, mockk(relaxed = true), mockk(relaxed = true)),
+      combat,
+    )
   }
 
   private fun interactEvent(action: WrapperPlayClientInteractEntity.InteractAction) {

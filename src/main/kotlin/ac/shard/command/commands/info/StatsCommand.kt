@@ -93,6 +93,7 @@ class StatsCommand(
     val totalFlags: Int,
     val flagsPerHour: String,
     val uniquePlayers: Int,
+    val attackers: Int,
     val uniqueViolators: Int,
     val violatorPercent: String,
     val onlinePlayers: Int,
@@ -146,6 +147,7 @@ class StatsCommand(
 
     scheduler.runAsync {
       val uniquePlayers = db.countUniquePlayersSince(since)
+      val attackers = db.countAttackersSince(since)
       val totalFlags = db.getLogCount(since)
       val uniqueViolators = db.getUniqueViolatorsSince(since)
       val snapshot =
@@ -154,8 +156,9 @@ class StatsCommand(
           totalFlags = totalFlags,
           flagsPerHour = formatPerHour(totalFlags, period.hours),
           uniquePlayers = uniquePlayers,
+          attackers = attackers,
           uniqueViolators = uniqueViolators,
-          violatorPercent = formatPercent(uniqueViolators, uniquePlayers),
+          violatorPercent = formatPercent(uniqueViolators, maxOf(attackers, uniqueViolators)),
           onlinePlayers = onlinePlayers,
           suspiciousNow = suspiciousNow,
           suspiciousPercent = formatPercent(suspiciousNow, onlinePlayers),
@@ -202,6 +205,8 @@ class StatsCommand(
         Message.STATS_PLAYERS,
         "players",
         snapshot.uniquePlayers.toString(),
+        "attackers",
+        snapshot.attackers.toString(),
         "period",
         snapshot.period.label,
       )
@@ -211,6 +216,8 @@ class StatsCommand(
             Message.STATS_PLAYERS_HOVER,
             "players",
             snapshot.uniquePlayers.toString(),
+            "attackers",
+            snapshot.attackers.toString(),
             "period",
             snapshot.period.label,
           )
@@ -235,6 +242,8 @@ class StatsCommand(
             snapshot.violatorPercent,
             "period",
             snapshot.period.label,
+            "attackers",
+            snapshot.attackers.toString(),
           )
         )
       )
