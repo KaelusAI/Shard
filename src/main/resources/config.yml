@@ -2,7 +2,7 @@
 # Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
 
 # Do not change this value manually.
-config-version: 3
+config-version: 4
 
 # Locale: en, ru
 locale: "en"
@@ -158,23 +158,23 @@ redis:
   timeout-seconds: 10
 
 # Mirror alerts between servers that share the same Redis.
-cross-server:
+network:
   # Show alerts from other servers, and send this server's alerts to them.
   # Requires redis.enabled above.
   enabled: false
   # Name shown as the origin tag for alerts coming from this server, e.g. [Lobby].
-  server-name: "server-1"
-  # Redis pub/sub channel. Every server in the network must use the same value.
+  name: "server-1"
+  # Servers sharing a channel see each other's alerts. One value per network.
   channel: "shard:alerts"
-  # Which alert types to mirror across servers.
-  alerts:
+  # What is shared with the rest of the network.
+  share:
     # Violation flags (rule breakers).
-    regular: true
+    alerts: true
     # Suspicious-buffer alerts. When on, this also shares the live suspicious-players list
     # (/shard suspicious list|top) across servers. Nothing is written to Redis unless this is on;
     # list entries carry a TTL, so offline servers and players that calm down drop off by themselves.
     suspicious: true
-  # Tuning for the shared suspicious-players list (only used when cross-server.alerts.suspicious is on).
+  # Only used when share.suspicious is on.
   suspicious-sync:
     # How long an entry survives in Redis without a refresh, in seconds.
     ttl-seconds: 30

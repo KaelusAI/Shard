@@ -81,12 +81,12 @@ class CrossServerAlertServiceTest {
     val service =
       service(
         """
-        cross-server:
+        network:
           enabled: true
-          server-name: "Lobby"
+          name: "Lobby"
           channel: "test:alerts"
-          alerts:
-            regular: true
+          share:
+            alerts: true
             suspicious: false
         """
           .trimIndent(),
@@ -108,7 +108,7 @@ class CrossServerAlertServiceTest {
   fun `does nothing when cross-server is disabled`() {
     val redis = mockk<RedisManager>(relaxed = true)
     val alerts = mockk<AlertManager>(relaxed = true)
-    val service = service("cross-server:\n  enabled: false\n", redis, alerts)
+    val service = service("network:\n  enabled: false\n", redis, alerts)
 
     service.start()
     service.publish(AlertType.REGULAR, Component.text("a"))
@@ -124,7 +124,7 @@ class CrossServerAlertServiceTest {
     val redis = mockk<RedisManager>(relaxed = true)
     every { redis.isAvailable } returns false
     val alerts = mockk<AlertManager>(relaxed = true)
-    val service = service("cross-server:\n  enabled: true\n", redis, alerts)
+    val service = service("network:\n  enabled: true\n", redis, alerts)
 
     service.start()
     service.publish(AlertType.REGULAR, Component.text("a"))
@@ -147,12 +147,12 @@ class CrossServerAlertServiceTest {
     val service =
       service(
         """
-        cross-server:
+        network:
           enabled: true
-          server-name: "Lobby"
+          name: "Lobby"
           channel: "test:alerts"
-          alerts:
-            regular: true
+          share:
+            alerts: true
             suspicious: true
         """
           .trimIndent(),
@@ -183,7 +183,7 @@ class CrossServerAlertServiceTest {
     val alerts = mockk<AlertManager>(relaxed = true)
     val delivered = slot<Component>()
     every { alerts.deliver(capture(delivered), any()) } just runs
-    val service = service("cross-server:\n  enabled: true\n", redis, alerts)
+    val service = service("network:\n  enabled: true\n", redis, alerts)
     service.start()
 
     val hostile =
@@ -208,7 +208,7 @@ class CrossServerAlertServiceTest {
     val incoming = slot<(String) -> Unit>()
     every { redis.subscribe(any(), capture(incoming)) } just runs
     val alerts = mockk<AlertManager>(relaxed = true)
-    val service = service("cross-server:\n  enabled: true\n", redis, alerts)
+    val service = service("network:\n  enabled: true\n", redis, alerts)
     service.start()
 
     incoming.captured.invoke("not even json")

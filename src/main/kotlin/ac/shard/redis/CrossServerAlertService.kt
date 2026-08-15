@@ -50,19 +50,19 @@ class CrossServerAlertService(
 
   fun start() {
     val config = configManager.config
-    if (!config.getBoolean("cross-server.enabled", false)) return
+    if (!config.getBoolean("network.enabled", false)) return
 
-    serverName = config.getString("cross-server.server-name", DEFAULT_SERVER_NAME)
-    channel = config.getString("cross-server.channel", DEFAULT_CHANNEL)
+    serverName = config.getString("network.name", DEFAULT_SERVER_NAME)
+    channel = config.getString("network.channel", DEFAULT_CHANNEL)
     val types = EnumSet.noneOf(AlertType::class.java)
-    if (config.getBoolean("cross-server.alerts.regular", true)) types.add(AlertType.REGULAR)
-    if (config.getBoolean("cross-server.alerts.suspicious", true)) types.add(AlertType.SUSPICIOUS)
+    if (config.getBoolean("network.share.alerts", true)) types.add(AlertType.REGULAR)
+    if (config.getBoolean("network.share.suspicious", true)) types.add(AlertType.SUSPICIOUS)
     mirroredTypes = types
 
     redisManager.start()
     if (!redisManager.isAvailable) {
       logger.warning(
-        "[CrossServer] cross-server.enabled is true but Redis is unavailable; alerts stay local."
+        "[CrossServer] network.enabled is true but Redis is unavailable; alerts stay local."
       )
       return
     }
