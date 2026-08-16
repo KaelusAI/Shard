@@ -195,6 +195,32 @@ class MitigationsFileTest {
   }
 
   @Test
+  fun `a spike is taxed even after the score has put the player on the watch list`() {
+    val rules = shipped().rules
+
+    fun firstMatch(score: Double, probability: Double) =
+      rules
+        .firstOrNull {
+          it.matches(RuleFacts(score, 0.0, probability, 200L, 0, 0, 600_000L, true))
+        }
+        ?.id
+
+    assertEquals("watching", firstMatch(score = 10.0, probability = 0.50))
+    assertEquals(
+      "tax",
+      firstMatch(score = 10.0, probability = 0.95),
+      "watching has no effects, so letting it swallow a spike would leave the player untouched",
+    )
+    assertEquals("tax", firstMatch(score = 0.0, probability = 0.95))
+
+    val watching = rules.first { it.id == "watching" }
+    assertTrue(
+      watching.releases(RuleFacts(10.0, 0.0, 0.95, 200L, 0, 0, 600_000L, true)),
+      "standing aside also means letting go, or the spike would wait behind it",
+    )
+  }
+
+  @Test
   fun `the standing toll sits last and never takes a player from a real rule`() {
     val settings = shipped()
     val tax = settings.rule("tax")!!

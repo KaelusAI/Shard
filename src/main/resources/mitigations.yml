@@ -120,9 +120,13 @@ rules:
     level: low
     enabled: true
     when:
-      score: { above: 8.0 }
+      all:
+        - score: { above: 8.0 }
+        - not: { probability: { above: 0.90 } }
     until:
-      score: { below: 4.0 }
+      any:
+        - score: { below: 4.0 }
+        - probability: { above: 0.90 }
     then: {}
     timing:
       delay-seconds: 0
