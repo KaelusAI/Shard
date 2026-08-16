@@ -84,7 +84,7 @@ class MitigationsFileTest {
       sustained.matches(facts(score = 30.0, days = 30)),
       "having been mitigated before must not buy anyone extra room either",
     )
-    assertFalse(sustained.matches(facts(score = 22.0, days = 30)), "the score is what decides")
+    assertFalse(sustained.matches(facts(score = 12.0, days = 30)), "the score is what decides")
     assertFalse(sustained.matches(facts(score = 30.0, days = 0).copy(answers = 50L)))
   }
 

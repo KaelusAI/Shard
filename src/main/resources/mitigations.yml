@@ -73,8 +73,13 @@ rules:
     enabled: true
     when:
       all:
-        - probability: { above: 0.80, for-seconds: 18 }
         - answers: { above: 40 }
+        - any:
+            - probability: { above: 0.80, for-seconds: 15 }
+            - all:
+                - probability: { above: 0.80, for-seconds: 10 }
+                - score: { above: 15.0 }
+            - score: { above: 28.0 }
     until:
       all:
         - probability: { below: 0.60 }
@@ -97,13 +102,13 @@ rules:
     when:
       all:
         - answers: { above: 100 }
-        - score: { above: 28.0 }
+        - score: { above: 15.0 }
     until:
-      score: { below: 18.0 }
+      score: { below: 10.0 }
     then:
-      melee: 0.70
-      crystal: 0.70
-      projectile: 0.85
+      melee: 0.60
+      crystal: 0.60
+      projectile: 0.75
     timing:
       delay-seconds: [30, 180]
       starts-in-combat: false
