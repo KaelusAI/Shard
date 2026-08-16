@@ -78,7 +78,7 @@ editor:
   no-session: "<prefix> <color:#f6d365>Сессия редактора не открыта.</color> <gray>Открыть:</gray> <white>/shard editor</white>"
   waiting: "<prefix> <color:#f6d365>В браузере пока ничего не сохранено.</color>"
   expired: "<prefix> <color:#f6d365>Сессия редактора истекла.</color> <gray>Открыть заново:</gray> <white>/shard editor</white>"
-  confirm: "<prefix> <color:#f6d365>Часть изменений ослабляет защиту.</color> <gray>Чтобы применить, выполните за 30 секунд</gray> <white>/shard editor apply confirm</white>"
+  confirm: "<prefix> <color:#f6d365>Часть изменений ослабляет защиту.</color> <gray>Чтобы применить, выполните за 10 минут</gray> <white>/shard editor apply confirm</white>"
   nothing-to-confirm: "<prefix> <color:#f6d365>Подтверждать нечего.</color>"
   applied: "<prefix> <color:#a8ff78>Применено изменений: <changed>.</color><gray> Отменить:</gray> <white>/shard editor undo</white>"
   rejected: "<prefix> <color:#ff4b2b>Ничего не применено:</color> <white><reason></white>"

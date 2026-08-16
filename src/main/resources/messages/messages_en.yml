@@ -78,7 +78,7 @@ editor:
   no-session: "<prefix> <color:#f6d365>No editor session is open.</color> <gray>Start one with</gray> <white>/shard editor</white><gray>.</gray>"
   waiting: "<prefix> <color:#f6d365>Nothing has been saved in the browser yet.</color>"
   expired: "<prefix> <color:#f6d365>The editor session has expired.</color> <gray>Open a new one with</gray> <white>/shard editor</white><gray>.</gray>"
-  confirm: "<prefix> <color:#f6d365>Some of these loosen the check.</color> <gray>Run</gray> <white>/shard editor apply confirm</white> <gray>within 30 seconds to go ahead.</gray>"
+  confirm: "<prefix> <color:#f6d365>Some of these loosen the check.</color> <gray>Run</gray> <white>/shard editor apply confirm</white> <gray>within 10 minutes to go ahead.</gray>"
   nothing-to-confirm: "<prefix> <color:#f6d365>There is nothing waiting to be confirmed.</color>"
   applied: "<prefix> <color:#a8ff78>Applied <changed> change(s).</color> <gray>Undo with</gray> <white>/shard editor undo</white><gray>.</gray>"
   rejected: "<prefix> <color:#ff4b2b>Nothing was applied:</color> <white><reason></white>"

@@ -45,7 +45,7 @@ import org.incendo.cloud.parser.standard.StringParser
 
 private const val PERMISSION = "shard.editor"
 private const val APPLY_PERMISSION = "shard.editor.apply"
-private const val CONFIRM_WINDOW_SECONDS = 30L
+private const val CONFIRM_WINDOW_SECONDS = 600L
 private const val MAX_DIFF_ROWS = 20
 private const val WATCH_MINUTES = 15L
 private const val POLL_SECONDS = 5L
