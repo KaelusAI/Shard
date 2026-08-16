@@ -21,6 +21,7 @@ import org.spongepowered.configurate.CommentedConfigurationNode
 import org.spongepowered.configurate.ConfigurationNode
 import org.spongepowered.configurate.serialize.SerializationException
 
+@Suppress("TooManyFunctions")
 class ConfigView(private val rootNode: CommentedConfigurationNode) {
   fun node(path: String): ConfigurationNode = rootNode.node(*path.split('.').toTypedArray())
 
@@ -35,6 +36,22 @@ class ConfigView(private val rootNode: CommentedConfigurationNode) {
   fun getLong(path: String, def: Long): Long = node(path).getLong(def)
 
   fun getDouble(path: String, def: Double): Double = node(path).getDouble(def)
+
+  fun isSet(path: String): Boolean = !node(path).virtual()
+
+  fun getStringOrNull(path: String): String? = node(path).string
+
+  fun getDoubleList(path: String): List<Double> = numbers(path).map { it.toDouble() }
+
+  fun getLongList(path: String): List<Long> = numbers(path).map { it.toLong() }
+
+  private fun numbers(path: String): List<Number> {
+    return try {
+      node(path).getList(Number::class.java) ?: emptyList()
+    } catch (ex: SerializationException) {
+      emptyList()
+    }
+  }
 
   fun getStringList(path: String): List<String> {
     return try {

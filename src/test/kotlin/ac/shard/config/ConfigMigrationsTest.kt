@@ -164,8 +164,8 @@ class ConfigMigrationsTest {
     assertContains(merged, "gzip: true")
     assertFalse(merged.contains("continuous:"))
     assertContains(merged, "config-version: ${ConfigMigrations.LATEST_VERSION}")
-    assertContains(merged, "# Redis connection, used by cross-server alerting.")
-    assertContains(merged, """server-name: "server-1"""")
+    assertContains(merged, "# Redis connection, used by the network section below.")
+    assertContains(merged, """name: "server-1"""")
     assertContains(merged, """channel: "shard:alerts"""")
     assertContains(merged, "suspicious-sync:")
     assertContains(merged, "ttl-seconds: 30")
@@ -330,5 +330,173 @@ class ConfigMigrationsTest {
         .isEmpty()
     )
     assertContains(ConfigMigrations.forcedDropsForUpgradeFrom(0, "monitor.yml"), "config-version")
+  }
+
+  @Test
+  fun `the cross-server section keeps its values under the network name`(@TempDir dir: Path) {
+    val file = dir.resolve("config.yml").toFile()
+    file.writeText(
+      """
+      cross-server:
+        enabled: true
+        server-name: "PvP"
+        channel: "mine:alerts"
+        alerts:
+          regular: false
+          suspicious: true
+        suspicious-sync:
+          ttl-seconds: 90
+      """
+        .trimIndent()
+    )
+
+    assertTrue(renameCrossServerToNetwork(file))
+
+    val moved = file.readText()
+    assertContains(moved, """name: "PvP"""")
+    assertContains(moved, """channel: "mine:alerts"""")
+    assertContains(moved, "ttl-seconds: 90")
+    assertContains(moved, "share:")
+    assertContains(moved, "alerts: false")
+    assertContains(moved, "suspicious: true")
+    assertFalse(moved.contains("cross-server"))
+    assertFalse(moved.contains("server-name"))
+  }
+
+  @Test
+  fun `the rename leaves the comments and the layout alone`(@TempDir dir: Path) {
+    val file = dir.resolve("config.yml").toFile()
+    val before =
+      """
+      # a section about servers
+      cross-server:
+        # shown as the origin tag
+        server-name: "Lobby"
+        alerts:
+          regular: true   # rule breakers
+          suspicious: false
+
+      other:
+        untouched: true
+      """
+        .trimIndent() + "\n"
+    file.writeText(before)
+
+    assertTrue(renameCrossServerToNetwork(file))
+
+    assertEquals(
+      before
+        .replace("cross-server:", "network:")
+        .replace("server-name:", "name:")
+        .replace("  alerts:", "  share:")
+        .replace("regular:", "alerts:"),
+      file.readText(),
+      "only the key names may change",
+    )
+  }
+
+  @Test
+  fun `the shipped 1_2_1 config survives the upgrade with its comments`(@TempDir dir: Path) {
+    val file = dir.resolve("config.yml").toFile()
+    val legacy =
+      this::class.java.classLoader.getResource("legacy/config-1.2.1.yml")?.readText(Charsets.UTF_8)
+        ?: error("legacy/config-1.2.1.yml is missing")
+    file.writeText(legacy)
+    assertEquals(3, ConfigMigrations.readVersion(file))
+
+    renameCrossServerToNetwork(file)
+    runMigration(file)
+
+    val merged = file.readText()
+    assertContains(merged, "config-version: ${ConfigMigrations.LATEST_VERSION}")
+    assertContains(merged, "flag-overrides-list: true")
+    assertFalse(merged.contains("cross-server"), "the old section name must be gone")
+    assertFalse(merged.contains("enabled: false\n  # Category toggles"), "debug.enabled must go")
+    assertContains(merged, "# Locale: en, ru")
+    assertContains(merged, "# Enable AI check?")
+    assertContains(merged, "# Redis connection, used by the network section below.")
+    assertContains(merged, "probability: false    # AI probability values per check")
+    assertTrue(
+      merged.lineSequence().count { it.trimStart().startsWith("#") } > 40,
+      "an upgrade must not strip the comments out of the file",
+    )
+  }
+
+  @Test
+  fun `the upgrade does not leave debug categories talking`(@TempDir dir: Path) {
+    val file = dir.resolve("config.yml").toFile()
+    val legacy =
+      this::class.java.classLoader.getResource("legacy/config-1.2.1.yml")?.readText(Charsets.UTF_8)
+        ?: error("legacy/config-1.2.1.yml is missing")
+    file.writeText(legacy)
+    assertContains(legacy, "timeout: true", ignoreCase = false)
+
+    renameCrossServerToNetwork(file)
+    runMigration(file)
+
+    val merged = file.readText()
+    assertFalse(
+      merged.contains("timeout: true"),
+      "the master switch used to mute this one, so it must not survive the upgrade switched on",
+    )
+    assertFalse(merged.contains("service-unavailable: true"))
+    assertContains(merged, "timeout: false")
+    assertContains(merged, "service-unavailable: false")
+  }
+
+  @Test
+  fun `the upgrade drops damage reduction and leaves mitigations out of config`(
+    @TempDir dir: Path
+  ) {
+    val file = dir.resolve("config.yml").toFile()
+    val legacy =
+      this::class.java.classLoader.getResource("legacy/config-1.2.1.yml")?.readText(Charsets.UTF_8)
+        ?: error("legacy/config-1.2.1.yml is missing")
+    file.writeText(legacy)
+    assertContains(legacy, "damage-reduction:")
+
+    renameCrossServerToNetwork(file)
+    runMigration(file)
+
+    val merged = file.readText()
+    assertFalse(
+      merged.contains("damage-reduction:"),
+      "the old block drove damage off the raw probability and has no counterpart here",
+    )
+    assertFalse(
+      merged.contains("\nmitigation:"),
+      "mitigations live in their own file, config.yml must not grow a second copy",
+    )
+  }
+
+  @Test
+  fun `a config carrying the in-development mitigation section has it removed`(@TempDir dir: Path) {
+    val file = dir.resolve("config.yml").toFile()
+    file.writeText(
+      """
+      config-version: 3
+      locale: "en"
+      mitigation:
+        enabled: true
+        mitigations:
+          melee:
+            enabled: true
+      """
+        .trimIndent() + "\n"
+    )
+
+    runMigration(file)
+
+    val merged = file.readText()
+    assertFalse(merged.contains("\nmitigation:"), "the whole section goes, not just its keys")
+    assertContains(merged, "config-version: ${ConfigMigrations.LATEST_VERSION}")
+  }
+
+  @Test
+  fun `a config already on the network name is left alone`(@TempDir dir: Path) {
+    val file = dir.resolve("config.yml").toFile()
+    file.writeText("network:\n  enabled: true\n  name: \"PvP\"\n")
+
+    assertFalse(renameCrossServerToNetwork(file))
   }
 }

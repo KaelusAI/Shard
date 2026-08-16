@@ -1,0 +1,152 @@
+# Shard mitigations
+# Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
+
+# Do not change this value manually.
+config-version: 1
+
+enabled: true
+
+skip:
+  bedrock: true
+  # follow-ai reuses the disabled regions from ai.worldguard. Anything else ignores regions.
+  regions: follow-ai
+
+# A window scores (step / sequence) * (logit(p) - logit(neutral)).
+score:
+  neutral: 0.20
+  clamp: [0.02, 0.96]
+  half-life-minutes: 20
+  range: [-6.0, 40.0]
+  # Answers from the model before any rule may apply.
+  min-answers: 5
+  # Idle time eats what for-seconds earned: 0.5 means ten idle seconds cost five.
+  forget-rate: 0.5
+  persist:
+    enabled: true
+    ttl-hours: 72
+    cap-on-restore: 6.0
+
+# First rule that matches wins. A rule above may cut in on a running rule below; one below waits.
+#
+#   level   - none, low, mid or high. What the API and the monitor speak.
+#   when / until - conditions, combined with all: [..], any: [..], not: {..}.
+#     Facts: score, buffer, probability, answers, online-seconds, and two counters of how
+#     often this player has already been mitigated: mitigated-sessions, mitigated-days.
+#     Each takes above and below. probability also takes for-seconds: seconds of movement
+#     scored above that mark, wiped by one answer below it.
+#   then    - melee, projectile, crystal scale damage dealt, 0..1. incoming scales damage
+#             received, 1..4, never lands the killing blow. healing 0..1. cancel is the
+#             share of melee hits the server throws away, 0..1. Instead of numbers a channel may
+#             take scale: { fact, from, to, <channel>: [at from, at to] }.
+#   timing  - delay-seconds (number or [min, max]), starts-in-combat, hold-seconds,
+#             release-jitter-seconds, max-seconds, max-answers. hold-seconds is a floor,
+#             the two max are ceilings that outrank until.
+rules:
+  # Buffer thresholds only mean something next to ai.buffer.* in config.yml.
+  - id: blatant
+    level: high
+    enabled: true
+    when:
+      any:
+        - all:
+            - probability: { above: 0.90, for-seconds: 6 }
+            - buffer: { above: 35.0 }
+        - score: { above: 32.0 }
+    until:
+      all:
+        - probability: { below: 0.75 }
+        - score: { below: 24.0 }
+    then:
+      melee: 0.20
+      crystal: 0.20
+      projectile: 0.35
+      incoming: 1.75
+      healing: 0.45
+      cancel: 0.35
+    timing:
+      delay-seconds: 0
+      starts-in-combat: true
+      hold-seconds: 60
+      release-jitter-seconds: 10
+
+  - id: strong
+    level: mid
+    enabled: true
+    when:
+      all:
+        - answers: { above: 40 }
+        - any:
+            - probability: { above: 0.80, for-seconds: 15 }
+            - all:
+                - probability: { above: 0.80, for-seconds: 10 }
+                - score: { above: 15.0 }
+            - score: { above: 28.0 }
+    until:
+      all:
+        - probability: { below: 0.60 }
+        - score: { below: 18.0 }
+    then:
+      melee: 0.35
+      crystal: 0.35
+      projectile: 0.50
+      incoming: 1.50
+      healing: 0.60
+      cancel: 0.20
+    timing:
+      delay-seconds: [5, 20]
+      starts-in-combat: true
+      hold-seconds: 90
+      release-jitter-seconds: 15
+
+  - id: sustained
+    level: mid
+    enabled: true
+    when:
+      all:
+        - answers: { above: 100 }
+        - score: { above: 15.0 }
+    until:
+      score: { below: 10.0 }
+    then:
+      melee: 0.60
+      crystal: 0.60
+      projectile: 0.75
+    timing:
+      delay-seconds: [15, 45]
+      starts-in-combat: false
+      hold-seconds: 120
+      release-jitter-seconds: 30
+
+  # Only puts a name in /shard mitigations.
+  - id: watching
+    level: low
+    enabled: true
+    when:
+      all:
+        - score: { above: 8.0 }
+        - not: { probability: { above: 0.90 } }
+    until:
+      any:
+        - score: { below: 4.0 }
+        - probability: { above: 0.90 }
+    then: {}
+    timing:
+      delay-seconds: 0
+      starts-in-combat: true
+
+  # No until: ends on the first answer below the mark.
+  - id: tax
+    level: low
+    enabled: true
+    when:
+      probability: { above: 0.90 }
+    then:
+      scale:
+        fact: probability
+        from: 0.90
+        to: 0.96
+        melee: [0.95, 0.80]
+        crystal: [0.95, 0.80]
+        projectile: [0.97, 0.88]
+    timing:
+      starts-in-combat: true

@@ -32,8 +32,10 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private val monitorSettings = ConcurrentHashMap<UUID, MonitorSettings>()
   private val punishmentLevels = ConcurrentHashMap<PunishmentKey, Int>()
   private val playerLogins = ConcurrentHashMap<UUID, Long>()
+  private val playerAttacks = ConcurrentHashMap<UUID, Long>()
   private val aiBuffers = ConcurrentHashMap<UUID, AiBufferState>()
   private val aiLabelBuffers = ConcurrentHashMap<UUID, ConcurrentHashMap<String, AiBufferState>>()
+  private val mitigationScores = ConcurrentHashMap<UUID, StoredScore>()
   private val violations = ArrayDeque<Violation>()
   private val violationsLock = Any()
 
@@ -92,6 +94,13 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
     return playerLogins.values.count { it >= since }
   }
 
+  override fun recordAttack(playerUUID: UUID, timestamp: Long) {
+    playerLogins[playerUUID] = timestamp
+    playerAttacks[playerUUID] = timestamp
+  }
+
+  override fun countAttackersSince(since: Long): Int = playerAttacks.values.count { it >= since }
+
   override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) {
     aiBuffers[playerUUID] = AiBufferState(buffer, updatedAt)
   }
@@ -112,6 +121,12 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
 
   override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> =
     aiLabelBuffers[playerUUID]?.toMap() ?: emptyMap()
+
+  override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) {
+    mitigationScores[playerUUID] = state
+  }
+
+  override fun loadMitigationScore(playerUUID: UUID): StoredScore? = mitigationScores[playerUUID]
 
   override fun getLogCount(since: Long): Int {
     return snapshotViolations().count { violation -> violation.createdAt.toEpochMilli() >= since }

@@ -43,6 +43,10 @@ interface ViolationDatabase {
 
   fun recordLogin(playerUUID: UUID, timestamp: Long)
 
+  fun recordAttack(playerUUID: UUID, timestamp: Long)
+
+  fun countAttackersSince(since: Long): Int
+
   fun countUniquePlayersSince(since: Long): Int
 
   fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long)
@@ -52,6 +56,10 @@ interface ViolationDatabase {
   fun saveAiLabelBuffers(playerUUID: UUID, buffers: Map<String, Double>, updatedAt: Long)
 
   fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState>
+
+  fun saveMitigationScore(playerUUID: UUID, state: StoredScore)
+
+  fun loadMitigationScore(playerUUID: UUID): StoredScore?
 
   fun getLogCount(since: Long): Int
 

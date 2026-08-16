@@ -233,7 +233,7 @@ class MonitorHudSessionTest {
     val session = session(output)
     session.render(listOf(sample(ping = 77)), settings(), builder)
 
-    val frame = session.liveFrame(event(), settings(), builder)
+    val frame = session.liveFrame(event(), settings(), builder, "NONE")
 
     assertEquals("77", frame?.placeholders?.get("ping"))
   }
@@ -244,9 +244,20 @@ class MonitorHudSessionTest {
     val session = session(output)
     session.render(listOf(sample(probability = 0.10)), settings(), builder)
 
-    val frame = session.liveFrame(event(probability = 0.93), settings(), builder)
+    val frame = session.liveFrame(event(probability = 0.93), settings(), builder, "NONE")
 
     assertEquals("93", frame?.placeholders?.get("prob"))
+  }
+
+  @Test
+  fun `a live frame carries the tier the caller looked up`() {
+    val output = RecordingOutput(MonitorOutputPolicy(keepAliveCycles = 0, minIntervalCycles = 0))
+    val session = session(output)
+    session.render(listOf(sample()), settings(), builder)
+
+    val frame = session.liveFrame(event(), settings(), builder, "HIGH")
+
+    assertEquals("HIGH", frame?.placeholders?.get("tier"))
   }
 
   @Test
@@ -255,7 +266,7 @@ class MonitorHudSessionTest {
     val session = session(output)
     session.render(listOf(sample(probability = 0.10)), settings(), builder)
 
-    session.liveFrame(event(probability = 0.93), settings(), builder)
+    session.liveFrame(event(probability = 0.93), settings(), builder, "NONE")
     session.render(listOf(sample(probability = 0.10)), settings(), builder)
 
     assertEquals(1, output.payloads.size)
@@ -276,7 +287,8 @@ class MonitorHudSessionTest {
     val output = RecordingOutput(MonitorOutputPolicy(keepAliveCycles = 0, minIntervalCycles = 0))
     val session = session(output)
 
-    val frame = session.liveFrame(event().copy(playerId = UUID.randomUUID()), settings(), builder)
+    val frame =
+      session.liveFrame(event().copy(playerId = UUID.randomUUID()), settings(), builder, "NONE")
 
     assertNull(frame)
   }

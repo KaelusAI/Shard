@@ -34,16 +34,6 @@ ai:
     multiplier: 100.0
     # The amount subtracted from the buffer when cheat probability is low (<0.1).
     decrease: 1.0
-  damage-reduction:
-    # Enable damage reduction?
-    enabled: true
-    # The probability at which damage reduction will begin.
-    prob: 0.9
-    # Damage multiplier
-    # 0.1: at 100% (1.0) probability, damage will be cut by 10%.
-    # 1.0: at 100% (1.0) probability, damage will be cut by 100%.
-    # 2.0: at 95% (0.95) probability, damage will be cut by 100%.
-    multiplier: 1.0
   worldguard:
     # Enable WorldGuard region checking?
     enabled: true
@@ -51,6 +41,10 @@ ai:
     # skip-detection - nothing is sent to the API, so there is no probability at all
     # skip-punishment - detection keeps running and stays visible, only punishments stop
     mode: skip-detection
+    # When a region has the shard-checks flag and is also listed below:
+    # true - the flag is read first, so setting it to allow re-enables the check there
+    # false - the list is read first, a listed region stays disabled whatever the flag says
+    flag-overrides-list: true
     # Regions where the AI check is disabled, grouped by world name.
     # Use "*" to disable a region in all worlds, "__global__" for a whole world.
     # Example:
@@ -61,9 +55,6 @@ ai:
     #       - "arena"
     #     world_nether:
     #       - "nether_hub"
-    disabled-regions:
-      world:
-        - "spawn"
   backoff:
     # Initial wait time after server error.
     initial-duration: 5
@@ -172,9 +163,15 @@ database:
     password: "password"
     use-ssl: false
 
-# Redis connection, used by cross-server alerting.
+editor:
+  # Every result waits for the server console and nothing is applied from in-game chat.
+  console-only: false
+  # The same, but only for results that add a console command to punishments.yml.
+  console-for-commands: false
+
+# Redis connection, used by the network section below.
 redis:
-  # Enable the Redis connection. Required for cross-server alerts below.
+  # Enable the Redis connection. Required by the network section below.
   enabled: false
   host: "localhost"
   port: 6379
@@ -188,23 +185,23 @@ redis:
   timeout-seconds: 10
 
 # Mirror alerts between servers that share the same Redis.
-cross-server:
+network:
   # Show alerts from other servers, and send this server's alerts to them.
   # Requires redis.enabled above.
   enabled: false
   # Name shown as the origin tag for alerts coming from this server, e.g. [Lobby].
-  server-name: "server-1"
-  # Redis pub/sub channel. Every server in the network must use the same value.
+  name: "server-1"
+  # Servers sharing a channel see each other's alerts. One value per network.
   channel: "shard:alerts"
-  # Which alert types to mirror across servers.
-  alerts:
+  # What is shared with the rest of the network.
+  share:
     # Violation flags (rule breakers).
-    regular: true
+    alerts: true
     # Suspicious-buffer alerts. When on, this also shares the live suspicious-players list
     # (/shard suspicious list|top) across servers. Nothing is written to Redis unless this is on;
     # list entries carry a TTL, so offline servers and players that calm down drop off by themselves.
     suspicious: true
-  # Tuning for the shared suspicious-players list (only used when cross-server.alerts.suspicious is on).
+  # Only used when share.suspicious is on.
   suspicious-sync:
     # How long an entry survives in Redis without a refresh, in seconds.
     ttl-seconds: 30
@@ -230,16 +227,16 @@ force-cancel-duplicate-packet: false
 ignore-duplicate-packet-rotation: true
 
 debug:
-  # Switch for all debug output
-  enabled: false
   # Category toggles
   categories:
     probability: false    # AI probability values per check
     api-error:
-      timeout: true              # Request timed out
+      timeout: false             # Request timed out
       network: false             # Connection refused/reset
       rate-limited: false        # HTTP 429
-      service-unavailable: true  # HTTP 503
+      service-unavailable: false # HTTP 503
     persistent-buffer: false  # AI buffer save/restore on quit/login
     flood: false          # Captures dropped by the packet rate budget
     worldguard: false     # WorldGuard region checks
+    packet-duplication: false  # Mojang packet duplication bugs
+    mitigation: false     # Mitigation tier changes per player

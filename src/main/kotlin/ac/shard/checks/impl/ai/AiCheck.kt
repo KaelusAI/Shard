@@ -36,6 +36,7 @@ import ac.shard.data.AttackWindowTracker
 import ac.shard.data.TickData
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
+import ac.shard.mitigation.MitigationScorer
 import ac.shard.player.ShardPlayer
 import ac.shard.region.RegionCheckMode
 import ac.shard.region.RegionProvider
@@ -47,7 +48,7 @@ import com.github.retrooper.packetevents.PacketEvents
 import java.util.concurrent.ConcurrentHashMap
 
 @CheckData(name = "AI", legacyNames = ["AI (Aim)"])
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class AiCheck(
   shardPlayer: ShardPlayer,
   private val plugin: Shard,
@@ -58,6 +59,7 @@ class AiCheck(
   private val damageProcessor: DamageProcessor,
   private val debugManager: DebugManager,
   private val scheduler: SchedulerService,
+  private val mitigationScorer: MitigationScorer,
 ) : AbstractCheck(shardPlayer), TickCheck, Reloadable {
   private var aiEnabled = false
 
@@ -174,6 +176,12 @@ class AiCheck(
   override fun onDataTick(player: ShardPlayer) {
     if (!aiEnabled) return
 
+    if (shardPlayer.compensatedEntities.self.riding != null) {
+      mitigationScorer.freeze(shardPlayer)
+      return
+    }
+    mitigationScorer.thaw(shardPlayer)
+
     if (ticksSinceLastInference < Int.MAX_VALUE) ticksSinceLastInference++
 
     window.onTick(
@@ -273,6 +281,7 @@ class AiCheck(
 
     val probability = apiResponse.probability
     lastProbability = probability
+    mitigationScorer.record(shardPlayer, probability)
     damageProcessor.applyProbability(shardPlayer, probability)
 
     if (probability > 0.9) {

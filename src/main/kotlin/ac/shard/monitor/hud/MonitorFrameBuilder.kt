@@ -88,6 +88,7 @@ class MonitorFrameBuilder {
       MonitorToken.PROB90 to sample.prob90.toString(),
       MonitorToken.COLLECT to (sample.collect?.status ?: ""),
       MonitorToken.INFERENCE to (sample.inference?.status ?: ""),
+      MonitorToken.TIER to sample.tier,
     )
   }
 

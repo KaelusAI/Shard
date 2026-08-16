@@ -24,7 +24,7 @@ import io.mockk.every
 import io.mockk.mockk
 import java.util.UUID
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 import org.bukkit.entity.Player
 
 class ScoreboardSlotObserverTest {
@@ -34,6 +34,7 @@ class ScoreboardSlotObserverTest {
   private fun registryWithClaim(slot: Int, objective: String): ScoreboardSlotRegistry {
     val registry = ScoreboardSlotRegistry()
     registry.claim(viewerId, SlotClaim(slot, objective) { _, _, _ -> })
+    assertFalse(registry.isIdle())
     return registry
   }
 
@@ -70,10 +71,5 @@ class ScoreboardSlotObserverTest {
     every { event.getPlayer<Any>() } returns viewer
 
     ScoreboardSlotObserver(scheduler, registryWithClaim(2, "obj")).onPacketSend(event)
-  }
-
-  @Test
-  fun `registry stays busy while a claim is held`() {
-    assertTrue(!registryWithClaim(2, "obj").isIdle())
   }
 }

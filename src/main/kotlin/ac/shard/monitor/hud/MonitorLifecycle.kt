@@ -37,8 +37,12 @@ class MonitorLifecycle(
   }
 
   private fun dropWatchers(target: Player) {
-    for (viewerId in index.viewersOf(target.uniqueId)) {
-      val session = hudService.session(viewerId) ?: continue
+    val sessions =
+      index
+        .viewersOf(target.uniqueId)
+        .mapNotNull { viewerId -> hudService.session(viewerId)?.let { viewerId to it } }
+        .filterNot { (_, session) -> session.targetMode.isAuto }
+    for ((viewerId, session) in sessions) {
       session.targets.remove(target.uniqueId)
       if (session.targets.size == 0) {
         hudService.stop(viewerId, session.viewer)

@@ -45,6 +45,7 @@ class MonitorSampler(
       collect = collectInfo(target),
       inference = aiCheck?.let { MonitorInferenceInfo(inferenceStatus(it.inferenceProgress)) },
       leadingLabel = aiCheck?.let { leadingLabel(it.labelBufferSnapshot()) },
+      tier = shardTarget?.mitigation?.appliedTier?.name ?: "NONE",
     )
   }
 

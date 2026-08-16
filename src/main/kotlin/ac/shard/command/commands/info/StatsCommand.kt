@@ -19,6 +19,7 @@ package ac.shard.command.commands.info
 
 import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.command.ShardCommand
+import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
 import ac.shard.database.ViolationDatabase
 import ac.shard.player.PlayerDataManager
@@ -40,7 +41,6 @@ import org.incendo.cloud.parser.standard.StringParser
 import org.incendo.cloud.suggestion.Suggestion
 import org.incendo.cloud.suggestion.SuggestionProvider
 
-private const val SUSPICIOUS_BUFFER_THRESHOLD = 10.0
 private const val PERCENT_MULTIPLIER = 100.0
 private const val WHOLE_PERCENT_DISPLAY_THRESHOLD = 10.0
 private const val WHOLE_NUMBER_REMAINDER = 1.0
@@ -86,12 +86,14 @@ class StatsCommand(
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
   private val playerDataManager: PlayerDataManager,
+  private val configManager: ConfigManager,
 ) : ShardCommand {
   private data class StatsSnapshot(
     val period: StatsPeriod,
     val totalFlags: Int,
     val flagsPerHour: String,
     val uniquePlayers: Int,
+    val attackers: Int,
     val uniqueViolators: Int,
     val violatorPercent: String,
     val onlinePlayers: Int,
@@ -145,6 +147,7 @@ class StatsCommand(
 
     scheduler.runAsync {
       val uniquePlayers = db.countUniquePlayersSince(since)
+      val attackers = db.countAttackersSince(since)
       val totalFlags = db.getLogCount(since)
       val uniqueViolators = db.getUniqueViolatorsSince(since)
       val snapshot =
@@ -153,8 +156,9 @@ class StatsCommand(
           totalFlags = totalFlags,
           flagsPerHour = formatPerHour(totalFlags, period.hours),
           uniquePlayers = uniquePlayers,
+          attackers = attackers,
           uniqueViolators = uniqueViolators,
-          violatorPercent = formatPercent(uniqueViolators, uniquePlayers),
+          violatorPercent = formatPercent(uniqueViolators, maxOf(attackers, uniqueViolators)),
           onlinePlayers = onlinePlayers,
           suspiciousNow = suspiciousNow,
           suspiciousPercent = formatPercent(suspiciousNow, onlinePlayers),
@@ -201,6 +205,8 @@ class StatsCommand(
         Message.STATS_PLAYERS,
         "players",
         snapshot.uniquePlayers.toString(),
+        "attackers",
+        snapshot.attackers.toString(),
         "period",
         snapshot.period.label,
       )
@@ -210,6 +216,8 @@ class StatsCommand(
             Message.STATS_PLAYERS_HOVER,
             "players",
             snapshot.uniquePlayers.toString(),
+            "attackers",
+            snapshot.attackers.toString(),
             "period",
             snapshot.period.label,
           )
@@ -234,6 +242,8 @@ class StatsCommand(
             snapshot.violatorPercent,
             "period",
             snapshot.period.label,
+            "attackers",
+            snapshot.attackers.toString(),
           )
         )
       )
@@ -255,7 +265,7 @@ class StatsCommand(
             "online_players",
             snapshot.onlinePlayers.toString(),
             "suspicious_threshold",
-            formatThreshold(SUSPICIOUS_BUFFER_THRESHOLD),
+            formatThreshold(configManager.suspiciousAlertsBuffer),
           )
         )
       )
@@ -267,7 +277,7 @@ class StatsCommand(
       .asSequence()
       .filter { sp ->
         val check = sp.checkManager.getCheck(AiCheck::class.java)
-        check != null && check.buffer > SUSPICIOUS_BUFFER_THRESHOLD
+        check != null && check.buffer > configManager.suspiciousAlertsBuffer
       }
       .count()
       .toLong()

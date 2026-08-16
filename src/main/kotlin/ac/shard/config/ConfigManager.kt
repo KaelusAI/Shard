@@ -23,10 +23,12 @@
 package ac.shard.config
 
 import ac.shard.Shard
+import ac.shard.config.yaml.YamlPatcher
 import ac.shard.connect.CredentialsStore
 import ac.shard.data.TickData
 import ac.shard.data.TickSchema
 import ac.shard.debug.DebugCategory
+import ac.shard.mitigation.MitigationSettings
 import ac.shard.region.RegionCheckMode
 import java.io.File
 import java.util.EnumSet
@@ -113,14 +115,24 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   var aiBufferDecrease: Double = 0.0
     private set
 
-  private var aiDamageReductionEnabled = false
-  var aiDamageReductionProb: Double = 0.0
+  var editorConsoleOnly: Boolean = false
     private set
 
-  var aiDamageReductionMultiplier: Double = 0.0
+  var editorConsoleForCommands: Boolean = false
+    private set
+
+  var mitigationsConfig: ConfigView = ConfigView(CommentedConfigurationNode.root())
+    private set
+
+  @Volatile
+  var mitigationSettings: MitigationSettings = MitigationsFile.OFF
     private set
 
   private var aiWorldGuardEnabled = false
+
+  var aiWorldGuardFlagOverridesList: Boolean = true
+    private set
+
   var aiDisabledRegions: Map<String, List<String>> = emptyMap()
     private set
 
@@ -190,7 +202,6 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   var ignoreDuplicatePacketRotation: Boolean = true
     private set
 
-  private var debugEnabled = false
   var enabledDebugCategories: Set<DebugCategory> = emptySet()
     private set
 
@@ -291,29 +302,30 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
 
   fun isTelemetryEnabled(): Boolean = telemetryEnabled
 
-  fun isAiDamageReductionEnabled(): Boolean = aiDamageReductionEnabled
-
   fun isAiWorldGuardEnabled(): Boolean = aiWorldGuardEnabled
 
   fun isBedrockExemptEnabled(): Boolean = bedrockExemptEnabled
 
   fun isDisconnectBlacklistedForge(): Boolean = disconnectBlacklistedForge
 
-  fun isDebugEnabled(): Boolean = debugEnabled
-
   private fun loadConfigs() {
     if (!plugin.dataFolder.exists()) {
       plugin.dataFolder.mkdirs()
     }
 
-    config = loadConfig("config.yml", migrate = true)
-    punishments = loadConfig("punishments.yml")
-    monitorConfig = loadConfig("monitor.yml", migrate = true)
+    config = loadConfig("config.yml", config, migrate = true)
+    punishments = loadConfig("punishments.yml", punishments)
+    monitorConfig = loadConfig("monitor.yml", monitorConfig, migrate = true)
+    mitigationsConfig = loadConfig("mitigations.yml", mitigationsConfig, migrate = true)
 
     loadValues()
   }
 
-  private fun loadConfig(fileName: String, migrate: Boolean = false): ConfigView {
+  private fun loadConfig(
+    fileName: String,
+    previous: ConfigView,
+    migrate: Boolean = false,
+  ): ConfigView {
     val file = File(plugin.dataFolder, fileName)
     if (!file.exists()) {
       plugin.saveResource(fileName, false)
@@ -327,16 +339,37 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
       val loader = YamlConfigurationLoader.builder().path(file.toPath()).build()
       ConfigView(loader.load())
     } catch (e: Exception) {
-      plugin.logger.severe("Failed to load $fileName: ${e.message}")
-      ConfigView(CommentedConfigurationNode.root())
+      keepPrevious(fileName, e, previous)
     }
   }
+
+  private fun keepPrevious(fileName: String, error: Exception, previous: ConfigView): ConfigView {
+    plugin.logger.severe("[Config] $fileName could not be parsed: ${error.message}")
+    if (previous.root().empty()) {
+      plugin.logger.severe(
+        "[Config] Shard is running on built-in defaults, which leave the AI check off. " +
+          "Fix $fileName and reload."
+      )
+    } else {
+      plugin.logger.severe("[Config] Keeping the values loaded before this reload.")
+    }
+    return previous
+  }
+
+  private fun present(file: File, path: String): Boolean =
+    runCatching { YamlPatcher.has(YamlPatcher.read(file), path) }.getOrDefault(true)
 
   private fun runMigration(file: File, fileName: String) {
     val updateStream = javaClass.classLoader.getResourceAsStream(fileName) ?: return
 
     val currentVersion = ConfigMigrations.readVersion(file, fileName)
-    val drops = ConfigMigrations.forcedDropsForUpgradeFrom(currentVersion, fileName, file)
+    if (fileName == "config.yml" && renameCrossServerToNetwork(file)) {
+      plugin.logger.info("[Config] Moved cross-server settings into the network section")
+    }
+    val drops =
+      ConfigMigrations.forcedDropsForUpgradeFrom(currentVersion, fileName, file).filter {
+        it == "config-version" || present(file, it)
+      }
 
     val report =
       runCatching {
@@ -366,6 +399,7 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     }
   }
 
+  @Suppress("CyclomaticComplexMethod", "LongMethod")
   private fun loadValues() {
     aiEnabled = config.getBoolean("ai.enabled", false)
     aiServerUrl = config.getString("ai.server", "")
@@ -407,11 +441,15 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     aiBufferMultiplier = config.getDouble("ai.buffer.multiplier", 100.0)
     aiBufferDecrease = config.getDouble("ai.buffer.decrease", 1.0)
 
-    aiDamageReductionEnabled = config.getBoolean("ai.damage-reduction.enabled", true)
-    aiDamageReductionProb = config.getDouble("ai.damage-reduction.prob", 0.9)
-    aiDamageReductionMultiplier = config.getDouble("ai.damage-reduction.multiplier", 1.0)
+    editorConsoleOnly = config.getBoolean("editor.console-only", false)
+    editorConsoleForCommands = config.getBoolean("editor.console-for-commands", false)
+
+    val complaints = mutableListOf<String>()
+    mitigationSettings = MitigationsFile.read(mitigationsConfig.root(), complaints)
+    complaints.forEach { plugin.logger.warning("[Mitigations] $it") }
 
     aiWorldGuardEnabled = config.getBoolean("ai.worldguard.enabled", true)
+    aiWorldGuardFlagOverridesList = config.getBoolean("ai.worldguard.flag-overrides-list", true)
     aiDisabledRegions = loadDisabledRegions()
     regionCheckMode =
       RegionCheckMode.fromConfig(config.getString("ai.worldguard.mode", "skip-detection"))
@@ -471,7 +509,6 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     forceCancelDuplicatePacket = config.getBoolean("force-cancel-duplicate-packet", false)
     ignoreDuplicatePacketRotation = config.getBoolean("ignore-duplicate-packet-rotation", true)
 
-    debugEnabled = config.getBoolean("debug.enabled", false)
     val enabledCategories = EnumSet.noneOf(DebugCategory::class.java)
     for (category in DebugCategory.values()) {
       if (config.getBoolean("debug.categories.${category.configKey}", false)) {

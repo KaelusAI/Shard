@@ -27,6 +27,7 @@ import ac.shard.connect.LinkResult
 import ac.shard.connect.PollResult
 import ac.shard.connect.RevokeResult
 import ac.shard.connect.StartResult
+import ac.shard.connect.isSecurePanelUrl
 import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
@@ -34,7 +35,6 @@ import ac.shard.server.AIServerProvider
 import ac.shard.telemetry.TelemetryService
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
-import java.net.URI
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -223,7 +223,7 @@ class ConnectCommand(
       return
     }
 
-    val canRevoke = configManager.connectPanelUrl.let { it.isNotBlank() && isSecureUrl(it) }
+    val canRevoke = configManager.connectPanelUrl.let { it.isNotBlank() && isSecurePanelUrl(it) }
     val uuid = sender.uniqueId
     val isConsole = sender.isConsole
     scheduler.runAsync {
@@ -388,25 +388,12 @@ class ConnectCommand(
       MessageUtil.sendMessage(sender, Message.CONNECT_DISABLED)
       return false
     }
-    if (!isSecureUrl(url)) {
+    if (!isSecurePanelUrl(url)) {
       MessageUtil.sendMessage(sender, Message.CONNECT_INSECURE_URL)
       return false
     }
     return true
   }
-
-  private fun isSecureUrl(url: String): Boolean =
-    try {
-      val uri = URI.create(url.trim())
-      val host = uri.host?.lowercase()?.removeSurrounding("[", "]")
-      when (uri.scheme?.lowercase()) {
-        "https" -> true
-        "http" -> host == "localhost" || host == "127.0.0.1" || host == "::1"
-        else -> false
-      }
-    } catch (_: Exception) {
-      false
-    }
 
   private fun sendStartMessages(sender: CommandSender, result: StartResult.Started) {
     val base = configManager.connectPanelUrl.trim().trimEnd('/')

@@ -1,0 +1,215 @@
+# Shard main configuration
+# Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
+
+# Do not change this value manually.
+config-version: 3
+
+# Locale: en, ru
+locale: "en"
+
+ai:
+  # Enable AI check?
+  enabled: true
+  # URL for the AI inference API.
+  server: "https://api.shard.ac/v1/inference"
+  # When true, sequences are recorded and sent continuously without requiring combat (hits).
+  continuous: false
+  buffer:
+    # The violation level (VL) at which a flag will be triggered.
+    flag: 50.0
+    # The value to which the buffer is reset after a flag.
+    reset-on-flag: 25.0
+    # The multiplier for increasing the buffer when cheat probability is high (>0.9).
+    # (probability - 0.9) * multiplier
+    multiplier: 100.0
+    # The amount subtracted from the buffer when cheat probability is low (<0.1).
+    decrease: 0.25
+  damage-reduction:
+    # Enable damage reduction?
+    enabled: true
+    # The probability at which damage reduction will begin.
+    prob: 0.9
+    # Damage multiplier
+    # 0.1: at 100% (1.0) probability, damage will be cut by 10%.
+    # 1.0: at 100% (1.0) probability, damage will be cut by 100%.
+    # 2.0: at 95% (0.95) probability, damage will be cut by 100%.
+    multiplier: 1.0
+  worldguard:
+    # Enable WorldGuard region checking?
+    enabled: true
+    # What is disabled inside those regions.
+    # skip-detection - nothing is sent to the API, so there is no probability at all
+    # skip-punishment - detection keeps running and stays visible, only punishments stop
+    mode: skip-detection
+    # Regions where the AI check is disabled, grouped by world name.
+    # Use "*" to disable a region in all worlds, "__global__" for a whole world.
+    # Example:
+    #   disabled-regions:
+    #     "*":
+    #       - "spawn"
+    #     world:
+    #       - "arena"
+    #     world_nether:
+    #       - "nether_hub"
+    disabled-regions:
+      world:
+        - "spawn"
+  backoff:
+    # Initial wait time after server error.
+    initial-duration: 5
+    # Maximum waiting time.
+    max-duration: 60
+    # Multiplier for the time to wait for each subsequent error.
+    multiplier: 2.0
+  batch:
+    # Send inferences in batches
+    enabled: true
+    # Max items per batch (server limit 256)
+    max-size: 32
+    # Flush partial batch after this delay
+    max-delay-ms: 50
+  retry:
+    # Total attempts (including initial)
+    max-attempts: 3
+    initial-delay-ms: 500
+    max-delay-ms: 5000
+    multiplier: 2.0
+    # Jitter (0.0 disables)
+    jitter: 0.25
+  persistent-buffer:
+    enabled: true
+    # Drop saved buffer after N hours offline
+    ttl-hours: 48
+    # Max buffer value that can be restored
+    cap-on-restore: 40.0
+    # Buffer drop per hour offline
+    decay-rate-per-hour: 2.0
+    # Restore as-is within this window
+    disconnect-window-seconds: 300
+    # Skip save below this value
+    save-threshold: 1.0
+
+exemptions:
+  # Skip all checks for Bedrock players connecting through Geyser/Floodgate?
+  # Their movement and combat are not comparable to Java clients, so the AI
+  # check produces meaningless results for them.
+  bedrock: true
+
+connect:
+  # Base URL of the Shard panel (used by "/shard connect").
+  panel-url: "https://app.shard.ac"
+
+telemetry:
+  # Periodically report this server's liveness and online player count so linked
+  # instances show as online in the panel. Sends a small request every 30 seconds.
+  # Set to false to disable all reporting.
+  enabled: true
+  # Shared id for servers that should count as one. They share a single panel
+  # entry showing the total player count.
+  # The SHARD_GROUP_ID environment variable overrides this.
+  group-id: ""
+
+client-brand:
+  # This means it won't broadcast their brand to operators if the brand matches the following regexes
+  ignored-clients:
+    - "^vanilla$"
+    - "^fabric$"
+    - "^lunarclient:v\\d+\\.\\d+\\.\\d+-\\d{4}$"
+    - "^Feather Fabric$"
+    - "^labymod$"
+  # Shard will blacklist specific Forge versions which include built-in Reach hacks (Forge 1.18.2 to 1.19.3).
+  # Setting this option to false will allow said clients to connect to the server. Disable this at your own risk.
+  disconnect-blacklisted-forge-versions: true
+
+alerts:
+  print-to-console: true
+
+history:
+  enabled: true
+
+database:
+  # sqlite, mysql or mariadb
+  type: sqlite
+  sqlite:
+    file: "violations.db"
+  # Legacy section name; used for the MariaDB Connector/J network database mode.
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "shard"
+    username: "root"
+    password: "password"
+    use-ssl: false
+
+# Redis connection, used by cross-server alerting.
+redis:
+  # Enable the Redis connection. Required for cross-server alerts below.
+  enabled: false
+  host: "localhost"
+  port: 6379
+  # Leave empty if your Redis instance has no password.
+  password: ""
+  # Logical database index.
+  database: 0
+  # Connect over TLS (rediss://).
+  ssl: false
+  # Connection and command timeout, in seconds.
+  timeout-seconds: 10
+
+# Mirror alerts between servers that share the same Redis.
+cross-server:
+  # Show alerts from other servers, and send this server's alerts to them.
+  # Requires redis.enabled above.
+  enabled: false
+  # Name shown as the origin tag for alerts coming from this server, e.g. [Lobby].
+  server-name: "server-1"
+  # Redis pub/sub channel. Every server in the network must use the same value.
+  channel: "shard:alerts"
+  # Which alert types to mirror across servers.
+  alerts:
+    # Violation flags (rule breakers).
+    regular: true
+    # Suspicious-buffer alerts. When on, this also shares the live suspicious-players list
+    # (/shard suspicious list|top) across servers. Nothing is written to Redis unless this is on;
+    # list entries carry a TTL, so offline servers and players that calm down drop off by themselves.
+    suspicious: true
+  # Tuning for the shared suspicious-players list (only used when cross-server.alerts.suspicious is on).
+  suspicious-sync:
+    # How long an entry survives in Redis without a refresh, in seconds.
+    ttl-seconds: 30
+    # How often this server republishes its suspicious players, in seconds.
+    refresh-seconds: 10
+
+suspicious:
+  alerts:
+    buffer: 25.0
+
+# Should the duplicate movement packet be cancelled?
+# Mojang fixed this in 1.21. This packet was introduced as part of the bucket desync workaround.
+# See MC-12363. This only matters on very old server versions.
+cancel-duplicate-packet: true
+
+# If true, Shard will always cancel duplicate movement packets even on modern servers.
+# This is more aggressive and can throw away duplicate packet rotation/use-item context.
+force-cancel-duplicate-packet: false
+
+# Whether rotation from duplicate packets should still be processed.
+# When true, Shard ignores yaw/pitch from duplicate movement packets.
+# Set this to false if you want duplicate packets to keep updating rotation.
+ignore-duplicate-packet-rotation: true
+
+debug:
+  # Switch for all debug output
+  enabled: false
+  # Category toggles
+  categories:
+    probability: false    # AI probability values per check
+    api-error:
+      timeout: true              # Request timed out
+      network: false             # Connection refused/reset
+      rate-limited: false        # HTTP 429
+      service-unavailable: true  # HTTP 503
+    persistent-buffer: false  # AI buffer save/restore on quit/login
+    rate-limit: false     # Rate limiting events
+    worldguard: false     # WorldGuard region checks
+    packet-duplication: false  # Mojang packet duplication bugs

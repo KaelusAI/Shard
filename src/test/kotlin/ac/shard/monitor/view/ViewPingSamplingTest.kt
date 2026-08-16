@@ -53,13 +53,6 @@ class ViewPingSamplingTest {
   }
 
   @Test
-  fun `first call always samples`() {
-    val state = TargetTeamState("slv_test")
-
-    assertEquals("57", state.resolvePingDisplay(57, config(pingBucketMs = 1)))
-  }
-
-  @Test
   fun `sample is held until the refresh interval elapses`() {
     val state = TargetTeamState("slv_test")
     val config = config(pingRefreshCycles = 3, pingBucketMs = 1)

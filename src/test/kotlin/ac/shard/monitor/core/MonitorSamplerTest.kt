@@ -20,6 +20,7 @@ package ac.shard.monitor.core
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.data.CollectManager
+import ac.shard.mitigation.MitigationState
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.CombatState
@@ -71,6 +72,7 @@ class MonitorSamplerTest {
     every { playerDataManager.getPlayer(target) } returns shardPlayer
     every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.combat } returns CombatState(0).also { it.damageMultiplier = 0.5 }
+    every { shardPlayer.mitigation } returns MitigationState()
     every { checkManager.getCheck(AiCheck::class.java) } returns null
 
     val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
@@ -91,6 +93,7 @@ class MonitorSamplerTest {
     every { playerDataManager.getPlayer(target) } returns shardPlayer
     every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.combat } returns CombatState(0).also { it.damageMultiplier = 0.25 }
+    every { shardPlayer.mitigation } returns MitigationState()
     every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
     every { aiCheck.lastProbability } returns 0.87
     every { aiCheck.buffer } returns 31.5

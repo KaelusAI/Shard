@@ -26,6 +26,7 @@ import ac.shard.config.ConfigManager
 import ac.shard.damage.DamageProcessor
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
+import ac.shard.mitigation.MitigationScorer
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.CombatState
 import ac.shard.punishment.PunishmentManager
@@ -48,8 +49,7 @@ class AiCheckResponseTest {
 
   @Test
   fun `probability debug log uses fixed formatting only when enabled`() {
-    val fixture =
-      createFixture(debugEnabled = true, enabledCategories = setOf(DebugCategory.AI_PROBABILITY))
+    val fixture = createFixture(enabledCategories = setOf(DebugCategory.AI_PROBABILITY))
 
     fixture.invokeOnResponse(0.42)
 
@@ -80,7 +80,6 @@ class AiCheckResponseTest {
   }
 
   private fun createFixture(
-    debugEnabled: Boolean = false,
     enabledCategories: Set<DebugCategory> = emptySet(),
     aiFlag: Double = 10.0,
     bufferMultiplier: Double = 1.0,
@@ -102,7 +101,6 @@ class AiCheckResponseTest {
     every { configManager.aiBufferDecrease } returns 0.25
     every { configManager.suspiciousAlertsBuffer } returns 25.0
     every { configManager.enabledDebugCategories } returns enabledCategories
-    every { configManager.isDebugEnabled() } returns debugEnabled
 
     val player = mockk<Player>(relaxed = true)
     every { player.name } returns "TestPlayer"
@@ -134,6 +132,7 @@ class AiCheckResponseTest {
         damageProcessor = mockk<DamageProcessor>(relaxed = true),
         debugManager = DebugManager(plugin, configManager),
         scheduler = mockk<SchedulerService>(relaxed = true),
+        mitigationScorer = mockk<MitigationScorer>(relaxed = true),
       )
 
     return Fixture(check, logger, punishmentManager)

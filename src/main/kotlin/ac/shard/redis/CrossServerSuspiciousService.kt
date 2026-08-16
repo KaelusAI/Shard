@@ -51,19 +51,19 @@ class CrossServerSuspiciousService(
   fun start() {
     val config = configManager.config
     if (
-      !config.getBoolean("cross-server.enabled", false) ||
-        !config.getBoolean("cross-server.alerts.suspicious", true)
+      !config.getBoolean("network.enabled", false) ||
+        !config.getBoolean("network.share.suspicious", true)
     ) {
       return
     }
 
-    serverName = config.getString("cross-server.server-name", DEFAULT_SERVER_NAME)
-    val channel = config.getString("cross-server.channel", DEFAULT_CHANNEL)
+    serverName = config.getString("network.name", DEFAULT_SERVER_NAME)
+    val channel = config.getString("network.channel", DEFAULT_CHANNEL)
     keyPrefix = "$channel:suspect"
-    ttlSeconds = config.getLong("cross-server.suspicious-sync.ttl-seconds", DEFAULT_TTL_SECONDS)
+    ttlSeconds = config.getLong("network.suspicious-sync.ttl-seconds", DEFAULT_TTL_SECONDS)
     val refreshSeconds =
       config
-        .getLong("cross-server.suspicious-sync.refresh-seconds", DEFAULT_REFRESH_SECONDS)
+        .getLong("network.suspicious-sync.refresh-seconds", DEFAULT_REFRESH_SECONDS)
         .coerceIn(1L, ttlSeconds.coerceAtLeast(1L))
     ttlSeconds = ttlSeconds.coerceAtLeast(refreshSeconds + 1L)
 
@@ -103,6 +103,8 @@ class CrossServerSuspiciousService(
               buffer = check.buffer,
               ping = player.ping,
               updatedAt = System.currentTimeMillis(),
+              level = shardPlayer.mitigation.matched?.let { shardPlayer.mitigation.tierName },
+              score = shardPlayer.mitigation.score,
             )
           )
         }

@@ -132,6 +132,10 @@ class ResilientViolationDatabaseTest {
 
     override fun countUniquePlayersSince(since: Long): Int = error("db down")
 
+    override fun recordAttack(playerUUID: UUID, timestamp: Long) = error("db down")
+
+    override fun countAttackersSince(since: Long): Int = error("db down")
+
     override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) = error("db down")
 
     override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = error("db down")
@@ -143,6 +147,10 @@ class ResilientViolationDatabaseTest {
     ) = error("db down")
 
     override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = error("db down")
+
+    override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
+
+    override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
 
     override fun getLogCount(since: Long): Int = error("db down")
 
@@ -188,6 +196,10 @@ class ResilientViolationDatabaseTest {
 
     override fun countUniquePlayersSince(since: Long): Int = error("db down")
 
+    override fun recordAttack(playerUUID: UUID, timestamp: Long) = error("db down")
+
+    override fun countAttackersSince(since: Long): Int = error("db down")
+
     override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) = error("db down")
 
     override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = error("db down")
@@ -199,6 +211,10 @@ class ResilientViolationDatabaseTest {
     ) = error("db down")
 
     override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = error("db down")
+
+    override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
+
+    override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
 
     override fun getLogCount(since: Long): Int = error("db down")
 

@@ -1,49 +1,54 @@
-# <check_name> - name of the check
-# <vl> - violations
-# <verbose> - extra information
-# <player> - player name
-# <uuid> - player UUID
-# [alert] - special command to alert
-# [broadcast] message - special command to broadcast message to all players on the server
-# <labels> - labels the model attached to this detection, comma separated, empty when it had none
-# labels: - optional list under a group; the group then only fires when the detection carries one
-#           of those labels. Leave it out and the group fires on every detection of its checks.
-# [reset] - special command to reset the check violations in check group
-# [wait] <time> - wait a duration (e.g. 10s, 40t)
+# Placeholders:
+#   <player>      player name
+#   <uuid>        player UUID
+#   <check_name>  name of the check that flagged
+#   <vl>          how many times this group has flagged the player
+#   <verbose>     extra detail from the check
+#   <labels>      labels the model attached to this detection, comma separated, empty when none
+#
+# Special actions:
+#   [alert]              tell staff with shard.alerts
+#   [log]                write the flag to the database, so it shows in /shard logs
+#   [broadcast] <text>   send a message to everyone online
+#   [reset]              set this group's violation level back to zero
+#   [wait] <time>        pause before the next action (10s, 40t, 500ms)
+#
+# labels: an optional list under a group. The group then only fires when the detection carries
+#         one of those labels; leave it out and the group fires on every detection of its checks.
+#
+# Anything else is run from the console as a command.
+#
+# A step runs when the violation level reaches its number and stays in force until the next
+# step. Levels are kept between sessions until [reset] clears them.
 
 Punishments:
   AI:
     checks:
       - "AI"
     actions:
-      1: # 20 часов
+      1:
         - "[alert]"
         - "[log]"
-        - "[broadcast] <#39FF14>▌ <bold><#F0F0F0><player></bold> <#A9A9A9>был <#39FF14>временно заблокирован</#39FF14> системой <gradient:#39FF14:#ADFF2F>Shard</gradient>.<#A9A9A9>"
-        - "tempban <player> 20h Система Shard сочла ваше поведение необычным."
-      3: # 3 дня
+        - "kick <player> Your combat looked unusual. Reconnect and keep playing."
+      3:
         - "[alert]"
         - "[log]"
-        - "[broadcast] <#39FF14>▌ <bold><#F0F0F0><player></bold> <#A9A9A9>был <#39FF14>временно заблокирован</#39FF14> системой <gradient:#39FF14:#ADFF2F>Shard</gradient>.<#A9A9A9>"
-        - "tempban <player> 3d Система Shard сочла ваше поведение необычным."
-      5: # 7 дней
+        - "tempban <player> 1h Your combat looked unusual."
+      6:
         - "[alert]"
         - "[log]"
-        - "[broadcast] <#39FF14>▌ <bold><#F0F0F0><player></bold> <#A9A9A9>был <#39FF14>временно заблокирован</#39FF14> системой <gradient:#39FF14:#ADFF2F>Shard</gradient>.<#A9A9A9>"
-        - "tempban <player> 7d Система Shard сочла ваше поведение необычным."
-      7: # 14 дней
+        - "tempban <player> 6h Your combat looked unusual."
+      12:
         - "[alert]"
         - "[log]"
-        - "[broadcast] <#39FF14>▌ <bold><#F0F0F0><player></bold> <#A9A9A9>был <#39FF14>временно заблокирован</#39FF14> системой <gradient:#39FF14:#ADFF2F>Shard</gradient>.<#A9A9A9>"
-        - "tempban <player> 14d Система Shard сочла ваше поведение необычным."
-      9: # 45 дней
+        - "tempban <player> 1d Your combat looked unusual."
+      20:
         - "[alert]"
         - "[log]"
-        - "[broadcast] <#39FF14>▌ <bold><#F0F0F0><player></bold> <#A9A9A9>был <#39FF14>временно заблокирован</#39FF14> системой <gradient:#39FF14:#ADFF2F>Shard</gradient>.<#A9A9A9>"
-        - "tempban <player> 45d Система Shard сочла ваше поведение необычным."
-      15: # Навсегда
+        - "tempban <player> 7d Your combat looked unusual."
+      30:
         - "[alert]"
         - "[log]"
-        - "[broadcast] <#FF416C>▌ <bold><#F0F0F0><player></bold> <gray>был <#FF4B2B>навсегда заблокирован</#FF4B2B> системой <gradient:#FF416C:#FF4B2B>Shard</gradient>."
-        - "ban <player> Система Shard сочла ваше поведение необычным."
+        - "[broadcast] <gradient:#39FF14:#ADFF2F>Shard</gradient> <gray>banned</gray> <white><player></white> <gray>for 30 days.</gray>"
+        - "tempban <player> 30d Your combat looked unusual."
         - "[reset]"

@@ -32,6 +32,7 @@ import ac.shard.config.ConfigManager
 import ac.shard.data.CollectManager
 import ac.shard.database.DatabaseManager
 import ac.shard.integration.GeyserUtil
+import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
@@ -57,6 +58,7 @@ constructor(
   private val eventBus: ShardEventBus,
   private val databaseManager: DatabaseManager,
   private val persistentBufferService: PersistentBufferService,
+  private val mitigationScoreStore: MitigationScoreStore,
 ) {
   private val players = ConcurrentHashMap<User, ShardPlayer>()
   private val unsavedBuffers = ConcurrentHashMap.newKeySet<ShardPlayer>()
@@ -90,6 +92,7 @@ constructor(
     scheduler.runAsync {
       if (unsavedBuffers.remove(tracked)) {
         persistentBufferService.saveOnQuit(tracked)
+        mitigationScoreStore.save(tracked)
       }
     }
   }
@@ -105,6 +108,7 @@ constructor(
       val shardPlayer = iterator.next()
       iterator.remove()
       persistentBufferService.saveOnShutdown(shardPlayer)
+      mitigationScoreStore.save(shardPlayer)
     }
   }
 
@@ -188,6 +192,7 @@ constructor(
         val loginTimestamp = System.currentTimeMillis()
         scheduler.runAsync { databaseManager.database.recordLogin(playerUuid, loginTimestamp) }
         persistentBufferService.restoreOnLogin(shardPlayer)
+        mitigationScoreStore.restoreOnLogin(shardPlayer)
 
         enableAlertsOnJoin(player, "shard.alerts", AlertType.REGULAR)
         enableAlertsOnJoin(player, "shard.brand", AlertType.BRAND)

@@ -24,7 +24,6 @@ import java.util.EnumSet
 class DebugManager(private val plugin: Shard, private val configManager: ConfigManager) {
   private val enabledCategories: MutableSet<DebugCategory> =
     EnumSet.noneOf(DebugCategory::class.java)
-  private var debugEnabled = false
 
   init {
     reload()
@@ -33,11 +32,10 @@ class DebugManager(private val plugin: Shard, private val configManager: ConfigM
   fun reload() {
     enabledCategories.clear()
     enabledCategories.addAll(configManager.enabledDebugCategories)
-    debugEnabled = configManager.isDebugEnabled()
   }
 
   fun isEnabled(category: DebugCategory): Boolean {
-    return debugEnabled && enabledCategories.contains(category)
+    return enabledCategories.contains(category)
   }
 
   fun log(category: DebugCategory, message: String) {

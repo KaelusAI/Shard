@@ -23,7 +23,7 @@ import org.flywaydb.core.api.migration.BaseJavaMigration
 import org.flywaydb.core.api.migration.Context
 
 @Suppress("ClassName")
-class V9__monitor_collect_inference : BaseJavaMigration() {
+class V11__monitor_collect_inference : BaseJavaMigration() {
   override fun migrate(context: Context) {
     val connection = context.connection
     val dialect = SqlDialect.fromProductName(connection.metaData.databaseProductName)

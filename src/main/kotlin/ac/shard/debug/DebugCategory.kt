@@ -26,4 +26,6 @@ enum class DebugCategory(val configKey: String) {
   AI_PERSISTENT_BUFFER("persistent-buffer"),
   AI_FLOOD("flood"),
   WORLDGUARD("worldguard"),
+  PACKET_DUPLICATION("packet-duplication"),
+  MITIGATION("mitigation"),
 }

@@ -36,6 +36,7 @@ class MonitorTargetsService(
 ) {
   fun add(viewer: Player, target: Player): TargetChange {
     val session = hudService.session(viewer.uniqueId) ?: return TargetChange.NO_SESSION
+    session.leaveAutoMode()
     return when {
       session.targets.state(target.uniqueId) != null -> TargetChange.ALREADY_WATCHED
       session.targets.size >= capacityFor(session) -> TargetChange.LIMIT_REACHED
@@ -53,6 +54,7 @@ class MonitorTargetsService(
     if (session == null || targetId == null) {
       return if (session == null) TargetChange.NO_SESSION else TargetChange.NOT_WATCHED
     }
+    session.leaveAutoMode()
     session.targets.remove(targetId)
     if (session.targets.size == 0) {
       hudService.stop(viewer.uniqueId, viewer)

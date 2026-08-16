@@ -19,6 +19,7 @@ package ac.shard.command.commands.info
 
 import ac.shard.command.CommandRegister
 import ac.shard.command.requirements.PlayerSenderRequirement
+import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.sender.Sender
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
@@ -79,3 +80,9 @@ internal fun canWatchOthers(viewer: Player): Boolean =
 
 internal fun canWatchMany(viewer: Player): Boolean =
   viewer.hasPermission("shard.monitor.multi") || viewer.hasPermission(MONITOR_PARENT_PERMISSION)
+
+internal fun canWatchAuto(viewer: Player, mode: MonitorTargetMode): Boolean =
+  canWatchOthers(viewer) &&
+    canWatchMany(viewer) &&
+    (viewer.hasPermission("shard.monitor.${mode.key}") ||
+      viewer.hasPermission(MONITOR_PARENT_PERMISSION))

@@ -40,6 +40,8 @@ class AiApiImpl(
         aiCheck.buffer,
         shardPlayer.combat.damageMultiplier,
         aiCheck.prob90,
+        shardPlayer.mitigation.appliedTier.name,
+        shardPlayer.mitigation.score,
       )
     )
   }

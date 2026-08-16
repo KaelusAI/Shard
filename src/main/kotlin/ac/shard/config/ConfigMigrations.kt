@@ -22,11 +22,19 @@ import java.io.File
 internal object ConfigMigrations {
   const val LATEST_VERSION = 4
   const val MONITOR_LATEST_VERSION = 2
+  const val MITIGATIONS_LATEST_VERSION = 1
+
+  private val DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH =
+    listOf("debug/categories/api-error/timeout", "debug/categories/api-error/service-unavailable")
 
   private const val VERSION_WITH_ATTACK_WINDOWS = 4
 
   private val LATEST_BY_FILE =
-    mapOf("config.yml" to LATEST_VERSION, "monitor.yml" to MONITOR_LATEST_VERSION)
+    mapOf(
+      "config.yml" to LATEST_VERSION,
+      "monitor.yml" to MONITOR_LATEST_VERSION,
+      "mitigations.yml" to MITIGATIONS_LATEST_VERSION,
+    )
 
   private val VERSION_RE = Regex("""^\s*config-version:\s*(\d+)""", RegexOption.MULTILINE)
 
@@ -52,6 +60,12 @@ internal object ConfigMigrations {
     if (currentVersion < VERSION_WITH_ATTACK_WINDOWS) {
       drops += "ai/continuous"
       if (file != null && holdsLegacyInferenceUrl(file)) drops += "ai/server"
+    }
+    if (fileName == "config.yml") {
+      drops += "debug/enabled"
+      drops += DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH
+      drops += "ai/damage-reduction"
+      drops += "mitigation"
     }
     return drops
   }

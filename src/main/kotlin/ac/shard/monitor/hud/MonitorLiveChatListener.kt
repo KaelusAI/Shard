@@ -24,6 +24,7 @@ import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.hud.output.ChatOutput
 import ac.shard.monitor.hud.output.LiveSignal
+import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -36,6 +37,7 @@ class MonitorLiveChatListener(
   private val settingsService: MonitorSettingsService,
   private val frameBuilder: MonitorFrameBuilder,
   private val scheduler: SchedulerService,
+  private val playerDataManager: PlayerDataManager,
   private val logger: Logger,
 ) {
   fun register(eventBus: ShardEventBus, pluginContext: Any) {
@@ -59,7 +61,9 @@ class MonitorLiveChatListener(
   private fun deliver(session: MonitorHudSession, event: AiPredictionEvent) {
     try {
       val settings = settingsService.getSettings(session.viewer.uniqueId)
-      val frame = session.liveFrame(event, settings, frameBuilder)
+      val tier =
+        playerDataManager.getPlayer(event.playerId)?.mitigation?.appliedTier?.name ?: "NONE"
+      val frame = session.liveFrame(event, settings, frameBuilder, tier)
       if (frame != null) {
         chatOutput.deliverLive(
           session.context,

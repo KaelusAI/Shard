@@ -21,6 +21,7 @@ import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
+import ac.shard.mitigation.MitigationState
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
@@ -45,11 +46,11 @@ class CrossServerSuspiciousServiceTest {
 
   private val enabledYaml =
     """
-    cross-server:
+    network:
       enabled: true
-      server-name: "Lobby"
+      name: "Lobby"
       channel: "test:alerts"
-      alerts:
+      share:
         suspicious: true
       suspicious-sync:
         ttl-seconds: 30
@@ -96,7 +97,7 @@ class CrossServerSuspiciousServiceTest {
     val scheduler = mockk<SchedulerService>(relaxed = true)
     val service =
       service(
-        "cross-server:\n  enabled: true\n  alerts:\n    suspicious: false\n",
+        "network:\n  enabled: true\n  share:\n    suspicious: false\n",
         redis,
         scheduler,
         mockk(relaxed = true),
@@ -142,6 +143,7 @@ class CrossServerSuspiciousServiceTest {
     every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.uuid } returns uuid
     every { shardPlayer.player } returns bukkitPlayer
+    every { shardPlayer.mitigation } returns MitigationState()
     return shardPlayer
   }
 

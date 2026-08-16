@@ -25,6 +25,7 @@ package ac.shard.packet
 import ac.shard.checks.impl.misc.ClientBrand
 import ac.shard.data.CollectManager
 import ac.shard.data.TickData
+import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
 import ac.shard.entity.PacketEntity
@@ -32,6 +33,7 @@ import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.player.TransactionStamp
 import ac.shard.player.state.TrackingState
+import ac.shard.scheduler.SchedulerService
 import ac.shard.utils.nmsutil.BlockFriction
 import ac.shard.utils.update.RotationUpdate
 import com.github.retrooper.packetevents.PacketEvents
@@ -117,6 +119,8 @@ class PacketListener(
   private val playerDataManager: PlayerDataManager,
   private val collectManager: CollectManager,
   private val debugManager: DebugManager,
+  private val databaseManager: DatabaseManager,
+  private val scheduler: SchedulerService,
 ) : PacketListenerAbstract() {
   override fun onUserLogin(event: UserLoginEvent) {
     val user: com.github.retrooper.packetevents.protocol.player.User? = event.user
@@ -702,6 +706,14 @@ class PacketListener(
     }
   }
 
+  private fun recordFirstAttack(shardPlayer: ShardPlayer) {
+    if (shardPlayer.combat.hasAttacked) return
+    shardPlayer.combat.hasAttacked = true
+    val attacker = shardPlayer.uuid
+    val now = System.currentTimeMillis()
+    scheduler.runAsync { databaseManager.database.recordAttack(attacker, now) }
+  }
+
   private fun handleAttack(targetId: Int, shardPlayer: ShardPlayer) {
     if (targetId == shardPlayer.entityId) return
     val target = shardPlayer.compensatedEntities.getEntity(targetId)
@@ -712,6 +724,7 @@ class PacketListener(
     if (target != null && target.isPlayer) {
       tracking.onAttack(targetId, tracking.sprinting)
       tracking.raiseWindowStart(TickData.START_MELEE_PLAYER)
+      recordFirstAttack(shardPlayer)
       return
     }
     tracking.raiseWindowStart(

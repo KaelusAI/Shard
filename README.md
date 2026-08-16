@@ -1,6 +1,22 @@
 <div align="center">
-  <h1>Shard</h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
+    <img alt="Shard" src=".github/assets/banner-light.svg" width="420">
+  </picture>
+
   <p>An AI-powered, free and open-source anti-cheat for Minecraft servers.</p>
+
+  <p>
+    <a href="README.md"><b>English</b></a>
+    ·
+    <a href="README.ru.md">Русский</a>
+    ·
+    <a href="https://shard.ac">shard.ac</a>
+    ·
+    <a href="https://app.shard.ac">Panel</a>
+    ·
+    <a href="https://discord.gg/kaelus">Discord</a>
+  </p>
 
   <p>
     <a href="https://github.com/KaelusAI/Shard/actions/workflows/ci.yml">
@@ -12,27 +28,26 @@
     <a href="https://discord.gg/kaelus">
       <img alt="Discord" src="https://img.shields.io/discord/1297490292349468715?style=flat&label=Discord&logo=discord&color=7289DA&logoColor=white">
     </a>
-    <a href="https://github.com/KaelusMC/Shard/">
-      <img alt="Views" src="https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2FKaelusMC%2FShard%2FREADME.md&label=Views&countColor=%23555555&style=flat&labelStyle=none">
+    <a href="https://github.com/KaelusAI/Shard/">
+      <img alt="Views" src="https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2FKaelusMC%2FSlothAC%2FREADME.md&label=Views&countColor=%23555555&style=flat&labelStyle=none">
     </a>
-  </p>
-
-  <p>
-    <a href="README.md"><b>English</b></a>
-    ·
-    <a href="README.ru.md">Русский</a>
   </p>
 </div>
 
 ## What Shard is
 
-Shard is an open-source anti-cheat plugin for Minecraft servers.
+Shard is an open-source combat anti-cheat for Minecraft servers. An AI model checks the player's mouse movement and detects killaura and aim assist.
 
 ## Important before you install
 
-Shard's AI check uses the official Shard API. Access is arranged in the [Discord server](https://discord.gg/kaelus).
+Shard's AI check uses the official Shard API. Create an account at [app.shard.ac](https://app.shard.ac) to get access.
 
-To connect a server to the API, run `/shard connect` and authorize it in the [Shard panel](https://panel.shard.ac).
+Two models are available, and you pick one in the panel:
+
+- **Flash** - on every plan including the free tier, no verification required
+- **Pro** - detects more cheats, at a higher price
+
+To connect a server to the API, run `/shard connect` and authorize it in the panel.
 
 If API access is not available yet, disable the AI check for now.
 
@@ -41,7 +56,6 @@ If API access is not available yet, disable the AI check for now.
 - Java 17 or newer to run the plugin
 - JDK 21 or newer if you want to build from source
 - A Paper or Folia-based server
-- A configured AI inference API if the AI check is enabled
 
 ## Installation
 
@@ -58,7 +72,7 @@ If API access is not available yet, disable the AI check for now.
 ## Configuration files
 
 - [`config.yml`](src/main/resources/config.yml): AI, database, Redis and cross-server alerts, alerts, duplicate packet handling
-- [`monitor.yml`](src/main/resources/monitor.yml): formatting for `/shard monitor` and `/shard view`
+- [`monitor.yml`](src/main/resources/monitor.yml): outputs, limits, themes and formatting for `/shard monitor` and `/shard view`
 - [`punishments.yml`](src/main/resources/punishments.yml): punishment rules
 - [`messages/messages_en.yml`](src/main/resources/messages/messages_en.yml): English messages
 - [`messages/messages_ru.yml`](src/main/resources/messages/messages_ru.yml): Russian messages
@@ -94,11 +108,7 @@ cd Shard
 ./gradlew shadowJar
 ```
 
-The main plugin jar will be written to:
-
-```text
-build/libs/Shard-<version>.jar
-```
+The main plugin jar lands in `build/libs/Shard-<version>.jar`.
 
 ## Help, bugs, and discussion
 
@@ -113,8 +123,6 @@ Issue reports should include:
 - relevant config values
 - logs, stack traces, and steps to reproduce
 
-That makes problems easier to reproduce and fix.
-
 ## Credits
 
 Shard has its own, independently developed codebase. That said, some parts of its code are adapted from the open-source [GrimAC](https://github.com/GrimAnticheat/Grim) project, and Shard builds on ideas developed by GrimAC, DefineOutside, and other GrimAC contributors - full credit and thanks to them for their work.
@@ -122,3 +130,6 @@ Shard has its own, independently developed codebase. That said, some parts of it
 ## License
 
 Shard is distributed under the terms of the [GNU General Public License v3.0](LICENSE).
+
+<img src="https://api.visitorbadge.io/api/visitors?path=shard-ac&label=&countColor=%23555555&style=flat&labelStyle=none" alt="" width="1" height="1">
+

@@ -56,6 +56,7 @@ class MonitorSettingsServiceTest {
   private fun service(yaml: String = "", deferAsync: Boolean = false): MonitorSettingsService {
     val loader = YamlConfigurationLoader.builder().source { yaml.reader().buffered() }.build()
     every { configManager.monitorConfig } returns ConfigView(loader.load())
+    every { configManager.suspiciousAlertsBuffer } returns 25.0
     every { databaseManager.database } returns database
     every { scheduler.runAsync(any()) } answers
       {

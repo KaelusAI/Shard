@@ -25,6 +25,7 @@ import ac.shard.damage.DamageProcessor
 import ac.shard.data.TickBuffer
 import ac.shard.data.TickData
 import ac.shard.debug.DebugManager
+import ac.shard.mitigation.MitigationScorer
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.TrackingState
 import ac.shard.region.RegionProvider
@@ -102,6 +103,7 @@ class AiCheckDuplicatePacketTest {
     every { shardPlayer.player } returns player
     every { shardPlayer.tracking } returns tracking
     every { shardPlayer.tickBuffer } returns tickBuffer
+    every { shardPlayer.compensatedEntities.self.riding } returns null
 
     val debugManager = DebugManager(plugin, configManager)
     val check =
@@ -115,6 +117,7 @@ class AiCheckDuplicatePacketTest {
         damageProcessor = mockk<DamageProcessor>(relaxed = true),
         debugManager = debugManager,
         scheduler = mockk<SchedulerService>(relaxed = true),
+        mitigationScorer = mockk<MitigationScorer>(relaxed = true),
       )
 
     return Fixture(check, shardPlayer, tracking)

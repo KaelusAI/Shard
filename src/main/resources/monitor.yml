@@ -13,6 +13,20 @@ limits:
   max-sessions: 32
   # Max viewers watching the same player. 0 = unlimited.
   max-viewers-per-target: 0
+
+# Settings for "/shard monitor all" and "/shard monitor suspicious".
+auto:
+  # Buffer a player needs to enter the suspicious list.
+  # -1 takes suspicious.alerts.buffer from config.yml.
+  suspicious-buffer: -1
+  # A listed player stays until the buffer drops below this share of the value above.
+  exit-ratio: 0.8
+  # How often the watched set is recalculated, in ticks.
+  refresh-ticks: 20
+  # How long a dropped player's data is kept, in ticks, so a return keeps the trend.
+  linger-ticks: 60
+  # Ticks after the last hit during which a player still counts as fighting. They list first.
+  combat-ticks: 100
 view:
   update: 2
   # Scoreboard display slot: 0 = tab list, 1 = sidebar, 2 = below name.
@@ -25,6 +39,7 @@ view:
   fallback:
     prob: "--"
     buffer: "--"
+  # Templates below also accept {tier}: NONE, LOW, MID or HIGH.
   format:
     prob-decimals: 0
     buffer-decimals: 2
@@ -72,7 +87,8 @@ format:
   dmg:
     decimals: 2
     hide-when-default: false
-# Tokens: name, prob, trend, buffer, ping, dmg, prob90
+# Tokens: name, prob, trend, buffer, ping, dmg, prob90, tier
+# tier is the mitigation step the player is on right now: NONE, LOW, MID or HIGH.
 modes:
   compact: [name, prob, trend, buffer, collect, inference]
   full: [name, prob, trend, buffer, ping, dmg, collect, inference]
@@ -152,6 +168,7 @@ theme:
     collect: "<color:#86EFAC>{status} ticks</color> <dark_gray>({label} w{windows} {elapsed})</dark_gray>"
     inference: "<color:#93C5FD>inf {status}</color>"
     prob90: "<color:#F87171>90+ {prob90}</color>"
+    tier: "<color:#FBBF24>{tier}</color>"
     sep: "<dark_gray> • </dark_gray>"
   vivid:
     name: "<gray>@{name}</gray>"
@@ -163,6 +180,7 @@ theme:
     collect: "<white>{status} ticks</white> <gray>({label} w{windows} {elapsed})</gray>"
     inference: "<aqua>inf {status}</aqua>"
     prob90: "<red>90+ {prob90}</red>"
+    tier: "<gold>{tier}</gold>"
     sep: "<dark_gray> • </dark_gray>"
   minimal:
     name: "<gray>@{name}</gray>"
@@ -174,4 +192,5 @@ theme:
     collect: "<gray>{status} ticks</gray>"
     inference: "<gray>inf {status}</gray>"
     prob90: "<gray>90+ {prob90}</gray>"
+    tier: "<gray>{tier}</gray>"
     sep: "<dark_gray> • </dark_gray>"

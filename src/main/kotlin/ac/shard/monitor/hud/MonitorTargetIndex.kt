@@ -30,6 +30,24 @@ class MonitorTargetIndex {
     targets.forEach { viewersByTarget.computeIfAbsent(it) { _ -> newViewerSet() }.add(viewerId) }
   }
 
+  fun update(viewerId: UUID, targets: Set<UUID>): Boolean {
+    val previous = targetsByViewer[viewerId].orEmpty()
+    if (previous == targets) {
+      return false
+    }
+    targetsByViewer[viewerId] = targets
+    (previous - targets).forEach { targetId ->
+      viewersByTarget.computeIfPresent(targetId) { _, viewers ->
+        viewers.remove(viewerId)
+        viewers.ifEmpty { null }
+      }
+    }
+    (targets - previous).forEach {
+      viewersByTarget.computeIfAbsent(it) { _ -> newViewerSet() }.add(viewerId)
+    }
+    return true
+  }
+
   fun clear(viewerId: UUID) {
     val previous = targetsByViewer.remove(viewerId) ?: return
     previous.forEach { targetId ->

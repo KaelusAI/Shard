@@ -32,6 +32,7 @@ data class MonitorSample(
   val collect: MonitorCollectInfo? = null,
   val inference: MonitorInferenceInfo? = null,
   val leadingLabel: MonitorLabelInfo? = null,
+  val tier: String = "NONE",
 )
 
 data class MonitorLabelInfo(val label: String, val buffer: Double) {

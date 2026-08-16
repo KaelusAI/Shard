@@ -67,6 +67,14 @@ internal class ResilientViolationDatabase(
     return execute { database -> database.countUniquePlayersSince(since) }
   }
 
+  override fun recordAttack(playerUUID: UUID, timestamp: Long) {
+    execute { database -> database.recordAttack(playerUUID, timestamp) }
+  }
+
+  override fun countAttackersSince(since: Long): Int {
+    return execute { database -> database.countAttackersSince(since) }
+  }
+
   override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) {
     execute { database -> database.saveAiBuffer(playerUUID, buffer, updatedAt) }
   }
@@ -85,6 +93,14 @@ internal class ResilientViolationDatabase(
 
   override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> {
     return execute { database -> database.loadAiLabelBuffers(playerUUID) }
+  }
+
+  override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) {
+    execute { database -> database.saveMitigationScore(playerUUID, state) }
+  }
+
+  override fun loadMitigationScore(playerUUID: UUID): StoredScore? {
+    return execute { database -> database.loadMitigationScore(playerUUID) }
   }
 
   override fun getLogCount(since: Long): Int {

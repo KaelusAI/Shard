@@ -24,7 +24,7 @@ import org.flywaydb.core.api.migration.Context
 // Rows written before this migration keep an empty labels string. They are not backfilled: a
 // binary model never decided which label a flag belonged to.
 @Suppress("ClassName")
-class V10__multilabel_storage : BaseJavaMigration() {
+class V12__multilabel_storage : BaseJavaMigration() {
   override fun migrate(context: Context) {
     val connection = context.connection
     addViolationLabels(connection)

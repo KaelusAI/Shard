@@ -49,7 +49,7 @@ object ShardFlags {
       }
 
     try {
-      val flag = StateFlag(CHECKS_FLAG_NAME, true)
+      val flag = StateFlag(CHECKS_FLAG_NAME, false)
       registry.register(flag)
       checks = flag
     } catch (conflict: FlagConflictException) {

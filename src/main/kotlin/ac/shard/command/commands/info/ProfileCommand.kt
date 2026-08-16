@@ -31,6 +31,7 @@ import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import ac.shard.utils.TimeUtil
+import java.util.Locale
 import java.util.logging.Logger
 import org.bukkit.Statistic
 import org.bukkit.command.CommandSender
@@ -96,6 +97,12 @@ class ProfileCommand(
       if (aiCheck != null) String.format("%.2f", aiCheck.buffer) else "N/A",
       "ai_probs_90",
       if (aiCheck != null) aiCheck.prob90.toString() else "N/A",
+      "mitigation_tier",
+      shardPlayer.mitigation.tierName,
+      "mitigation_score",
+      String.format(Locale.US, "%.1f", shardPlayer.mitigation.score),
+      "mitigation_active",
+      shardPlayer.mitigation.applied?.id ?: "-",
     )
   }
 }

@@ -31,4 +31,9 @@ enum class AlertType(
     Message.SUSPICIOUS_ALERTS_ENABLED,
     Message.SUSPICIOUS_ALERTS_DISABLED,
   ),
+  MITIGATION(
+    "shard.mitigations.alerts",
+    Message.MITIGATION_ALERTS_ENABLED,
+    Message.MITIGATION_ALERTS_DISABLED,
+  ),
 }

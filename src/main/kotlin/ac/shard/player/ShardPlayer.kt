@@ -31,6 +31,7 @@ import ac.shard.data.CrystalTracker
 import ac.shard.data.TickBuffer
 import ac.shard.entity.CompensatedEntities
 import ac.shard.entity.CompensatedFireworks
+import ac.shard.mitigation.MitigationState
 import ac.shard.player.state.CombatState
 import ac.shard.player.state.MovementState
 import ac.shard.player.state.TrackingState
@@ -105,6 +106,7 @@ constructor(
   val movement: MovementState = MovementState()
   val combat: CombatState = CombatState()
   val tracking: TrackingState = TrackingState()
+  val mitigation: MitigationState = MitigationState()
   val transactions: TransactionTracker = TransactionTracker()
   @Volatile
   var tickBuffer: TickBuffer = TickBuffer(requiredBufferCapacity())
