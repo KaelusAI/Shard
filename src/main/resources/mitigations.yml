@@ -110,7 +110,7 @@ rules:
       crystal: 0.60
       projectile: 0.75
     timing:
-      delay-seconds: [30, 180]
+      delay-seconds: [15, 45]
       starts-in-combat: false
       hold-seconds: 120
       release-jitter-seconds: 30
