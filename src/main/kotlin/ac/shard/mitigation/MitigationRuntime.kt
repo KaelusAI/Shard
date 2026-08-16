@@ -180,7 +180,7 @@ class MitigationRuntime(
         "active",
         state.applied?.id ?: "-",
       ),
-      AlertType.SUSPICIOUS,
+      AlertType.MITIGATION,
     )
   }
 

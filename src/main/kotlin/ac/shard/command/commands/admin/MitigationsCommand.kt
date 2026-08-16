@@ -17,6 +17,8 @@
  */
 package ac.shard.command.commands.admin
 
+import ac.shard.alert.AlertManager
+import ac.shard.alert.AlertType
 import ac.shard.command.ShardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.mitigation.MitigationRuntime
@@ -40,12 +42,14 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 private const val MAX_ROWS = 20
 private const val PERCENT = 100
 
+@Suppress("LongParameterList")
 internal class MitigationsCommand(
   private val playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
   private val skip: MitigationSkip,
   private val runtime: MitigationRuntime,
   private val localeManager: ac.shard.config.LocaleManager,
+  private val alertManager: AlertManager,
 ) : ShardCommand {
 
   override fun register(manager: CommandManager<Sender>) {
@@ -57,6 +61,12 @@ internal class MitigationsCommand(
         .permission("shard.mitigations")
         .required("target", PlayerParser.playerParser())
         .handler(this@MitigationsCommand::explain)
+    }
+    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+      literal("mitigations")
+        .literal("alerts")
+        .permission("shard.mitigations.alerts")
+        .handler(this@MitigationsCommand::alerts)
     }
     manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
       literal("mitigations")
@@ -150,6 +160,11 @@ internal class MitigationsCommand(
       "histogram",
       histogram(shardPlayer),
     )
+  }
+
+  private fun alerts(context: CommandContext<Sender>) {
+    val player = context.sender().player ?: return
+    alertManager.toggle(player, AlertType.MITIGATION, false)
   }
 
   private fun skipText(reason: SkipReason?): String =

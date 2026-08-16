@@ -298,6 +298,10 @@ bukkit {
       description = "Allows resetting a player's mitigation score by hand"
       default = Permission.Default.OP
     }
+    register("shard.mitigations.alerts") {
+      description = "Allows receiving an alert when a player starts being mitigated"
+      default = Permission.Default.FALSE
+    }
     register("shard.disable") {
       description = "Stops every check for the player, nothing is sent to the API"
       default = Permission.Default.FALSE

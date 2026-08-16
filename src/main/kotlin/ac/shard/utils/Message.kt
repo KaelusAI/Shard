@@ -48,6 +48,8 @@ enum class Message(val path: String) {
   MITIGATIONS_DETAIL("mitigations.detail"),
   MITIGATIONS_CLEARED("mitigations.cleared"),
   MITIGATIONS_ALERT("mitigations.alert"),
+  MITIGATION_ALERTS_ENABLED("mitigations.alerts-enabled"),
+  MITIGATION_ALERTS_DISABLED("mitigations.alerts-disabled"),
   MITIGATIONS_SKIP_NONE("mitigations.skip.none"),
   MITIGATIONS_SKIP_TURNED_OFF("mitigations.skip.turned-off"),
   MITIGATIONS_SKIP_EXEMPT("mitigations.skip.exempt"),
