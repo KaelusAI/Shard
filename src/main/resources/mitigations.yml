@@ -83,7 +83,7 @@ rules:
     until:
       all:
         - probability: { below: 0.60 }
-        - score: { below: 12.0 }
+        - score: { below: 18.0 }
     then:
       melee: 0.35
       crystal: 0.35
