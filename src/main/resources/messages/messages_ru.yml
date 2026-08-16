@@ -23,7 +23,7 @@ connect:
   denied: "<prefix> <color:#ff4b2b>Подключение отклонено в панели.</color>"
   expired: "<prefix> <color:#ff4b2b>Код истёк.</color> <gray>Запустите</gray> <white>/shard connect</white> <gray>снова.</gray>"
   error: "<prefix> <color:#ff4b2b>Не удалось подключиться:</color> <white><reason></white>"
-  disconnect-confirm: "<prefix> <color:#f6d365>Это отвяжет сервер и отзовёт его ключ.</color> <gray>Введите</gray> <white>/shard disconnect confirm</white> <gray>в течение 30 сек, чтобы продолжить.</gray>"
+  disconnect-confirm: "<prefix> <color:#f6d365>Это уберёт адрес сервера из панели и сотрёт локальный ключ.</color> <gray>Введите</gray> <white>/shard disconnect confirm</white> <gray>в течение 30 сек, чтобы продолжить.</gray>"
   disconnect-no-pending: "<prefix> <gray>Нечего подтверждать. Сначала введите</gray> <white>/shard disconnect</white><gray>.</gray>"
   disconnect-success: "<prefix> <color:#a8ff78>Отключено.</color> <gray>IP сервера удалён из панели, локальный ключ очищен.</gray>"
   disconnect-local-only: "<prefix> <color:#f6d365>Локальная привязка удалена, но панель недоступна.</color> <gray>Отзовите этот сервер в панели вручную.</gray>"

@@ -23,7 +23,7 @@ connect:
   denied: "<prefix> <color:#ff4b2b>Connection was declined in the panel.</color>"
   expired: "<prefix> <color:#ff4b2b>The code expired.</color> <gray>Run</gray> <white>/shard connect</white> <gray>again.</gray>"
   error: "<prefix> <color:#ff4b2b>Connect failed:</color> <white><reason></white>"
-  disconnect-confirm: "<prefix> <color:#f6d365>This unlinks the server and revokes its key.</color> <gray>Run</gray> <white>/shard disconnect confirm</white> <gray>within 30s to proceed.</gray>"
+  disconnect-confirm: "<prefix> <color:#f6d365>This removes the server's address from the panel and clears the local key.</color> <gray>Run</gray> <white>/shard disconnect confirm</white> <gray>within 30s to proceed.</gray>"
   disconnect-no-pending: "<prefix> <gray>Nothing to confirm. Run</gray> <white>/shard disconnect</white> <gray>first.</gray>"
   disconnect-success: "<prefix> <color:#a8ff78>Disconnected.</color> <gray>This server's IP was removed from the panel and the local key cleared.</gray>"
   disconnect-local-only: "<prefix> <color:#f6d365>Local link removed, but the panel could not be reached.</color> <gray>Revoke this server in the panel manually.</gray>"
