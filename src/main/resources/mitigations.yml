@@ -67,6 +67,7 @@ rules:
       delay-seconds: 0
       starts-in-combat: true
       hold-seconds: 60
+      release-jitter-seconds: 10
 
   - id: strong
     level: mid
@@ -95,6 +96,7 @@ rules:
       delay-seconds: [5, 20]
       starts-in-combat: true
       hold-seconds: 90
+      release-jitter-seconds: 15
 
   - id: sustained
     level: mid
