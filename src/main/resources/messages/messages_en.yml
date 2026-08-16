@@ -47,6 +47,7 @@ mitigations:
   no-data: "<prefix> <color:#ff4b2b>No data for that player (exempt or offline).</color>"
   cleared: "<prefix> <color:#a8ff78>Suspicion for <white><player></white> reset.</color>"
   alert: "<prefix> <color:#FBBF24>Player</color> <white><player></white> <color:#FBBF24>is mitigated</color> <dark_gray>|</dark_gray> <color:#FBBF24><tier></color> <gray>(suspicion</gray> <white><score></white><gray>)</gray> <dark_gray>|</dark_gray> <gray><active></gray>"
+  pending: " -> <white><rule></white> in <time>"
   alerts-enabled: "<prefix> <color:#eef2f3>Mitigation Alerts</color> <color:#a8ff78>enabled</color>."
   alerts-disabled: "<prefix> <color:#eef2f3>Mitigation Alerts</color> <color:#ff4b2b>disabled</color>."
   skip:
@@ -60,7 +61,7 @@ mitigations:
     too-few-answers: "too few model answers"
   detail:
     - "<gradient:#8e9eab:#eef2f3>---- [ Mitigations: <player> ] ----</gradient>"
-    - " <color:#00b4db>Applied tier:</color> <white><tier></white> <gray>(assessed <assessed>)</gray>"
+    - " <color:#00b4db>Applied:</color> <white><applied></white> <dark_gray>·</dark_gray> <white><tier></white><gray><waiting></gray>"
     - " <color:#00b4db>Suspicion:</color> <white><score></white>"
     - " <color:#00b4db>Windows:</color> <white><windows></white>"
     - " <color:#00b4db>Seen again:</color> <white><sessions></white> <gray>sessions,</gray> <white><days></white> <gray>days</gray>"

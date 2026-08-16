@@ -23,6 +23,7 @@ import ac.shard.command.ShardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.mitigation.MitigationRuntime
 import ac.shard.mitigation.MitigationSkip
+import ac.shard.mitigation.MitigationState
 import ac.shard.mitigation.ScoreMath
 import ac.shard.mitigation.SkipReason
 import ac.shard.player.PlayerDataManager
@@ -141,8 +142,10 @@ internal class MitigationsCommand(
       target.name,
       "tier",
       state.tierName,
-      "assessed",
-      state.matched?.id ?: "-",
+      "applied",
+      state.applied?.id ?: "-",
+      "waiting",
+      pendingText(state),
       "score",
       format(state.score),
       "windows",
@@ -165,6 +168,15 @@ internal class MitigationsCommand(
   private fun alerts(context: CommandContext<Sender>) {
     val player = context.sender().player ?: return
     alertManager.toggle(player, AlertType.MITIGATION, false)
+  }
+
+  private fun pendingText(state: MitigationState): String {
+    val left = state.onsetAtMillis - System.currentTimeMillis()
+    if (state.matched == null || state.matched === state.applied || left <= 0L) return ""
+    return localeManager
+      .getRawMessage(Message.MITIGATIONS_PENDING)
+      .replace("<rule>", state.matched?.id.orEmpty())
+      .replace("<time>", TimeUtil.formatDuration(left, localeManager))
   }
 
   private fun skipText(reason: SkipReason?): String =
