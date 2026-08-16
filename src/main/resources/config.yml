@@ -2,7 +2,7 @@
 # Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
 
 # Do not change this value manually.
-config-version: 4
+config-version: 5
 
 # Locale: en, ru
 locale: "en"

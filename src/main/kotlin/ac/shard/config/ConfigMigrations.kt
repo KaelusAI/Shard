@@ -20,7 +20,7 @@ package ac.shard.config
 import java.io.File
 
 internal object ConfigMigrations {
-  const val LATEST_VERSION = 4
+  const val LATEST_VERSION = 5
   const val MONITOR_LATEST_VERSION = 2
   const val MITIGATIONS_LATEST_VERSION = 1
 
