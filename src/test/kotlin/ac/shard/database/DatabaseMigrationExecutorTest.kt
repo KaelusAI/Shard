@@ -29,6 +29,7 @@ import java.util.logging.Logger
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.MigrationVersion
 import org.junit.jupiter.api.Test
 
 private const val TRANSITIONAL_V1_CHECKSUM = 1087069697
@@ -95,6 +96,87 @@ class DatabaseMigrationExecutorTest {
           message.contains("Repairing Flyway schema history automatically.")
         }
       )
+    }
+  }
+
+  @Test
+  fun `renumbers migrations that moved into the 2_0 range and keeps the data`() {
+    val jdbcUrl = createJdbcUrl("shard-executor-renumber")
+    migrateFreshSqlite(jdbcUrl)
+    DriverManager.getConnection(jdbcUrl).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "UPDATE flyway_schema_history SET version = '9' WHERE version = '1000'"
+        )
+        statement.executeUpdate(
+          "UPDATE flyway_schema_history SET version = '10' WHERE version = '1001'"
+        )
+        statement.executeUpdate(
+          "INSERT INTO violations (uuid, player_name, check_name, vl, verbose, " +
+            "created_at_instant, created_at, server) VALUES " +
+            "('11111111-1111-1111-1111-111111111111', 'Tester', 'AI', 3, 'keep me', 1, 1, 'test')"
+        )
+      }
+    }
+
+    createSqliteDataSource(jdbcUrl).use { dataSource ->
+      createExecutor()
+        .migrate(
+          dataSource = dataSource,
+          databaseType = DatabaseType.SQLITE,
+          announceCompat = false,
+        )
+    }
+
+    DriverManager.getConnection(jdbcUrl).use { connection ->
+      val versions = appliedVersions(connection)
+      assertTrue(versions.contains("1000"), "V9 должна была переехать в V1000")
+      assertTrue(versions.contains("1001"), "V10 должна была переехать в V1001")
+      assertTrue(versions.contains("9"), "миграция V9 ветки 1.0 должна примениться")
+      assertTrue(versions.contains("10"), "миграция V10 ветки 1.0 должна примениться")
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT COUNT(*) FROM violations WHERE verbose = 'keep me'").use {
+          it.next()
+          assertEquals(1, it.getInt(1), "данные стенда должны пережить починку")
+        }
+      }
+    }
+  }
+
+  private fun appliedVersions(connection: java.sql.Connection): Set<String> {
+    val versions = mutableSetOf<String>()
+    connection.createStatement().use { statement ->
+      statement.executeQuery("SELECT version FROM flyway_schema_history WHERE success = 1").use {
+        while (it.next()) it.getString("version")?.let(versions::add)
+      }
+    }
+    return versions
+  }
+
+  @Test
+  fun `upgrades a 1_x database to the 2_0 range`() {
+    val jdbcUrl = createJdbcUrl("shard-executor-1x-upgrade")
+    Flyway.configure()
+      .dataSource(jdbcUrl, null, null)
+      .locations("classpath:db/migration/common", "classpath:db/migration/sqlite")
+      .baselineVersion("0")
+      .target(MigrationVersion.fromVersion("10"))
+      .load()
+      .migrate()
+
+    createSqliteDataSource(jdbcUrl).use { dataSource ->
+      createExecutor()
+        .migrate(
+          dataSource = dataSource,
+          databaseType = DatabaseType.SQLITE,
+          announceCompat = false,
+        )
+    }
+
+    DriverManager.getConnection(jdbcUrl).use { connection ->
+      val versions = appliedVersions(connection)
+      assertTrue(versions.contains("1000"), "миграции 2.0 должны накатиться поверх 1.x")
+      assertTrue(versions.contains("1001"))
     }
   }
 

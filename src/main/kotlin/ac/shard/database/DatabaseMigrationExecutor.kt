@@ -26,6 +26,23 @@ private const val SQLITE_BASELINE_LOG =
 
 internal class DatabaseMigrationExecutor(private val environment: DatabaseEnvironment) {
 
+  private fun healMovedMigrations(
+    flyway: org.flywaydb.core.Flyway,
+    dataSource: HikariDataSource,
+    databaseType: DatabaseType,
+    announceCompat: Boolean,
+  ): org.flywaydb.core.Flyway {
+    if (!renumberMovedMigrations(dataSource, environment.logger)) return flyway
+    flyway.repair()
+    return buildMigrationFlyway(
+      environment.classLoader,
+      environment.logger,
+      dataSource,
+      databaseType,
+      announceCompat,
+    )
+  }
+
   fun migrate(
     dataSource: HikariDataSource,
     databaseType: DatabaseType,
@@ -40,6 +57,7 @@ internal class DatabaseMigrationExecutor(private val environment: DatabaseEnviro
         databaseType,
         announceCompat,
       )
+    activeFlyway = healMovedMigrations(activeFlyway, dataSource, databaseType, announceCompat)
     if (requiresExplicitBaseline(dataSource, databaseType)) {
       environment.logger.info(SQLITE_BASELINE_LOG)
       activeFlyway.baseline()
