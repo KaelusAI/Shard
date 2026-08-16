@@ -112,6 +112,7 @@ private fun buildFlyway(
       .dataSource(dataSource)
       .baselineVersion(SQLITE_BASELINE_VERSION)
       .validateOnMigrate(true)
+      .outOfOrder(true)
   if (locations.size == DEFAULT_LOCATIONS_COUNT) {
     configuration.locations(locations[0], locations[1])
   } else {
@@ -144,7 +145,7 @@ private fun hasAppliedMigrationVersion(dataSource: HikariDataSource, version: St
   }
 }
 
-private fun flywaySchemaHistoryTableExists(connection: java.sql.Connection): Boolean {
+internal fun flywaySchemaHistoryTableExists(connection: java.sql.Connection): Boolean {
   connection.metaData.getTables(null, null, "flyway_schema_history", arrayOf("TABLE")).use {
     resultSet ->
     return resultSet.next()
