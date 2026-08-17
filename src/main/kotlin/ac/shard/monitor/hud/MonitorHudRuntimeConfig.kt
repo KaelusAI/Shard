@@ -35,6 +35,7 @@ data class MonitorBehaviorConfig(
   val neutralPing: String,
   val neutralDmg: String,
   val neutralTrend: String,
+  val neutralTier: String,
   val nameMaxLength: Int,
   val nameTruncateSuffix: String,
   val keepAliveCycles: Int,
@@ -50,6 +51,7 @@ data class MonitorBehaviorConfig(
         neutralPing = config.getString("behavior.neutral.ping", DEFAULT_NEUTRAL_PING),
         neutralDmg = config.getString("behavior.neutral.dmg", DEFAULT_NEUTRAL_DMG),
         neutralTrend = config.getString("behavior.neutral.trend", DEFAULT_NEUTRAL_TREND),
+        neutralTier = config.getString("behavior.neutral.tier", ""),
         nameMaxLength =
           config.getInt("behavior.name.max-length", DEFAULT_NAME_MAX_LENGTH).coerceAtLeast(0),
         nameTruncateSuffix =

@@ -37,6 +37,7 @@ data class MonitorFrameRequest(
   val unavailableHeadline: String,
 )
 
+@Suppress("TooManyFunctions")
 class MonitorFrameBuilder {
   fun build(request: MonitorFrameRequest, config: MonitorHudRuntimeConfig): MonitorFrame {
     val sample = request.sample
@@ -83,7 +84,9 @@ class MonitorFrameBuilder {
       MonitorToken.PING to ping,
       MonitorToken.DMG to formatDecimal(sample.damageMultiplier, format.dmgDecimals),
       MonitorToken.PROB90 to sample.prob90.toString(),
-      MonitorToken.TIER to sample.tier,
+      MonitorToken.TIER to tierText(sample.tier, format.tierUppercase),
+      MonitorToken.SCORE to formatDecimal(sample.score, format.scoreDecimals),
+      MonitorToken.RULE to ruleText(sample),
     )
   }
 
@@ -114,6 +117,14 @@ class MonitorFrameBuilder {
       MonitorToken.DMG ->
         if (dmgVisible(settings.showDmg, request.sample.damageMultiplier, config)) themed[token]
         else neutralFor(behavior.neutralDmg, behavior)
+      MonitorToken.TIER ->
+        if (tierVisible(request.sample.tier, config)) themed[token]
+        else neutralFor(behavior.neutralTier, behavior)
+      MonitorToken.SCORE ->
+        themed[token].takeIf {
+          !config.format.scoreHideWhenIdle || request.sample.score > 0.0
+        }
+      MonitorToken.RULE -> themed[token].takeIf { request.sample.rule.isNotBlank() }
       else -> themed[token]
     }
   }
@@ -124,6 +135,24 @@ class MonitorFrameBuilder {
       MonitorNameMode.AUTO -> !selfView
       MonitorNameMode.ALWAYS -> true
     }
+
+  private fun ruleText(sample: MonitorSample): String {
+    if (sample.rule.isBlank()) return ""
+    val since = sample.appliedForMillis
+    return if (since <= 0L) sample.rule else "${sample.rule} ${compactDuration(since)}"
+  }
+
+  private fun compactDuration(millis: Long): String {
+    val seconds = millis / MILLIS_PER_SECOND
+    val minutes = seconds / SECONDS_PER_MINUTE
+    return if (minutes <= 0L) "${seconds}s" else "${minutes}m${seconds % SECONDS_PER_MINUTE}s"
+  }
+
+  private fun tierText(tier: String, uppercase: Boolean): String =
+    if (uppercase) tier else tier.lowercase(java.util.Locale.US)
+
+  private fun tierVisible(tier: String, config: MonitorHudRuntimeConfig): Boolean =
+    !(config.format.tierHideWhenNone && tier == NO_TIER)
 
   private fun dmgVisible(
     showDmg: Boolean,
@@ -168,6 +197,9 @@ class MonitorFrameBuilder {
 
   private companion object {
     const val PERCENT_SCALE = 100.0
+    const val NO_TIER = "NONE"
+    const val MILLIS_PER_SECOND = 1000L
+    const val SECONDS_PER_MINUTE = 60L
     const val DEFAULT_DMG_MULTIPLIER = 1.0
     const val MULTIPLIER_EPSILON = 0.0001
   }

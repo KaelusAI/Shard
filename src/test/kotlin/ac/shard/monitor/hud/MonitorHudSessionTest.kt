@@ -257,7 +257,7 @@ class MonitorHudSessionTest {
 
     val frame = session.liveFrame(event(), settings(), builder, "HIGH")
 
-    assertEquals("HIGH", frame?.placeholders?.get("tier"))
+    assertEquals("high", frame?.placeholders?.get("tier"))
   }
 
   @Test

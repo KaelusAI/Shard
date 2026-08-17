@@ -36,6 +36,19 @@ class MonitorSampler(private val playerDataManager: PlayerDataManager) {
       damageMultiplier = shardTarget?.combat?.damageMultiplier ?: 1.0,
       prob90 = aiCheck?.prob90 ?: 0,
       tier = shardTarget?.mitigation?.appliedTier?.name ?: "NONE",
+      score = shardTarget?.mitigation?.score ?: 0.0,
+      rule = shardTarget?.mitigation?.applied?.id.orEmpty(),
+      appliedForMillis = appliedFor(shardTarget),
     )
+  }
+
+  private fun appliedFor(shardTarget: ac.shard.player.ShardPlayer?): Long {
+    val state = shardTarget?.mitigation
+    val since = state?.appliedAtMillis ?: 0L
+    return if (state?.applied == null || since == 0L) {
+      0L
+    } else {
+      (System.currentTimeMillis() - since).coerceAtLeast(0L)
+    }
   }
 }

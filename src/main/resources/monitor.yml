@@ -83,11 +83,12 @@ format:
   dmg:
     decimals: 2
     hide-when-default: false
-# Tokens: name, prob, trend, buffer, ping, dmg, prob90, tier
+# Tokens: name, prob, trend, buffer, ping, dmg, prob90, tier, score, rule
+# rule carries how long it has been running, e.g. "blatant 2m19s".
 # tier is the mitigation step the player is on right now: NONE, LOW, MID or HIGH.
 modes:
   compact: [name, prob, trend, buffer]
-  full: [name, prob, trend, buffer, ping, dmg]
+  full: [name, prob, trend, buffer, score, ping, dmg, rule]
 # Where the monitor is drawn. A player picks one with "/shard monitor output <kind>".
 # Templates below accept three placeholder forms:
 #   {prob}     the raw formatted value, no colour
@@ -162,7 +163,9 @@ theme:
     ping: "<color:#BFDBFE>Ping {ping}ms</color>"
     dmg: "<color:#FECACA>Dmg {dmg}x</color>"
     prob90: "<color:#F87171>90+ {prob90}</color>"
-    tier: "<color:#FBBF24>{tier}</color>"
+    tier: "<color:#FBBF24>Mit {tier}</color>"
+    score: "<color:#FBBF24>◇ {score}</color>"
+    rule: "<color:#FBBF24>{rule}</color>"
     sep: "<dark_gray> • </dark_gray>"
   vivid:
     name: "<gray>@{name}</gray>"
@@ -172,7 +175,9 @@ theme:
     ping: "<aqua>Ping {ping}ms</aqua>"
     dmg: "<red>Dmg {dmg}x</red>"
     prob90: "<red>90+ {prob90}</red>"
-    tier: "<gold>{tier}</gold>"
+    tier: "<gold>Mit {tier}</gold>"
+    score: "<gold>◇ {score}</gold>"
+    rule: "<gold>{rule}</gold>"
     sep: "<dark_gray> • </dark_gray>"
   minimal:
     name: "<gray>@{name}</gray>"
@@ -182,5 +187,7 @@ theme:
     ping: "<gray>{ping}ms</gray>"
     dmg: "<gray>{dmg}x</gray>"
     prob90: "<gray>90+ {prob90}</gray>"
-    tier: "<gray>{tier}</gray>"
+    tier: "<gray>Mit {tier}</gray>"
+    score: "<gray>◇ {score}</gray>"
+    rule: "<gray>{rule}</gray>"
     sep: "<dark_gray> • </dark_gray>"

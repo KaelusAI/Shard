@@ -27,7 +27,9 @@ enum class MonitorToken(val key: String) {
   PING("ping"),
   DMG("dmg"),
   PROB90("prob90"),
-  TIER("tier");
+  TIER("tier"),
+  SCORE("score"),
+  RULE("rule");
 
   companion object {
     private val BY_KEY = entries.associateBy { it.key }
