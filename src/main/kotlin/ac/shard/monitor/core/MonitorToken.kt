@@ -29,7 +29,9 @@ enum class MonitorToken(val key: String) {
   PROB90("prob90"),
   COLLECT("collect"),
   INFERENCE("inference"),
-  TIER("tier");
+  TIER("tier"),
+  SCORE("score"),
+  RULE("rule");
 
   companion object {
     private val BY_KEY = entries.associateBy { it.key }

@@ -46,6 +46,9 @@ class MonitorSampler(
       inference = aiCheck?.let { MonitorInferenceInfo(inferenceStatus(it.inferenceProgress)) },
       leadingLabel = aiCheck?.let { leadingLabel(it.labelBufferSnapshot()) },
       tier = shardTarget?.mitigation?.appliedTier?.name ?: "NONE",
+      score = shardTarget?.mitigation?.score ?: 0.0,
+      rule = shardTarget?.mitigation?.applied?.id.orEmpty(),
+      appliedForMillis = appliedFor(shardTarget),
     )
   }
 
@@ -72,6 +75,16 @@ class MonitorSampler(
 
   private fun inferenceStatus(progress: IntArray?): String =
     if (progress == null) WAITING else "${progress[0]}/${progress[1]}"
+
+  private fun appliedFor(shardTarget: ac.shard.player.ShardPlayer?): Long {
+    val state = shardTarget?.mitigation
+    val since = state?.appliedAtMillis ?: 0L
+    return if (state?.applied == null || since == 0L) {
+      0L
+    } else {
+      (System.currentTimeMillis() - since).coerceAtLeast(0L)
+    }
+  }
 
   private companion object {
     const val WAITING = "waiting"

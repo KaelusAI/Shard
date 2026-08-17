@@ -28,6 +28,10 @@ data class MonitorFormatConfig(
   val pingMinWidth: Int,
   val dmgDecimals: Int,
   val dmgHideWhenDefault: Boolean,
+  val tierHideWhenNone: Boolean,
+  val tierUppercase: Boolean,
+  val scoreDecimals: Int,
+  val scoreHideWhenIdle: Boolean,
 ) {
   companion object {
     fun from(config: ConfigView): MonitorFormatConfig {
@@ -51,6 +55,10 @@ data class MonitorFormatConfig(
         dmgDecimals =
           config.getInt("format.dmg.decimals", DEFAULT_DMG_DECIMALS).coerceIn(0, MAX_DECIMALS),
         dmgHideWhenDefault = config.getBoolean("format.dmg.hide-when-default", false),
+        tierHideWhenNone = config.getBoolean("format.tier.hide-when-none", true),
+        tierUppercase = config.getBoolean("format.tier.uppercase", false),
+        scoreDecimals = config.getInt("format.score.decimals", 1).coerceIn(0, MAX_DECIMALS),
+        scoreHideWhenIdle = config.getBoolean("format.score.hide-when-idle", true),
       )
     }
 

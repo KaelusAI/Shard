@@ -55,7 +55,9 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
         MonitorToken.PROB90 to "<color:#F87171>90+ {prob90}</color>",
         MonitorToken.COLLECT to "<gray>{status} ticks ({label} w{windows} {elapsed})</gray>",
         MonitorToken.INFERENCE to "<gray>inf {status}</gray>",
-        MonitorToken.TIER to "<color:#FBBF24>{tier}</color>",
+        MonitorToken.TIER to "<color:#FBBF24>Mit {tier}</color>",
+        MonitorToken.SCORE to "<color:#FBBF24>◇ {score}</color>",
+        MonitorToken.RULE to "<color:#FBBF24>{rule}</color>",
       )
   }
 }
