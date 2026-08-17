@@ -27,6 +27,7 @@ import kotlin.random.Random
 import org.bukkit.entity.EnderCrystal
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
+import org.bukkit.entity.TNTPrimed
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
@@ -45,9 +46,8 @@ class MitigationChannelListener(
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
   fun onDamage(event: EntityDamageByEntityEvent) {
     val victim = event.entity as? Player ?: return
-    val source = event.damageSource
-    val direct = source.directEntity
-    val attacker = source.causingEntity as? Player
+    val direct = event.damager
+    val attacker = causingPlayer(direct)
 
     if (attacker == null) {
       scaleStamped(event, victim, direct?.uniqueId)
@@ -82,7 +82,7 @@ class MitigationChannelListener(
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   fun onCrystalHit(event: EntityDamageByEntityEvent) {
     val crystal = event.entity as? EnderCrystal ?: return
-    val attacker = event.damageSource.causingEntity as? Player ?: return
+    val attacker = causingPlayer(event.damager) ?: return
     val shardPlayer = playerDataManager.getPlayer(attacker) ?: return
     stamps.remember(
       crystal.uniqueId,
@@ -90,6 +90,14 @@ class MitigationChannelListener(
       multiplier(shardPlayer, MitigationSettings.CRYSTAL),
     )
   }
+
+  private fun causingPlayer(direct: org.bukkit.entity.Entity?): Player? =
+    when (direct) {
+      is Player -> direct
+      is Projectile -> direct.shooter as? Player
+      is TNTPrimed -> direct.source as? Player
+      else -> null
+    }
 
   private fun multiplierFrom(
     shardPlayer: ShardPlayer,
