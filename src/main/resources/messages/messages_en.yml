@@ -54,6 +54,7 @@ mitigations:
   logs-header: "<prefix> <color:#00b4db>Latest mitigations</color><gray>:</gray>"
   logs-entry: " <dark_gray>[<white><server></white>]</dark_gray> <white><player></white> <dark_gray>|</dark_gray> <color:#FBBF24><rule></color> <gray>(<tier>)</gray> <dark_gray>|</dark_gray> <gray>suspicion</gray> <white><score></white> <dark_gray>|</dark_gray> <gray>lasted</gray> <white><for></white> <dark_gray>|</dark_gray> <gray><ago></gray>"
   logs-empty: "<prefix> <gray>Nothing has been mitigated yet.</gray>"
+  log-off: "<prefix> <gray>The mitigation log is switched off in mitigations.yml.</gray>"
   alerts-enabled: "<prefix> <color:#eef2f3>Mitigation Alerts</color> <color:#a8ff78>enabled</color>."
   alerts-disabled: "<prefix> <color:#eef2f3>Mitigation Alerts</color> <color:#ff4b2b>disabled</color>."
   skip:

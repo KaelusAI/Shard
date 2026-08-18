@@ -54,6 +54,7 @@ mitigations:
   logs-header: "<prefix> <color:#00b4db>Последние срабатывания подавления</color><gray>:</gray>"
   logs-entry: " <dark_gray>[<white><server></white>]</dark_gray> <white><player></white> <dark_gray>|</dark_gray> <color:#FBBF24><rule></color> <gray>(<tier>)</gray> <dark_gray>|</dark_gray> <gray>подозрение</gray> <white><score></white> <dark_gray>|</dark_gray> <gray>длилось</gray> <white><for></white> <dark_gray>|</dark_gray> <gray><ago></gray>"
   logs-empty: "<prefix> <gray>Подавление ещё ни разу не срабатывало.</gray>"
+  log-off: "<prefix> <gray>Журнал подавления выключен в mitigations.yml.</gray>"
   alerts-enabled: "<prefix> <color:#eef2f3>Уведомления о подавлении</color> <color:#a8ff78>включены</color>."
   alerts-disabled: "<prefix> <color:#eef2f3>Уведомления о подавлении</color> <color:#ff4b2b>выключены</color>."
   skip:

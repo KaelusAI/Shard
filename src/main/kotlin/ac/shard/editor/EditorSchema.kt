@@ -173,6 +173,7 @@ private val MONITOR_RULES: Map<String, FieldRule> =
 private val MITIGATION_RULES: Map<String, FieldRule> =
   mapOf(
     "enabled" to BoolRule,
+    "log" to BoolRule,
     "skip/bedrock" to BoolRule,
     "skip/regions" to EnumRule(setOf("follow-ai", "ignore")),
     "score/neutral" to SHARE,
@@ -261,6 +262,7 @@ private val LOOSENS: Map<Pair<String, String>, Loosening> =
     ("monitor.yml" to "limits/max-viewers-per-target") to Loosening.WHEN_LOWER,
     ("monitor.yml" to "auto/suspicious-buffer") to Loosening.WHEN_HIGHER,
     ("mitigations.yml" to "enabled") to Loosening.WHEN_OFF,
+    ("mitigations.yml" to "log") to Loosening.WHEN_OFF,
     ("mitigations.yml" to "skip/bedrock") to Loosening.WHEN_ON,
     ("mitigations.yml" to "score/neutral") to Loosening.WHEN_HIGHER,
     ("mitigations.yml" to "score/half-life-minutes") to Loosening.WHEN_LOWER,

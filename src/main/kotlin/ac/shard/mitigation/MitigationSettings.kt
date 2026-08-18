@@ -21,6 +21,7 @@ data class SkipSettings(val bedrock: Boolean, val followAiRegions: Boolean)
 
 data class MitigationSettings(
   val enabled: Boolean,
+  val logEnabled: Boolean,
   val score: ScoreSettings,
   val skip: SkipSettings,
   val rules: List<MitigationRule>,

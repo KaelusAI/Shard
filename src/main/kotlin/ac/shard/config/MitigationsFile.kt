@@ -64,6 +64,7 @@ object MitigationsFile {
   val OFF =
     MitigationSettings(
       enabled = false,
+      logEnabled = false,
       score = DEFAULT_SCORE,
       skip = DEFAULT_SKIP,
       rules = emptyList(),
@@ -72,6 +73,7 @@ object MitigationsFile {
   fun read(root: ConfigurationNode, complaints: MutableList<String>): MitigationSettings =
     MitigationSettings(
       enabled = root.node("enabled").getBoolean(false),
+      logEnabled = root.node("log").getBoolean(true),
       score = readScore(root.node("score"), complaints),
       skip = readSkip(root.node("skip")),
       rules = readRules(root.node("rules"), complaints),

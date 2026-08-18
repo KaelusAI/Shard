@@ -23,6 +23,7 @@ import ac.shard.command.ShardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
 import ac.shard.database.MitigationLogEntry
+import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationRuntime
 import ac.shard.mitigation.MitigationSkip
 import ac.shard.mitigation.MitigationState
@@ -61,6 +62,7 @@ internal class MitigationsCommand(
   private val alertManager: AlertManager,
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
+  private val logStore: MitigationLogStore,
 ) : ShardCommand {
 
   override fun register(manager: CommandManager<Sender>) {
@@ -192,6 +194,10 @@ internal class MitigationsCommand(
     val sender = context.sender()
     val target: OfflinePlayer = context["target"]
 
+    if (!logStore.enabled()) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.MITIGATIONS_LOG_OFF)
+      return
+    }
     if (!target.hasPlayedBefore() && !target.isOnline) {
       MessageUtil.sendMessage(sender.nativeSender, Message.PLAYER_NOT_FOUND)
       return
@@ -226,6 +232,10 @@ internal class MitigationsCommand(
   private fun logs(context: CommandContext<Sender>) {
     val sender = context.sender()
 
+    if (!logStore.enabled()) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.MITIGATIONS_LOG_OFF)
+      return
+    }
     warnIfStorageDegraded(sender)
 
     scheduler.runAsync {

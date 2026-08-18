@@ -55,6 +55,7 @@ enum class Message(val path: String) {
   MITIGATIONS_LOGS_HEADER("mitigations.logs-header"),
   MITIGATIONS_LOGS_ENTRY("mitigations.logs-entry"),
   MITIGATIONS_LOGS_EMPTY("mitigations.logs-empty"),
+  MITIGATIONS_LOG_OFF("mitigations.log-off"),
   MITIGATION_ALERTS_ENABLED("mitigations.alerts-enabled"),
   MITIGATION_ALERTS_DISABLED("mitigations.alerts-disabled"),
   MITIGATIONS_SKIP_NONE("mitigations.skip.none"),

@@ -17,6 +17,7 @@
  */
 package ac.shard.editor
 
+import ac.shard.config.ConfigMigrations
 import ac.shard.config.MitigationsFile
 import ac.shard.mitigation.MitigationTier
 import ac.shard.mitigation.RuleEffects
@@ -80,7 +81,7 @@ class RulesBlockTest {
     val rewritten = RulesBlock.replace(text, "rules", plain(text, "rules"))!!
 
     assertContains(rewritten, "# Shard mitigations")
-    assertContains(rewritten, "config-version: 1")
+    assertContains(rewritten, "config-version: ${ConfigMigrations.MITIGATIONS_LATEST_VERSION}")
     assertContains(rewritten, "half-life-minutes: 20")
     assertContains(rewritten, "# a comment below the block")
     assertEquals(
