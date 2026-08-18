@@ -35,6 +35,8 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import org.bukkit.command.CommandSender
 
 object MessageUtil {
+  private val UNESCAPED_PLACEHOLDERS = setOf("channels")
+
   private val miniMessage: MiniMessage = MiniMessage.miniMessage()
   private lateinit var localeManager: LocaleManager
   private lateinit var adventure: BukkitAudiences
@@ -46,6 +48,8 @@ object MessageUtil {
     this.adventure = adventure
     this.logger = logger
   }
+
+  @JvmStatic fun escape(value: String): String = miniMessage.escapeTags(value)
 
   @JvmStatic fun deserializeRaw(message: String): Component = miniMessage.deserialize(message)
 
@@ -74,22 +78,25 @@ object MessageUtil {
     val processedMessage = message.replace("<prefix>", localeManager.getRawMessage(Message.PREFIX))
 
     val resolverBuilder = TagResolver.builder()
-    if (placeholders.isNotEmpty()) {
-      if (placeholders.size % 2 != 0) {
-        val activeLogger = logger ?: Logger.getLogger(MessageUtil::class.java.name)
-        activeLogger.warning("Invalid placeholders count for message: $message")
-      } else {
-        var i = 0
-        while (i < placeholders.size) {
-          val key = placeholders[i]
-          val value = placeholders[i + 1]
-          resolverBuilder.resolver(Placeholder.parsed(key, miniMessage.escapeTags(value)))
-          i += 2
-        }
-      }
+    if (placeholders.size % 2 != 0) {
+      val activeLogger = logger ?: Logger.getLogger(MessageUtil::class.java.name)
+      activeLogger.warning("Invalid placeholders count for message: $message")
+    } else {
+      addPlaceholders(resolverBuilder, placeholders)
     }
 
     return miniMessage.deserialize(processedMessage, resolverBuilder.build())
+  }
+
+  private fun addPlaceholders(builder: TagResolver.Builder, placeholders: Array<out String>) {
+    var i = 0
+    while (i < placeholders.size) {
+      val key = placeholders[i]
+      val value = placeholders[i + 1]
+      val safe = if (key in UNESCAPED_PLACEHOLDERS) value else miniMessage.escapeTags(value)
+      builder.resolver(Placeholder.parsed(key, safe))
+      i += 2
+    }
   }
 
   @JvmStatic

@@ -25,6 +25,7 @@ import ac.shard.database.DatabaseManager
 import ac.shard.database.MitigationLogEntry
 import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationRuntime
+import ac.shard.mitigation.MitigationSettings
 import ac.shard.mitigation.MitigationSkip
 import ac.shard.mitigation.MitigationState
 import ac.shard.mitigation.ScoreMath
@@ -179,10 +180,8 @@ internal class MitigationsCommand(
       state.history.sessions.toString(),
       "days",
       state.history.days.toString(),
-      "active",
-      state.activeEffects.entries
-        .joinToString(" · ") { "${it.key} ${format(it.value)}" }
-        .ifEmpty { "-" },
+      "channels",
+      channels(state.activeEffects),
       "skipped",
       skipText(reason),
       "histogram",
@@ -279,6 +278,36 @@ internal class MitigationsCommand(
       TimeUtil.formatTimeAgo(Instant.ofEpochMilli(entry.endedAt), localeManager),
     )
 
+  private fun channels(effects: Map<String, Double>): String {
+    if (effects.isEmpty()) return "-"
+    return effects.entries.joinToString("<newline>   ") { (channel, value) ->
+      val hint = channelHint(channel)
+      val text = "${MessageUtil.escape(channel)} ${channelValue(channel, value)}"
+      if (hint.isBlank()) text else "<hover:show_text:'${quoted(hint)}'>$text</hover>"
+    }
+  }
+
+  private fun quoted(value: String): String = value.replace("\\", "\\\\").replace("'", "\\'")
+
+  private fun channelHint(channel: String): String =
+    when (channel) {
+      MitigationSettings.MELEE -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_MELEE)
+      MitigationSettings.PROJECTILE ->
+        localeManager.getRawMessage(Message.MITIGATIONS_HINT_PROJECTILE)
+      MitigationSettings.CRYSTAL -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_CRYSTAL)
+      MitigationSettings.INCOMING -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_INCOMING)
+      MitigationSettings.HEALING -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_HEALING)
+      MitigationSettings.CANCEL -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_CANCEL)
+      else -> ""
+    }
+
+  private fun channelValue(channel: String, value: Double): String =
+    if (channel == MitigationSettings.CANCEL) {
+      String.format(Locale.US, "%.0f%%", value * PERCENT)
+    } else {
+      String.format(Locale.US, "%+.0f%%", (value - 1.0) * PERCENT)
+    }
+
   private fun alerts(context: CommandContext<Sender>) {
     val player = context.sender().player ?: return
     alertManager.toggle(player, AlertType.MITIGATION, false)
@@ -325,9 +354,13 @@ internal class MitigationsCommand(
   private fun histogram(shardPlayer: ShardPlayer): String {
     val shape = shardPlayer.mitigation.shape()
     if (shape.total == 0L) return "-"
-    return "under ${ScoreMath.LOW_TAIL_UNTIL}: ${share(shape.low, shape.total)}  " +
-      "between: ${share(shape.middle, shape.total)}  " +
-      "over ${ScoreMath.SPIKE_FROM}: ${share(shape.high, shape.total)}"
+    return localeManager
+      .getRawMessage(Message.MITIGATIONS_HISTOGRAM)
+      .replace("<low-mark>", ScoreMath.LOW_TAIL_UNTIL.toString())
+      .replace("<high-mark>", ScoreMath.SPIKE_FROM.toString())
+      .replace("<low>", share(shape.low, shape.total))
+      .replace("<mid>", share(shape.middle, shape.total))
+      .replace("<high>", share(shape.high, shape.total))
   }
 
   private fun share(part: Long, total: Long): String = "${part * PERCENT / total}%"

@@ -48,6 +48,7 @@ mitigations:
   cleared: "<prefix> <color:#a8ff78>Suspicion for <white><player></white> reset.</color>"
   alert: "<prefix> <color:#FBBF24>Player</color> <white><player></white> <color:#FBBF24>is mitigated</color> <dark_gray>|</dark_gray> <color:#FBBF24><tier></color> <gray>(suspicion</gray> <white><score></white><gray>)</gray> <dark_gray>|</dark_gray> <gray><active></gray>"
   pending: " -> <white><rule></white> in <time>"
+  histogram: "under <low-mark>: <low>  between: <mid>  over <high-mark>: <high>"
   history-header: "<prefix> <color:#00b4db>Mitigation history for</color> <white><player></white><gray>:</gray>"
   history-entry: " <dark_gray>[<white><server></white>]</dark_gray> <color:#FBBF24><rule></color> <gray>(<tier>)</gray> <dark_gray>|</dark_gray> <gray>suspicion</gray> <white><score></white> <dark_gray>|</dark_gray> <gray>lasted</gray> <white><for></white> <dark_gray>|</dark_gray> <gray><ago></gray>"
   history-empty: "<prefix> <gray>Player <white><player></white> has never been mitigated.</gray>"
@@ -55,6 +56,13 @@ mitigations:
   logs-entry: " <dark_gray>[<white><server></white>]</dark_gray> <white><player></white> <dark_gray>|</dark_gray> <color:#FBBF24><rule></color> <gray>(<tier>)</gray> <dark_gray>|</dark_gray> <gray>suspicion</gray> <white><score></white> <dark_gray>|</dark_gray> <gray>lasted</gray> <white><for></white> <dark_gray>|</dark_gray> <gray><ago></gray>"
   logs-empty: "<prefix> <gray>Nothing has been mitigated yet.</gray>"
   log-off: "<prefix> <gray>The mitigation log is switched off in mitigations.yml.</gray>"
+  hint:
+    melee: "<gray>Damage dealt in melee</gray>"
+    projectile: "<gray>Damage from arrows, crossbows and tridents</gray>"
+    crystal: "<gray>Damage from crystals and TNT</gray>"
+    incoming: "<gray>Damage the player takes</gray>"
+    healing: "<gray>Health regained from potions, regeneration and food</gray>"
+    cancel: "<gray>Share of hits that are cancelled</gray>"
   alerts-enabled: "<prefix> <color:#eef2f3>Mitigation Alerts</color> <color:#a8ff78>enabled</color>."
   alerts-disabled: "<prefix> <color:#eef2f3>Mitigation Alerts</color> <color:#ff4b2b>disabled</color>."
   skip:
@@ -68,11 +76,11 @@ mitigations:
     too-few-answers: "too few model answers"
   detail:
     - "<gradient:#8e9eab:#eef2f3>---- [ Mitigations: <player> ] ----</gradient>"
-    - " <color:#00b4db>Applied:</color> <white><applied></white> <dark_gray>·</dark_gray> <white><tier></white><gray><waiting></gray>"
+    - " <color:#00b4db>Applied:</color> <white><applied></white> <gray>(<tier>)</gray><gray><waiting></gray>"
     - " <color:#00b4db>Suspicion:</color> <white><score></white>"
     - " <color:#00b4db>Windows:</color> <white><windows></white>"
     - " <color:#00b4db>Seen again:</color> <white><sessions></white> <gray>sessions,</gray> <white><days></white> <gray>days</gray>"
-    - " <color:#00b4db>Channels:</color> <white><active></white>"
+    - " <color:#00b4db>Channels:</color><newline>   <white><channels></white>"
     - " <color:#00b4db>Skipped:</color> <white><skipped></white>"
     - " <color:#00b4db>Probabilities:</color> <gray><histogram></gray>"
 
