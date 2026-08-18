@@ -25,6 +25,7 @@ import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
+import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
@@ -38,6 +39,7 @@ import io.mockk.verify
 import java.util.UUID
 import org.bukkit.Server
 import org.bukkit.entity.Player
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.plugin.PluginManager
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -64,6 +66,27 @@ class PlayerDataManagerTest {
     verify(exactly = 0) { fixture.alertManager.handlePlayerQuit(any()) }
   }
 
+  @Test
+  fun `both disconnect paths write the mitigation to the log`() {
+    listOf(true, false).forEach { throughQuitEvent ->
+      val fixture = createFixture()
+      val tracked = mockk<ShardPlayer>(relaxed = true)
+      every { tracked.player } returns fixture.player
+      trackedPlayers(fixture.manager)[fixture.player.uniqueId] = tracked
+
+      if (throughQuitEvent) {
+        val quit = mockk<PlayerQuitEvent>(relaxed = true)
+        every { quit.player } returns fixture.player
+        fixture.manager.onQuit(quit)
+      } else {
+        every { fixture.user.uuid } returns fixture.player.uniqueId
+        fixture.manager.handleUserDisconnect(fixture.user)
+      }
+
+      verify(exactly = 1) { fixture.mitigationLogStore.saveOnQuit(tracked) }
+    }
+  }
+
   private fun createFixture(): Fixture {
     val plugin = mockk<Shard>(relaxed = true)
     val server = mockk<Server>(relaxed = true)
@@ -78,6 +101,11 @@ class PlayerDataManagerTest {
         secondArg<Runnable>().run()
         mockk(relaxed = true)
       }
+    every { scheduler.runAsync(any<Runnable>()) } answers
+      {
+        firstArg<Runnable>().run()
+        mockk(relaxed = true)
+      }
 
     val configManager = mockk<ConfigManager>(relaxed = true)
     every { configManager.aiSequence } returns 40
@@ -85,6 +113,7 @@ class PlayerDataManagerTest {
     every { configManager.forceCancelDuplicatePacket } returns false
     every { configManager.ignoreDuplicatePacketRotation } returns true
 
+    val mitigationLogStore = mockk<MitigationLogStore>(relaxed = true)
     val alertManager = mockk<AlertManager>(relaxed = true)
     every { alertManager.handlePlayerQuit(any()) } just runs
 
@@ -122,6 +151,7 @@ class PlayerDataManagerTest {
         databaseManager = mockk<DatabaseManager>(relaxed = true),
         persistentBufferService = mockk<PersistentBufferService>(relaxed = true),
         mitigationScoreStore = mockk<MitigationScoreStore>(relaxed = true),
+        mitigationLogStore = mitigationLogStore,
       )
 
     return Fixture(
@@ -129,6 +159,7 @@ class PlayerDataManagerTest {
       user = mockk<User>(relaxed = true),
       player = player,
       alertManager = alertManager,
+      mitigationLogStore = mitigationLogStore,
       checkManagerFactory = checkManagerFactory,
       disablePermissionAccessor = { disablePermission },
       disablePermissionMutator = { disablePermission = it },
@@ -140,6 +171,7 @@ class PlayerDataManagerTest {
     val user: User,
     val player: Player,
     val alertManager: AlertManager,
+    val mitigationLogStore: MitigationLogStore,
     val checkManagerFactory: CheckManager.Factory,
     private val disablePermissionAccessor: () -> Boolean,
     private val disablePermissionMutator: (Boolean) -> Unit,

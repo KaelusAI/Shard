@@ -173,6 +173,64 @@ class SqlViolationDatabaseSqliteTest {
     assertEquals(MonitorChatStyle.LIVE, loaded?.chatStyle)
   }
 
+  @Test
+  fun `the mitigation log is ordered by when the episode ended, not when it began`() {
+    val databaseFile = Files.createTempFile("shard-sqlite-mitigation-log-", ".db").toFile()
+    databaseFile.deleteOnExit()
+    val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+    migrateFreshSqlite(jdbcUrl)
+    val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
+    val violationDatabase = SqlViolationDatabase(mockk(relaxed = true), database)
+    val hunted = UUID.randomUUID()
+    val other = UUID.randomUUID()
+
+    violationDatabase.recordMitigation(
+      hunted,
+      entry("PlayerOne", "blatant", "high", 39.9, startedAt = 1_000L, endedAt = 9_000L),
+    )
+    violationDatabase.recordMitigation(
+      hunted,
+      entry("PlayerOne", "strong", "mid", 22.4, startedAt = 4_000L, endedAt = 5_000L),
+    )
+    violationDatabase.recordMitigation(
+      other,
+      entry("PlayerTwo", "sustained", "mid", 16.1, startedAt = 6_000L, endedAt = 7_000L),
+    )
+
+    val mine = violationDatabase.getMitigationLog(hunted, limit = 10)
+    assertEquals(
+      listOf("blatant", "strong"),
+      mine.map { it.rule },
+      "blatant started first but ended last, so it must lead the log",
+    )
+    assertEquals(39.9, mine.first().score)
+    assertEquals(1_000L, mine.first().startedAt)
+
+    val everyone = violationDatabase.getMitigationLog(limit = 10)
+    assertEquals(listOf("blatant", "sustained", "strong"), everyone.map { it.rule })
+    assertEquals("PlayerTwo", everyone[1].playerName)
+    assertEquals(1, violationDatabase.getMitigationLog(hunted, limit = 1).size)
+  }
+
+  @Suppress("LongParameterList")
+  private fun entry(
+    name: String,
+    rule: String,
+    tier: String,
+    score: Double,
+    startedAt: Long,
+    endedAt: Long,
+  ) =
+    MitigationLogEntry(
+      serverName = "test",
+      playerName = name,
+      rule = rule,
+      tier = tier,
+      score = score,
+      startedAt = startedAt,
+      endedAt = endedAt,
+    )
+
   private fun migrateFreshSqlite(jdbcUrl: String) {
     Flyway.configure()
       .dataSource(jdbcUrl, null, null)
