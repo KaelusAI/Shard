@@ -86,7 +86,7 @@ internal object EditorDiff {
             "mitigations.yml",
             "mitigations.rules",
             "",
-            if (rules.isEmpty()) "none left" else rules.joinToString(" · ", transform = ::ruleName),
+            if (rules.isEmpty()) "none left" else rules.joinToString(", ", transform = ::ruleName),
             if (rules.any { !running(it) } || rules.isEmpty()) {
               DiffWeight.NOTABLE
             } else {
@@ -118,7 +118,7 @@ internal object EditorDiff {
           "punishments.yml",
           "${edit.group} ${span(step.key, steps.getOrNull(index + 1)?.key)}",
           "",
-          step.value.joinToString(" · "),
+          step.value.joinToString(" | "),
           if (step.value.any { terminal(it) || PunishmentActionRule.needsConfirming(it) }) {
             DiffWeight.NOTABLE
           } else {
