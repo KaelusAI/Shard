@@ -21,6 +21,8 @@ import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.command.ShardCommand
 import ac.shard.config.ConfigManager
+import ac.shard.database.DatabaseManager
+import ac.shard.database.MitigationLogEntry
 import ac.shard.mitigation.MitigationRuntime
 import ac.shard.mitigation.MitigationSkip
 import ac.shard.mitigation.MitigationState
@@ -28,22 +30,28 @@ import ac.shard.mitigation.ScoreMath
 import ac.shard.mitigation.SkipReason
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
+import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import ac.shard.utils.TimeUtil
+import java.time.Instant
 import java.util.Locale
+import net.kyori.adventure.text.Component
+import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
+import org.incendo.cloud.bukkit.parser.OfflinePlayerParser
 import org.incendo.cloud.bukkit.parser.PlayerParser
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 private const val MAX_ROWS = 20
 private const val PERCENT = 100
+private const val LOG_LIMIT = 10
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 internal class MitigationsCommand(
   private val playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
@@ -51,6 +59,8 @@ internal class MitigationsCommand(
   private val runtime: MitigationRuntime,
   private val localeManager: ac.shard.config.LocaleManager,
   private val alertManager: AlertManager,
+  private val databaseManager: DatabaseManager,
+  private val scheduler: SchedulerService,
 ) : ShardCommand {
 
   override fun register(manager: CommandManager<Sender>) {
@@ -68,6 +78,19 @@ internal class MitigationsCommand(
         .literal("alerts")
         .permission("shard.mitigations.alerts")
         .handler(this@MitigationsCommand::alerts)
+    }
+    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+      literal("mitigations")
+        .literal("logs")
+        .permission("shard.mitigations")
+        .handler(this@MitigationsCommand::logs)
+    }
+    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+      literal("mitigations")
+        .literal("history")
+        .permission("shard.mitigations")
+        .required("target", OfflinePlayerParser.offlinePlayerParser())
+        .handler(this@MitigationsCommand::history)
     }
     manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
       literal("mitigations")
@@ -164,6 +187,87 @@ internal class MitigationsCommand(
       histogram(shardPlayer),
     )
   }
+
+  private fun history(context: CommandContext<Sender>) {
+    val sender = context.sender()
+    val target: OfflinePlayer = context["target"]
+
+    if (!target.hasPlayedBefore() && !target.isOnline) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.PLAYER_NOT_FOUND)
+      return
+    }
+    warnIfStorageDegraded(sender)
+
+    val name = target.name ?: target.uniqueId.toString()
+    val uuid = target.uniqueId
+    scheduler.runAsync {
+      val entries =
+        databaseManager.database.getMitigationLog(uuid, LOG_LIMIT).map { entry ->
+          entryLine(Message.MITIGATIONS_HISTORY_ENTRY, entry)
+        }
+      scheduler.runSync {
+        if (entries.isEmpty()) {
+          MessageUtil.sendMessage(
+            sender.nativeSender,
+            Message.MITIGATIONS_HISTORY_EMPTY,
+            "player",
+            name,
+          )
+          return@runSync
+        }
+        sender.sendMessage(
+          MessageUtil.getMessage(Message.MITIGATIONS_HISTORY_HEADER, "player", name)
+        )
+        entries.forEach { sender.sendMessage(it) }
+      }
+    }
+  }
+
+  private fun logs(context: CommandContext<Sender>) {
+    val sender = context.sender()
+
+    warnIfStorageDegraded(sender)
+
+    scheduler.runAsync {
+      val entries =
+        databaseManager.database.getMitigationLog(LOG_LIMIT).map { entry ->
+          entryLine(Message.MITIGATIONS_LOGS_ENTRY, entry)
+        }
+      scheduler.runSync {
+        if (entries.isEmpty()) {
+          MessageUtil.sendMessage(sender.nativeSender, Message.MITIGATIONS_LOGS_EMPTY)
+          return@runSync
+        }
+        sender.sendMessage(MessageUtil.getMessage(Message.MITIGATIONS_LOGS_HEADER))
+        entries.forEach { sender.sendMessage(it) }
+      }
+    }
+  }
+
+  private fun warnIfStorageDegraded(sender: Sender) {
+    if (!databaseManager.isAvailable) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
+    }
+  }
+
+  private fun entryLine(key: Message, entry: MitigationLogEntry): Component =
+    MessageUtil.getMessage(
+      key,
+      "server",
+      entry.serverName,
+      "player",
+      entry.playerName,
+      "rule",
+      entry.rule,
+      "tier",
+      entry.tier,
+      "score",
+      format(entry.score),
+      "for",
+      TimeUtil.formatDuration(entry.endedAt - entry.startedAt, localeManager),
+      "ago",
+      TimeUtil.formatTimeAgo(Instant.ofEpochMilli(entry.endedAt), localeManager),
+    )
 
   private fun alerts(context: CommandContext<Sender>) {
     val player = context.sender().player ?: return
