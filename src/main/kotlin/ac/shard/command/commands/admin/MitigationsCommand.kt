@@ -318,7 +318,7 @@ internal class MitigationsCommand(
     if (state.matched == null || state.matched === state.applied || left <= 0L) return ""
     return localeManager
       .getRawMessage(Message.MITIGATIONS_PENDING)
-      .replace("<rule>", state.matched?.id.orEmpty())
+      .replace("<rule>", MessageUtil.escape(state.matched?.id.orEmpty()))
       .replace("<time>", TimeUtil.formatDuration(left, localeManager))
   }
 
