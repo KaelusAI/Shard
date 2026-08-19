@@ -54,6 +54,11 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.upsert
 
+private const val TIER_LENGTH = 16
+private const val TEXT_LENGTH = 255
+private const val UUID_LENGTH = 36
+private const val NAME_LENGTH = 64
+
 class SqlViolationDatabase(
   private val configManager: ConfigManager,
   private val database: Database,
@@ -96,6 +101,68 @@ class SqlViolationDatabase(
         .limit(limit)
         .offset(((page - 1) * limit).toLong())
         .map(::toViolation)
+    }
+  }
+
+  override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
+    transaction(database) {
+      MitigationEvents.insert {
+        it[server] = entry.serverName
+        it[uuid] = playerUUID.toString()
+        it[playerName] = entry.playerName
+        it[rule] = entry.rule
+        it[tier] = entry.tier
+        it[score] = entry.score
+        it[startedAt] = entry.startedAt
+        it[endedAt] = entry.endedAt
+      }
+    }
+  }
+
+  override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> {
+    return transaction(database) {
+      MitigationEvents.select(
+          MitigationEvents.server,
+          MitigationEvents.playerName,
+          MitigationEvents.rule,
+          MitigationEvents.tier,
+          MitigationEvents.score,
+          MitigationEvents.startedAt,
+          MitigationEvents.endedAt,
+        )
+        .where { MitigationEvents.uuid eq playerUUID.toString() }
+        .orderBy(MitigationEvents.endedAt to SortOrder.DESC)
+        .limit(limit)
+        .map { row ->
+          MitigationLogEntry(
+            serverName = row[MitigationEvents.server],
+            playerName = row[MitigationEvents.playerName],
+            rule = row[MitigationEvents.rule],
+            tier = row[MitigationEvents.tier],
+            score = row[MitigationEvents.score],
+            startedAt = row[MitigationEvents.startedAt],
+            endedAt = row[MitigationEvents.endedAt],
+          )
+        }
+    }
+  }
+
+  override fun getMitigationLog(limit: Int): List<MitigationLogEntry> {
+    return transaction(database) {
+      MitigationEvents.selectAll()
+        .orderBy(MitigationEvents.endedAt to SortOrder.DESC)
+        .limit(limit)
+        .map { row ->
+          MitigationLogEntry(
+            serverName = row[MitigationEvents.server],
+            playerName = row[MitigationEvents.playerName],
+            rule = row[MitigationEvents.rule],
+            tier = row[MitigationEvents.tier],
+            score = row[MitigationEvents.score],
+            startedAt = row[MitigationEvents.startedAt],
+            endedAt = row[MitigationEvents.endedAt],
+          )
+        }
     }
   }
 
@@ -476,6 +543,25 @@ class SqlViolationDatabase(
     val updatedAt: Column<Long> = long("updated_at").default(0L)
 
     override val primaryKey = PrimaryKey(uuid, label)
+  }
+
+  private object MitigationEvents : Table("mitigation_events") {
+    val id: Column<Long> = long("id").autoIncrement()
+    val server: Column<String> = varchar("server", TEXT_LENGTH).default("server")
+    val uuid: Column<String> = varchar("uuid", UUID_LENGTH)
+    val playerName: Column<String> = varchar("player_name", NAME_LENGTH).default("")
+    val rule: Column<String> = varchar("rule", TEXT_LENGTH)
+    val tier: Column<String> = varchar("tier", TIER_LENGTH)
+    val score: Column<Double> = double("score")
+    val startedAt: Column<Long> = long("started_at")
+    val endedAt: Column<Long> = long("ended_at")
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+      index(isUnique = false, uuid, endedAt)
+      index(isUnique = false, endedAt)
+    }
   }
 
   private object PlayerLogins : Table("player_logins") {

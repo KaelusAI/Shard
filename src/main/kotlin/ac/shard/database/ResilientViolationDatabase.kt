@@ -103,6 +103,18 @@ internal class ResilientViolationDatabase(
     return execute { database -> database.loadMitigationScore(playerUUID) }
   }
 
+  override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
+    execute { database -> database.recordMitigation(playerUUID, entry) }
+  }
+
+  override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> {
+    return execute { database -> database.getMitigationLog(playerUUID, limit) }
+  }
+
+  override fun getMitigationLog(limit: Int): List<MitigationLogEntry> {
+    return execute { database -> database.getMitigationLog(limit) }
+  }
+
   override fun getLogCount(since: Long): Int {
     return execute { database -> database.getLogCount(since) }
   }

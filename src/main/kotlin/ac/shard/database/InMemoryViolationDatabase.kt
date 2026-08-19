@@ -25,6 +25,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 private const val MAX_IN_MEMORY_VIOLATIONS = 5000
+private const val MAX_IN_MEMORY_MITIGATIONS = 500
 
 @Suppress("TooManyFunctions")
 internal class InMemoryViolationDatabase(private val configManager: ConfigManager) :
@@ -36,6 +37,8 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private val aiBuffers = ConcurrentHashMap<UUID, AiBufferState>()
   private val aiLabelBuffers = ConcurrentHashMap<UUID, ConcurrentHashMap<String, AiBufferState>>()
   private val mitigationScores = ConcurrentHashMap<UUID, StoredScore>()
+  private val mitigationLog = ArrayDeque<Pair<UUID, MitigationLogEntry>>()
+  private val mitigationLogLock = Any()
   private val violations = ArrayDeque<Violation>()
   private val violationsLock = Any()
 
@@ -127,6 +130,33 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   }
 
   override fun loadMitigationScore(playerUUID: UUID): StoredScore? = mitigationScores[playerUUID]
+
+  override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
+    synchronized(mitigationLogLock) {
+      mitigationLog.addFirst(playerUUID to entry)
+      while (mitigationLog.size > MAX_IN_MEMORY_MITIGATIONS) {
+        mitigationLog.removeLast()
+      }
+    }
+  }
+
+  override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> =
+    snapshotMitigationLog()
+      .asSequence()
+      .filter { (uuid, _) -> uuid == playerUUID }
+      .map { (_, entry) -> entry }
+      .sortedByDescending { it.endedAt }
+      .take(limit)
+      .toList()
+
+  override fun getMitigationLog(limit: Int): List<MitigationLogEntry> =
+    snapshotMitigationLog()
+      .map { (_, entry) -> entry }
+      .sortedByDescending { it.endedAt }
+      .take(limit)
+
+  private fun snapshotMitigationLog(): List<Pair<UUID, MitigationLogEntry>> =
+    synchronized(mitigationLogLock) { mitigationLog.toList() }
 
   override fun getLogCount(since: Long): Int {
     return snapshotViolations().count { violation -> violation.createdAt.toEpochMilli() >= since }

@@ -32,6 +32,7 @@ import ac.shard.config.ConfigManager
 import ac.shard.data.CollectManager
 import ac.shard.database.DatabaseManager
 import ac.shard.integration.GeyserUtil
+import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
@@ -59,6 +60,7 @@ constructor(
   private val databaseManager: DatabaseManager,
   private val persistentBufferService: PersistentBufferService,
   private val mitigationScoreStore: MitigationScoreStore,
+  private val mitigationLogStore: MitigationLogStore,
 ) {
   private val players = ConcurrentHashMap<User, ShardPlayer>()
   private val unsavedBuffers = ConcurrentHashMap.newKeySet<ShardPlayer>()
@@ -93,6 +95,7 @@ constructor(
       if (unsavedBuffers.remove(tracked)) {
         persistentBufferService.saveOnQuit(tracked)
         mitigationScoreStore.save(tracked)
+        mitigationLogStore.saveOnQuit(tracked)
       }
     }
   }

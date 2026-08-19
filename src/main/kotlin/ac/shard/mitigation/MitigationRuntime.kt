@@ -52,6 +52,7 @@ class MitigationRuntime(
   private val stamps: HitStamps,
   private val debugManager: DebugManager,
   private val scheduler: SchedulerService,
+  private val logStore: MitigationLogStore,
   private val settings: () -> MitigationSettings,
   private val clock: () -> Long = System::currentTimeMillis,
 ) {
@@ -69,7 +70,7 @@ class MitigationRuntime(
   fun disable() {
     handle?.cancel()
     handle = null
-    playerDataManager.getPlayers().forEach { release(it) }
+    playerDataManager.getPlayers().forEach { release(it, async = false) }
     stamps.clear()
   }
 
@@ -121,6 +122,9 @@ class MitigationRuntime(
     val config = settings()
     val state = shardPlayer.mitigation
     val applying = state.appliedTier
+    val wasApplied = state.applied
+    val startedAt = state.appliedAtMillis
+    val peak = state.peakScore
 
     val facts = factsFor(shardPlayer)
     val enoughAnswers = state.answers >= config.score.minAnswers
@@ -128,6 +132,10 @@ class MitigationRuntime(
       skip.skipReason(shardPlayer) ?: (SkipReason.TOO_FEW_ANSWERS.takeIf { !enoughAnswers })
 
     val change = engine.evaluate(state, facts, reason)
+    if (state.applied !== wasApplied && wasApplied != null && startedAt != 0L) {
+      log(shardPlayer, wasApplied, applying, startedAt, peak)
+    }
+    trackPeak(state, wasApplied)
 
     countTowardsRepeat(shardPlayer)
     damageProcessor.refresh(shardPlayer)
@@ -153,13 +161,49 @@ class MitigationRuntime(
       )
   }
 
-  private fun release(shardPlayer: ShardPlayer) {
+  private fun trackPeak(state: MitigationState, wasApplied: MitigationRule?) {
+    state.peakScore =
+      when {
+        state.applied == null -> 0.0
+        state.applied !== wasApplied -> state.score
+        else -> maxOf(state.peakScore, state.score)
+      }
+  }
+
+  private fun log(
+    shardPlayer: ShardPlayer,
+    rule: MitigationRule,
+    tier: MitigationTier,
+    startedAt: Long,
+    peak: Double,
+    async: Boolean = true,
+  ) {
+    if (async) {
+      scheduler.runAsync { logStore.record(shardPlayer, rule, tier, startedAt, peak) }
+    } else {
+      logStore.record(shardPlayer, rule, tier, startedAt, peak)
+    }
+  }
+
+  private fun release(shardPlayer: ShardPlayer, async: Boolean = true) {
     val state = shardPlayer.mitigation
+    val running = state.applied
+    if (running != null && state.appliedAtMillis != 0L) {
+      log(
+        shardPlayer,
+        running,
+        state.appliedTier,
+        state.appliedAtMillis,
+        maxOf(state.peakScore, state.score),
+        async,
+      )
+    }
     state.matched = null
     state.applied = null
     state.onsetAtMillis = clock()
     state.holdUntilMillis = clock()
     state.appliedAtMillis = 0L
+    state.peakScore = 0.0
     state.spent = null
     state.activeEffects = emptyMap()
     shardPlayer.combat.damageMultiplier = 1.0

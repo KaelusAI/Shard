@@ -72,6 +72,8 @@ class MitigationState {
 
   @Volatile var appliedAtMillis: Long = 0L
 
+  @Volatile var peakScore: Double = 0.0
+
   @Volatile var answersAtApply: Long = 0L
 
   @Volatile var spent: MitigationRule? = null

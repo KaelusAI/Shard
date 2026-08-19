@@ -65,7 +65,7 @@ class EditorDiffTest {
       rows.map { it.key },
       "a step runs until the next one, so the diff must show the span, not a single level",
     )
-    assertEquals("[alert] · [log]", rows.first().after)
+    assertEquals("[alert] | [log]", rows.first().after)
     assertEquals(DiffWeight.ORDINARY, rows.first().weight)
     assertEquals(DiffWeight.NOTABLE, rows.last().weight)
     assertTrue(EditorDiff.needsConfirming(rows))

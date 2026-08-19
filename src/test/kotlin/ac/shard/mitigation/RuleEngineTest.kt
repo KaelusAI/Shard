@@ -68,6 +68,7 @@ class RuleEngineTest {
   private fun settings(vararg rules: MitigationRule) =
     MitigationSettings(
       enabled = true,
+      logEnabled = true,
       score = scoring,
       skip = SkipSettings(bedrock = true, followAiRegions = true),
       rules = rules.toList(),

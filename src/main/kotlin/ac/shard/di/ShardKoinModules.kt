@@ -85,6 +85,7 @@ import ac.shard.editor.SessionKind
 import ac.shard.integration.WorldGuardManager
 import ac.shard.mitigation.HitStamps
 import ac.shard.mitigation.MitigationDamageProcessor
+import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationRuntime
 import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.mitigation.MitigationScorer
@@ -218,6 +219,7 @@ private fun coreModule(plugin: Shard) = module {
   single { MitigationDamageProcessor() }
   single<DamageProcessor> { get<MitigationDamageProcessor>() }
   single { MitigationScoreStore(get(), get(), get()) }
+  single { MitigationLogStore(get(), get(), get()) }
   single {
     MitigationRuntime(
       plugin = get(),
@@ -230,6 +232,7 @@ private fun coreModule(plugin: Shard) = module {
       stamps = get(),
       debugManager = get(),
       scheduler = get(),
+      logStore = get(),
       settings = get(),
     )
   }

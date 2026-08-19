@@ -61,6 +61,12 @@ interface ViolationDatabase {
 
   fun loadMitigationScore(playerUUID: UUID): StoredScore?
 
+  fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry)
+
+  fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry>
+
+  fun getMitigationLog(limit: Int): List<MitigationLogEntry>
+
   fun getLogCount(since: Long): Int
 
   fun getLogCounts(playerUUIDs: Collection<UUID>): Map<UUID, Int>

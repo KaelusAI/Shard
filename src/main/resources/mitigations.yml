@@ -2,9 +2,12 @@
 # Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
 
 # Do not change this value manually.
-config-version: 1
+config-version: 2
 
 enabled: true
+
+# Keeps every applied rule in the database for /shard mitigations logs and history.
+log: true
 
 skip:
   bedrock: true

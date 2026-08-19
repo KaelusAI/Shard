@@ -22,7 +22,7 @@ import java.io.File
 internal object ConfigMigrations {
   const val LATEST_VERSION = 5
   const val MONITOR_LATEST_VERSION = 2
-  const val MITIGATIONS_LATEST_VERSION = 1
+  const val MITIGATIONS_LATEST_VERSION = 2
 
   private val DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH =
     listOf("debug/categories/api-error/timeout", "debug/categories/api-error/service-unavailable")

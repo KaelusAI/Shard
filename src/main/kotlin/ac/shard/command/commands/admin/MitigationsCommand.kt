@@ -21,29 +21,39 @@ import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.command.ShardCommand
 import ac.shard.config.ConfigManager
+import ac.shard.database.DatabaseManager
+import ac.shard.database.MitigationLogEntry
+import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationRuntime
+import ac.shard.mitigation.MitigationSettings
 import ac.shard.mitigation.MitigationSkip
 import ac.shard.mitigation.MitigationState
 import ac.shard.mitigation.ScoreMath
 import ac.shard.mitigation.SkipReason
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
+import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import ac.shard.utils.TimeUtil
+import java.time.Instant
 import java.util.Locale
+import net.kyori.adventure.text.Component
+import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
+import org.incendo.cloud.bukkit.parser.OfflinePlayerParser
 import org.incendo.cloud.bukkit.parser.PlayerParser
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 private const val MAX_ROWS = 20
 private const val PERCENT = 100
+private const val LOG_LIMIT = 10
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 internal class MitigationsCommand(
   private val playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
@@ -51,6 +61,9 @@ internal class MitigationsCommand(
   private val runtime: MitigationRuntime,
   private val localeManager: ac.shard.config.LocaleManager,
   private val alertManager: AlertManager,
+  private val databaseManager: DatabaseManager,
+  private val scheduler: SchedulerService,
+  private val logStore: MitigationLogStore,
 ) : ShardCommand {
 
   override fun register(manager: CommandManager<Sender>) {
@@ -68,6 +81,19 @@ internal class MitigationsCommand(
         .literal("alerts")
         .permission("shard.mitigations.alerts")
         .handler(this@MitigationsCommand::alerts)
+    }
+    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+      literal("mitigations")
+        .literal("logs")
+        .permission("shard.mitigations")
+        .handler(this@MitigationsCommand::logs)
+    }
+    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+      literal("mitigations")
+        .literal("history")
+        .permission("shard.mitigations")
+        .required("target", OfflinePlayerParser.offlinePlayerParser())
+        .handler(this@MitigationsCommand::history)
     }
     manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
       literal("mitigations")
@@ -154,16 +180,133 @@ internal class MitigationsCommand(
       state.history.sessions.toString(),
       "days",
       state.history.days.toString(),
-      "active",
-      state.activeEffects.entries
-        .joinToString(" · ") { "${it.key} ${format(it.value)}" }
-        .ifEmpty { "-" },
+      "channels",
+      channels(state.activeEffects),
       "skipped",
       skipText(reason),
       "histogram",
       histogram(shardPlayer),
     )
   }
+
+  private fun history(context: CommandContext<Sender>) {
+    val sender = context.sender()
+    val target: OfflinePlayer = context["target"]
+
+    if (!logStore.enabled()) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.MITIGATIONS_LOG_OFF)
+      return
+    }
+    if (!target.hasPlayedBefore() && !target.isOnline) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.PLAYER_NOT_FOUND)
+      return
+    }
+    warnIfStorageDegraded(sender)
+
+    val name = target.name ?: target.uniqueId.toString()
+    val uuid = target.uniqueId
+    scheduler.runAsync {
+      val entries =
+        databaseManager.database.getMitigationLog(uuid, LOG_LIMIT).map { entry ->
+          entryLine(Message.MITIGATIONS_HISTORY_ENTRY, entry)
+        }
+      scheduler.runSync {
+        if (entries.isEmpty()) {
+          MessageUtil.sendMessage(
+            sender.nativeSender,
+            Message.MITIGATIONS_HISTORY_EMPTY,
+            "player",
+            name,
+          )
+          return@runSync
+        }
+        sender.sendMessage(
+          MessageUtil.getMessage(Message.MITIGATIONS_HISTORY_HEADER, "player", name)
+        )
+        entries.forEach { sender.sendMessage(it) }
+      }
+    }
+  }
+
+  private fun logs(context: CommandContext<Sender>) {
+    val sender = context.sender()
+
+    if (!logStore.enabled()) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.MITIGATIONS_LOG_OFF)
+      return
+    }
+    warnIfStorageDegraded(sender)
+
+    scheduler.runAsync {
+      val entries =
+        databaseManager.database.getMitigationLog(LOG_LIMIT).map { entry ->
+          entryLine(Message.MITIGATIONS_LOGS_ENTRY, entry)
+        }
+      scheduler.runSync {
+        if (entries.isEmpty()) {
+          MessageUtil.sendMessage(sender.nativeSender, Message.MITIGATIONS_LOGS_EMPTY)
+          return@runSync
+        }
+        sender.sendMessage(MessageUtil.getMessage(Message.MITIGATIONS_LOGS_HEADER))
+        entries.forEach { sender.sendMessage(it) }
+      }
+    }
+  }
+
+  private fun warnIfStorageDegraded(sender: Sender) {
+    if (!databaseManager.isAvailable) {
+      MessageUtil.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
+    }
+  }
+
+  private fun entryLine(key: Message, entry: MitigationLogEntry): Component =
+    MessageUtil.getMessage(
+      key,
+      "server",
+      entry.serverName,
+      "player",
+      entry.playerName,
+      "rule",
+      entry.rule,
+      "tier",
+      entry.tier,
+      "score",
+      format(entry.score),
+      "for",
+      TimeUtil.formatDuration(entry.endedAt - entry.startedAt, localeManager),
+      "ago",
+      TimeUtil.formatTimeAgo(Instant.ofEpochMilli(entry.endedAt), localeManager),
+    )
+
+  private fun channels(effects: Map<String, Double>): String {
+    if (effects.isEmpty()) return "-"
+    return effects.entries.joinToString("<newline>   ") { (channel, value) ->
+      val hint = channelHint(channel)
+      val text = "${MessageUtil.escape(channel)} ${channelValue(channel, value)}"
+      if (hint.isBlank()) text else "<hover:show_text:'${quoted(hint)}'>$text</hover>"
+    }
+  }
+
+  private fun quoted(value: String): String = value.replace("\\", "\\\\").replace("'", "\\'")
+
+  private fun channelHint(channel: String): String =
+    when (channel) {
+      MitigationSettings.MELEE -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_MELEE)
+      MitigationSettings.PROJECTILE ->
+        localeManager.getRawMessage(Message.MITIGATIONS_HINT_PROJECTILE)
+      MitigationSettings.CRYSTAL -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_CRYSTAL)
+      MitigationSettings.INCOMING -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_INCOMING)
+      MitigationSettings.HEALING -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_HEALING)
+      MitigationSettings.CANCEL -> localeManager.getRawMessage(Message.MITIGATIONS_HINT_CANCEL)
+      else -> ""
+    }
+
+  private fun channelValue(channel: String, value: Double): String =
+    if (channel == MitigationSettings.CANCEL) {
+      String.format(Locale.US, "%.0f%%", value * PERCENT)
+    } else {
+      String.format(Locale.US, "%+.0f%%", (value - 1.0) * PERCENT)
+    }
 
   private fun alerts(context: CommandContext<Sender>) {
     val player = context.sender().player ?: return
@@ -175,7 +318,7 @@ internal class MitigationsCommand(
     if (state.matched == null || state.matched === state.applied || left <= 0L) return ""
     return localeManager
       .getRawMessage(Message.MITIGATIONS_PENDING)
-      .replace("<rule>", state.matched?.id.orEmpty())
+      .replace("<rule>", MessageUtil.escape(state.matched?.id.orEmpty()))
       .replace("<time>", TimeUtil.formatDuration(left, localeManager))
   }
 
@@ -211,9 +354,13 @@ internal class MitigationsCommand(
   private fun histogram(shardPlayer: ShardPlayer): String {
     val shape = shardPlayer.mitigation.shape()
     if (shape.total == 0L) return "-"
-    return "under ${ScoreMath.LOW_TAIL_UNTIL}: ${share(shape.low, shape.total)}  " +
-      "between: ${share(shape.middle, shape.total)}  " +
-      "over ${ScoreMath.SPIKE_FROM}: ${share(shape.high, shape.total)}"
+    return localeManager
+      .getRawMessage(Message.MITIGATIONS_HISTOGRAM)
+      .replace("<low-mark>", ScoreMath.LOW_TAIL_UNTIL.toString())
+      .replace("<high-mark>", ScoreMath.SPIKE_FROM.toString())
+      .replace("<low>", share(shape.low, shape.total))
+      .replace("<mid>", share(shape.middle, shape.total))
+      .replace("<high>", share(shape.high, shape.total))
   }
 
   private fun share(part: Long, total: Long): String = "${part * PERCENT / total}%"

@@ -152,6 +152,13 @@ class ResilientViolationDatabaseTest {
 
     override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
 
+    override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) = error("db down")
+
+    override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> =
+      error("db down")
+
+    override fun getMitigationLog(limit: Int): List<MitigationLogEntry> = error("db down")
+
     override fun getLogCount(since: Long): Int = error("db down")
 
     override fun getLogCounts(playerUUIDs: Collection<UUID>): Map<UUID, Int> = error("db down")
@@ -215,6 +222,13 @@ class ResilientViolationDatabaseTest {
     override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
 
     override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
+
+    override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) = error("db down")
+
+    override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> =
+      error("db down")
+
+    override fun getMitigationLog(limit: Int): List<MitigationLogEntry> = error("db down")
 
     override fun getLogCount(since: Long): Int = error("db down")
 
