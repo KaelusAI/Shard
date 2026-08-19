@@ -197,19 +197,20 @@ constructor(
         persistentBufferService.restoreOnLogin(shardPlayer)
         mitigationScoreStore.restoreOnLogin(shardPlayer)
 
-        enableAlertsOnJoin(player, "shard.alerts", AlertType.REGULAR)
-        enableAlertsOnJoin(player, "shard.brand", AlertType.BRAND)
-        enableAlertsOnJoin(player, "shard.suspicious.alerts", AlertType.SUSPICIOUS)
+        enableAlertsOnJoin(player)
       },
     )
   }
 
-  private fun enableAlertsOnJoin(player: Player, permission: String, type: AlertType) {
-    if (!player.hasPermission(permission) || !player.hasPermission("$permission.enable-on-join")) {
-      return
-    }
-    if (!alertManager.hasAlertsEnabled(player, type)) {
-      alertManager.toggle(player, type, true)
+  private fun enableAlertsOnJoin(player: Player) {
+    AlertType.entries.forEach { type ->
+      if (
+        player.hasPermission(type.permission) &&
+          player.hasPermission("${type.permission}.enable-on-join") &&
+          !alertManager.hasAlertsEnabled(player, type)
+      ) {
+        alertManager.toggle(player, type, true)
+      }
     }
   }
 

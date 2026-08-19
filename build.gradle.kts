@@ -300,7 +300,11 @@ bukkit {
     }
     register("shard.mitigations.alerts") {
       description = "Allows receiving an alert when a player starts being mitigated"
-      default = Permission.Default.FALSE
+      default = Permission.Default.OP
+    }
+    register("shard.mitigations.alerts.enable-on-join") {
+      description = "Automatically enables mitigation alerts on join"
+      default = Permission.Default.OP
     }
     register("shard.disable") {
       description = "Stops every check for the player, nothing is sent to the API"
