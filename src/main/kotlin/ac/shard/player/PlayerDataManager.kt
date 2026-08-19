@@ -153,33 +153,21 @@ constructor(
         persistentBufferService.restoreOnLogin(shardPlayer)
         mitigationScoreStore.restoreOnLogin(shardPlayer)
 
-        if (
-          player.hasPermission("shard.alerts") &&
-            player.hasPermission("shard.alerts.enable-on-join")
-        ) {
-          if (!alertManager.hasAlertsEnabled(player, AlertType.REGULAR)) {
-            alertManager.toggle(player, AlertType.REGULAR, true)
-          }
-        }
-
-        if (
-          player.hasPermission("shard.brand") && player.hasPermission("shard.brand.enable-on-join")
-        ) {
-          if (!alertManager.hasAlertsEnabled(player, AlertType.BRAND)) {
-            alertManager.toggle(player, AlertType.BRAND, true)
-          }
-        }
-
-        if (
-          player.hasPermission("shard.suspicious.alerts") &&
-            player.hasPermission("shard.suspicious.alerts.enable-on-join")
-        ) {
-          if (!alertManager.hasAlertsEnabled(player, AlertType.SUSPICIOUS)) {
-            alertManager.toggle(player, AlertType.SUSPICIOUS, true)
-          }
-        }
+        enableAlertsOnJoin(player)
       },
     )
+  }
+
+  private fun enableAlertsOnJoin(player: Player) {
+    AlertType.entries.forEach { type ->
+      if (
+        player.hasPermission(type.permission) &&
+          player.hasPermission("${type.permission}.enable-on-join") &&
+          !alertManager.hasAlertsEnabled(player, type)
+      ) {
+        alertManager.toggle(player, type, true)
+      }
+    }
   }
 
   fun handleUserDisconnect(user: com.github.retrooper.packetevents.protocol.player.User) {
