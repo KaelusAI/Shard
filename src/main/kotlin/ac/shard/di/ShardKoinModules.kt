@@ -212,7 +212,7 @@ private fun coreModule(plugin: Shard) = module {
   single<RegionProvider> { get<WorldGuardManager>() }
 
   single { { get<ConfigManager>().mitigationSettings } }
-  singleOf(::HitStamps)
+  single { HitStamps() }
   single { MitigationScorer(get(), get()) }
   single { MitigationSkip(get(), get(), get()) }
   single { RuleEngine(get(), System::currentTimeMillis) }
