@@ -1,0 +1,39 @@
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: dco-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sign-off:
+    name: Sign-off
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Every commit carries a sign-off
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          for sha in $(git rev-list --no-merges "$BASE".."$HEAD"); do
+            if git log -1 --format='%b' "$sha" \
+              | grep -qiE '^Signed-off-by: .+ <[^@[:space:]]+@[^@[:space:]]+>[[:space:]]*$'; then
+              continue
+            fi
+            echo "::error::No Signed-off-by: $(git log -1 --format='%h %s' "$sha")"
+            missing=1
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Add it with: git commit -s (or amend the last one: git commit --amend -s --no-edit)"
+            echo "See CONTRIBUTING.md."
+            exit 1
+          fi
