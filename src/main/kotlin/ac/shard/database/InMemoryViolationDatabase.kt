@@ -61,6 +61,7 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
         mitigationScore = facts.score,
         windows = facts.windows,
         highWindows = facts.highWindows,
+        trail = facts.trail,
       )
 
     synchronized(violationsLock) {

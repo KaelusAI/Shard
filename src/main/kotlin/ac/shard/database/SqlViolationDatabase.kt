@@ -58,6 +58,7 @@ private const val TIER_LENGTH = 16
 private const val TEXT_LENGTH = 255
 private const val UUID_LENGTH = 36
 private const val NAME_LENGTH = 64
+private const val TRAIL_BYTES = 1024
 
 class SqlViolationDatabase(
   private val configManager: ConfigManager,
@@ -86,6 +87,7 @@ class SqlViolationDatabase(
         it[mitigationScore] = facts.score
         it[aiWindows] = facts.windows
         it[aiHighWindows] = facts.highWindows
+        it[probabilityTrail] = facts.trail.takeIf { trail -> trail.isNotEmpty() }
       }
     }
   }
@@ -463,6 +465,7 @@ class SqlViolationDatabase(
       mitigationScore = row[Violations.mitigationScore],
       windows = row[Violations.aiWindows],
       highWindows = row[Violations.aiHighWindows],
+      trail = row[Violations.probabilityTrail] ?: ByteArray(0),
     )
   }
 
@@ -569,6 +572,7 @@ class SqlViolationDatabase(
         Violations.mitigationScore,
         Violations.aiWindows,
         Violations.aiHighWindows,
+        Violations.probabilityTrail,
       )
 
     private class ShardInstantColumnType : InstantColumnType<Instant>() {

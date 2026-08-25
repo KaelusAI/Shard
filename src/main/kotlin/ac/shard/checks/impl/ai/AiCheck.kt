@@ -79,6 +79,8 @@ class AiCheck(
 
   @Volatile var prob90: Int = 0
 
+  val trail = ProbabilityTrail()
+
   private var flag = 0.0
   private var bufferResetOnFlag = 0.0
   private var bufferMultiplier = 0.0
@@ -222,6 +224,7 @@ class AiCheck(
 
     val probability = apiResponse.probability
     lastProbability = probability
+    trail.record(probability)
     mitigationScorer.record(shardPlayer, probability)
     damageProcessor.applyProbability(shardPlayer, probability)
 

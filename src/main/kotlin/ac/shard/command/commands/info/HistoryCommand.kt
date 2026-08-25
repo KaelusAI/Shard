@@ -31,6 +31,7 @@ import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
+import ac.shard.utils.Sparkline
 import ac.shard.utils.TimeUtil
 import java.util.Locale
 import net.kyori.adventure.text.Component
@@ -41,6 +42,8 @@ import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.description.Description
 import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.IntegerParser
+
+private const val SPARKLINE_WIDTH = 20
 
 class HistoryCommand(
   private val databaseManager: DatabaseManager,
@@ -135,6 +138,8 @@ class HistoryCommand(
       violation.windows?.toString() ?: "-",
       "high",
       violation.highWindows?.toString() ?: "-",
+      "trail",
+      Sparkline.of(violation.trail, SPARKLINE_WIDTH).ifEmpty { "-" },
     )
 
   private fun warnIfStorageDegraded(sender: Sender) {

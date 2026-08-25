@@ -39,6 +39,7 @@ data class Violation(
   val mitigationScore: Double? = null,
   val windows: Long? = null,
   val highWindows: Long? = null,
+  val trail: ByteArray = ByteArray(0),
 ) {
   companion object {
     @Throws(SQLException::class)
