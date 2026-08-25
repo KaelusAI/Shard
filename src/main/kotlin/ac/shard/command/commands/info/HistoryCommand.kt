@@ -44,6 +44,7 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.IntegerParser
 
 private const val SPARKLINE_WIDTH = 20
+private const val DEFAULT_SERVER_NAME = "server"
 
 class HistoryCommand(
   private val databaseManager: DatabaseManager,
@@ -117,11 +118,11 @@ class HistoryCommand(
     }
   }
 
-  private fun entryLine(violation: Violation): Component =
+  private fun entryLine(violation: Violation, showServer: Boolean): Component =
     MessageUtil.getMessage(
       Message.HISTORY_ENTRY,
       "server",
-      violation.serverName,
+      serverTag(violation.serverName, showServer),
       "check",
       violation.checkName,
       "vl",
@@ -141,6 +142,13 @@ class HistoryCommand(
       "trail",
       Sparkline.of(violation.trail, SPARKLINE_WIDTH).ifEmpty { "-" },
     )
+
+  private fun serverTag(name: String, show: Boolean): String =
+    if (!show || name.isBlank()) {
+      ""
+    } else {
+      "<dark_gray>[<white>${MessageUtil.escape(name)}</white>]</dark_gray> "
+    }
 
   private fun warnIfStorageDegraded(sender: Sender) {
     if (!databaseManager.isAvailable) {

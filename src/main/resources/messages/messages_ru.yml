@@ -250,7 +250,7 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>Подсистема истории отключена!</color>"
   header: "<prefix> <color:#00b4db>История нарушений игрока</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <dark_gray>[<white><server></white>]</dark_gray> <color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white><newline><gray>Последняя минута: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <server><color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white><newline><gray>Последняя минута: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>У этого игрока нет найденных нарушений.</gray>"
 
 logs:

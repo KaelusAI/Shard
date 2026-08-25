@@ -35,7 +35,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import org.bukkit.command.CommandSender
 
 object MessageUtil {
-  private val UNESCAPED_PLACEHOLDERS = setOf("channels", "waiting")
+  private val UNESCAPED_PLACEHOLDERS = setOf("channels", "waiting", "server")
 
   private val miniMessage: MiniMessage = MiniMessage.miniMessage()
   private lateinit var localeManager: LocaleManager
