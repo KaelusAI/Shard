@@ -41,6 +41,7 @@ import ac.shard.checks.CheckFactory
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.ActionManager
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.checks.impl.ai.AiSnapshotStore
 import ac.shard.checks.impl.ai.DataCollectorCheck
 import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
@@ -220,6 +221,7 @@ private fun coreModule(plugin: Shard) = module {
   single<DamageProcessor> { get<MitigationDamageProcessor>() }
   single { MitigationScoreStore(get(), get(), get()) }
   single { MitigationLogStore(get(), get(), get()) }
+  single { AiSnapshotStore(get()) }
   single {
     MitigationRuntime(
       plugin = get(),

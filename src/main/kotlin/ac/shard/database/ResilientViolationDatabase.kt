@@ -91,6 +91,14 @@ internal class ResilientViolationDatabase(
     return execute { database -> database.loadMitigationScore(playerUUID) }
   }
 
+  override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) {
+    execute { database -> database.saveAiSnapshot(playerUUID, snapshot) }
+  }
+
+  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? {
+    return execute { database -> database.loadAiSnapshot(playerUUID) }
+  }
+
   override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
     execute { database -> database.recordMitigation(playerUUID, entry) }
   }

@@ -27,6 +27,7 @@ import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.api.event.ShardEventBus
 import ac.shard.checks.CheckManager
+import ac.shard.checks.impl.ai.AiSnapshotStore
 import ac.shard.checks.impl.ai.DataCollectorManager
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
@@ -61,6 +62,7 @@ constructor(
   private val persistentBufferService: PersistentBufferService,
   private val mitigationScoreStore: MitigationScoreStore,
   private val mitigationLogStore: MitigationLogStore,
+  private val aiSnapshotStore: AiSnapshotStore,
 ) : Listener {
   private val players = ConcurrentHashMap<UUID, ShardPlayer>()
 
@@ -92,6 +94,7 @@ constructor(
       persistentBufferService.saveOnQuit(tracked)
       mitigationScoreStore.save(tracked)
       mitigationLogStore.saveOnQuit(tracked)
+      aiSnapshotStore.saveOnQuit(tracked)
     }
   }
 
@@ -99,6 +102,7 @@ constructor(
     for (shardPlayer in players.values) {
       persistentBufferService.saveOnShutdown(shardPlayer)
       mitigationScoreStore.save(shardPlayer)
+      aiSnapshotStore.saveOnQuit(shardPlayer)
     }
   }
 

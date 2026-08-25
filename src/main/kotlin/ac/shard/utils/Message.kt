@@ -202,6 +202,7 @@ enum class Message(val path: String) {
   // Profile
   PROFILE_NO_DATA("profile.no-data"),
   PROFILE_LINES("profile.lines"),
+  PROFILE_OFFLINE_LINES("profile.offline-lines"),
 
   // History
   HISTORY_DISABLED("history.disabled"),

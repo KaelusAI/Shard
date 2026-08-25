@@ -78,6 +78,7 @@ mitigations:
     - "<gradient:#8e9eab:#eef2f3>---- [ Подавление: <player> ] ----</gradient>"
     - " <color:#00b4db>Применено:</color> <white><applied></white> <gray>(<tier>)</gray><gray><waiting></gray>"
     - " <color:#00b4db>Подозрение:</color> <white><score></white>"
+    - " <color:#00b4db>Окон:</color> <white><windows></white>"
     - " <color:#00b4db>Повторялось:</color> <white><sessions></white> <gray>сессий,</gray> <white><days></white> <gray>дней</gray>"
     - " <color:#00b4db>Каналы:</color><newline>   <white><channels></white>"
     - " <color:#00b4db>Пропуск:</color> <white><skipped></white>"
@@ -234,6 +235,17 @@ profile:
     - " <color:#ff416c>AI вер-ть >90%:</color> <white><ai_probs_90></white>"
     - " <color:#FBBF24>Подавление:</color> <white><mitigation_tier></white> <gray>(подозрение <mitigation_score>)</gray>"
     - " <color:#FBBF24>Правило:</color> <white><mitigation_active></white>"
+    - " <color:#00b4db>Окон:</color> <white><windows></white>"
+    - " <color:#00b4db>Вероятности:</color> <gray><probabilities></gray>"
+  offline-lines:
+    - "<gradient:#8e9eab:#eef2f3>---- [ Профиль: <player> ] ----</gradient>"
+    - " <color:#00b4db>Был в сети:</color> <white><seen></white>"
+    - " <color:#ff416c>AI буфер:</color> <white><ai_buffer></white> <gray>(<buffer_seen>)</gray>"
+    - " <color:#00b4db>Окон:</color> <white><windows></white> <gray>(выше 0.9:</gray> <white><high></white><gray>)</gray>"
+    - " <color:#00b4db>Вероятности:</color> <gray><probabilities></gray>"
+    - " <color:#FBBF24>Подозрение:</color> <white><mitigation_score></white>"
+    - " <color:#FBBF24>Подавлялся:</color> <white><sessions></white> <gray>сессий,</gray> <white><days></white> <gray>дней</gray>"
+    - " <color:#00b4db>Нарушений:</color> <white><violations></white>"
 
 history:
   disabled: "<prefix> <color:#ff4b2b>Подсистема истории отключена!</color>"

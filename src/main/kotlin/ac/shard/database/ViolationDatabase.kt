@@ -57,6 +57,10 @@ interface ViolationDatabase {
 
   fun loadMitigationScore(playerUUID: UUID): StoredScore?
 
+  fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot)
+
+  fun loadAiSnapshot(playerUUID: UUID): AiSnapshot?
+
   fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry)
 
   fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry>

@@ -109,6 +109,59 @@ class SqlViolationDatabase(
     }
   }
 
+  override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) {
+    transaction(database) {
+      val uuidString = playerUUID.toString()
+      val updated =
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) { writeSnapshot(it, snapshot) }
+      if (updated > 0) return@transaction
+      try {
+        PlayerLogins.insert {
+          it[uuid] = uuidString
+          it[lastSeen] = snapshot.savedAt
+          writeSnapshot(it, snapshot)
+        }
+      } catch (_: java.sql.SQLException) {
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) { writeSnapshot(it, snapshot) }
+      }
+    }
+  }
+
+  private fun writeSnapshot(statement: UpdateBuilder<*>, snapshot: AiSnapshot) {
+    statement[PlayerLogins.aiHighWindows] = snapshot.highWindows
+    statement[PlayerLogins.aiWindows] = snapshot.windows
+    statement[PlayerLogins.probLow] = snapshot.low
+    statement[PlayerLogins.probMid] = snapshot.middle
+    statement[PlayerLogins.probHigh] = snapshot.high
+    statement[PlayerLogins.aiStateAt] = snapshot.savedAt
+  }
+
+  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? {
+    return transaction(database) {
+      PlayerLogins.select(
+          PlayerLogins.aiHighWindows,
+          PlayerLogins.aiWindows,
+          PlayerLogins.probLow,
+          PlayerLogins.probMid,
+          PlayerLogins.probHigh,
+          PlayerLogins.aiStateAt,
+        )
+        .where { PlayerLogins.uuid eq playerUUID.toString() }
+        .firstOrNull()
+        ?.let { row ->
+          AiSnapshot(
+            highWindows = row[PlayerLogins.aiHighWindows],
+            windows = row[PlayerLogins.aiWindows],
+            low = row[PlayerLogins.probLow],
+            middle = row[PlayerLogins.probMid],
+            high = row[PlayerLogins.probHigh],
+            savedAt = row[PlayerLogins.aiStateAt],
+          )
+        }
+        ?.takeIf { it.savedAt != 0L }
+    }
+  }
+
   override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
     transaction(database) {
       MitigationEvents.insert {
@@ -534,6 +587,12 @@ class SqlViolationDatabase(
     val mitigationSessions: Column<Int> = integer("mitigation_sessions").default(0)
     val mitigationDays: Column<Int> = integer("mitigation_days").default(0)
     val mitigationLastDay: Column<Long> = long("mitigation_last_day").default(0L)
+    val aiHighWindows: Column<Long> = long("ai_high_windows").default(0L)
+    val aiWindows: Column<Long> = long("ai_windows").default(0L)
+    val probLow: Column<Long> = long("prob_low").default(0L)
+    val probMid: Column<Long> = long("prob_mid").default(0L)
+    val probHigh: Column<Long> = long("prob_high").default(0L)
+    val aiStateAt: Column<Long> = long("ai_state_at").default(0L)
     val probabilityTrail: Column<ByteArray?> = binary("probability_trail", TRAIL_BYTES).nullable()
 
     override val primaryKey = PrimaryKey(uuid)
