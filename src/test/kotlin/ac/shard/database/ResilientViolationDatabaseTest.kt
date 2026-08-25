@@ -111,8 +111,13 @@ class ResilientViolationDatabaseTest {
   }
 
   private class AlwaysFailingViolationDatabase : ViolationDatabase {
-    override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) =
-      error("db down")
+    override fun logAlert(
+      player: ShardPlayer,
+      verbose: String,
+      checkName: String,
+      vls: Int,
+      facts: AiFacts,
+    ) = error("db down")
 
     override fun getLogCount(player: UUID): Int = error("db down")
 
@@ -136,6 +141,10 @@ class ResilientViolationDatabaseTest {
     override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
 
     override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
+
+    override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) = error("db down")
+
+    override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? = error("db down")
 
     override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) = error("db down")
 
@@ -169,8 +178,13 @@ class ResilientViolationDatabaseTest {
   private class CountingFailingViolationDatabase : ViolationDatabase {
     val incrementAttempts = AtomicInteger()
 
-    override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) =
-      error("db down")
+    override fun logAlert(
+      player: ShardPlayer,
+      verbose: String,
+      checkName: String,
+      vls: Int,
+      facts: AiFacts,
+    ) = error("db down")
 
     override fun getLogCount(player: UUID): Int = error("db down")
 
@@ -194,6 +208,10 @@ class ResilientViolationDatabaseTest {
     override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
 
     override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
+
+    override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) = error("db down")
+
+    override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? = error("db down")
 
     override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) = error("db down")
 

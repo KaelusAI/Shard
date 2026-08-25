@@ -41,7 +41,13 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private val violations = ArrayDeque<Violation>()
   private val violationsLock = Any()
 
-  override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) {
+  override fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    facts: AiFacts,
+  ) {
     val entry =
       Violation(
         serverName = configManager.config.getString("history.server-name", "server"),
@@ -51,6 +57,10 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
         verbose = verbose,
         vl = vls,
         createdAt = Instant.now(),
+        aiBuffer = facts.buffer,
+        mitigationScore = facts.score,
+        windows = facts.windows,
+        highWindows = facts.highWindows,
       )
 
     synchronized(violationsLock) {

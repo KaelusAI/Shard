@@ -35,6 +35,10 @@ data class Violation(
   val verbose: String,
   val vl: Int,
   val createdAt: Instant,
+  val aiBuffer: Double? = null,
+  val mitigationScore: Double? = null,
+  val windows: Long? = null,
+  val highWindows: Long? = null,
 ) {
   companion object {
     @Throws(SQLException::class)

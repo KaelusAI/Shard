@@ -27,7 +27,13 @@ import ac.shard.player.ShardPlayer
 import java.util.UUID
 
 interface ViolationDatabase {
-  fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int)
+  fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    facts: AiFacts,
+  )
 
   fun getLogCount(player: UUID): Int
 

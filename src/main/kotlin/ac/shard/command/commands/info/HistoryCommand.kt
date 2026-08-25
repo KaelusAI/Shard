@@ -32,6 +32,8 @@ import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import ac.shard.utils.TimeUtil
+import java.util.Locale
+import net.kyori.adventure.text.Component
 import org.bukkit.OfflinePlayer
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.bukkit.parser.OfflinePlayerParser
@@ -91,21 +93,11 @@ class HistoryCommand(
           maxPages.toString(),
         )
 
-      val entries = violations.map { violation ->
-        MessageUtil.getMessage(
-          Message.HISTORY_ENTRY,
-          "server",
-          violation.serverName,
-          "check",
-          violation.checkName,
-          "vl",
-          violation.vl.toString(),
-          "verbose",
-          violation.verbose,
-          "timeago",
-          TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
-        )
-      }
+      val here =
+        configManager.config.getString("history.server-name", DEFAULT_SERVER_NAME).orEmpty()
+      val named = here.isNotBlank() && here != DEFAULT_SERVER_NAME
+      val elsewhere = violations.any { it.serverName.isNotBlank() && it.serverName != here }
+      val entries = violations.map { violation -> entryLine(violation, named || elsewhere) }
 
       scheduler.runSync {
         sender.sendMessage(header)
@@ -121,6 +113,29 @@ class HistoryCommand(
       }
     }
   }
+
+  private fun entryLine(violation: Violation): Component =
+    MessageUtil.getMessage(
+      Message.HISTORY_ENTRY,
+      "server",
+      violation.serverName,
+      "check",
+      violation.checkName,
+      "vl",
+      violation.vl.toString(),
+      "verbose",
+      violation.verbose,
+      "timeago",
+      TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
+      "buffer",
+      violation.aiBuffer?.let { String.format(Locale.US, "%.2f", it) } ?: "-",
+      "score",
+      violation.mitigationScore?.let { String.format(Locale.US, "%.1f", it) } ?: "-",
+      "windows",
+      violation.windows?.toString() ?: "-",
+      "high",
+      violation.highWindows?.toString() ?: "-",
+    )
 
   private fun warnIfStorageDegraded(sender: Sender) {
     if (!databaseManager.isAvailable) {

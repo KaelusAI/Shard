@@ -37,8 +37,14 @@ internal class ResilientViolationDatabase(
 ) : ViolationDatabase {
   private val switchedToFallback = AtomicBoolean(false)
 
-  override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) {
-    execute { database -> database.logAlert(player, verbose, checkName, vls) }
+  override fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    facts: AiFacts,
+  ) {
+    execute { database -> database.logAlert(player, verbose, checkName, vls, facts) }
   }
 
   override fun getLogCount(player: UUID): Int {

@@ -78,7 +78,6 @@ mitigations:
     - "<gradient:#8e9eab:#eef2f3>---- [ Mitigations: <player> ] ----</gradient>"
     - " <color:#00b4db>Applied:</color> <white><applied></white> <gray>(<tier>)</gray><gray><waiting></gray>"
     - " <color:#00b4db>Suspicion:</color> <white><score></white>"
-    - " <color:#00b4db>Windows:</color> <white><windows></white>"
     - " <color:#00b4db>Seen again:</color> <white><sessions></white> <gray>sessions,</gray> <white><days></white> <gray>days</gray>"
     - " <color:#00b4db>Channels:</color><newline>   <white><channels></white>"
     - " <color:#00b4db>Skipped:</color> <white><skipped></white>"
@@ -239,7 +238,7 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>History subsystem is disabled!</color>"
   header: "<prefix> <color:#00b4db>Showing logs for</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <dark_gray>[<white><server></white>]</dark_gray> <color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <dark_gray>[<white><server></white>]</dark_gray> <color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white><newline><gray>Buffer: <white><buffer></white><newline><gray>Suspicion: <white><score></white><newline><gray>Windows: <white><windows></white><gray>, over 0.9: <white><high></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>No violations found for this player.</gray>"
 
 logs:

@@ -64,7 +64,13 @@ class SqlViolationDatabase(
   private val database: Database,
 ) : ViolationDatabase {
 
-  override fun logAlert(player: ShardPlayer, verbose: String, checkName: String, vls: Int) {
+  override fun logAlert(
+    player: ShardPlayer,
+    verbose: String,
+    checkName: String,
+    vls: Int,
+    facts: AiFacts,
+  ) {
     transaction(database) {
       val now = Instant.now()
       Violations.insert {
@@ -76,6 +82,10 @@ class SqlViolationDatabase(
         it[vl] = vls
         it[createdAt] = now.toEpochMilli()
         it[createdAtInstant] = now
+        it[aiBuffer] = facts.buffer
+        it[mitigationScore] = facts.score
+        it[aiWindows] = facts.windows
+        it[aiHighWindows] = facts.highWindows
       }
     }
   }
@@ -449,6 +459,10 @@ class SqlViolationDatabase(
       verbose = row[Violations.verbose],
       vl = row[Violations.vl],
       createdAt = row[Violations.createdAtInstant],
+      aiBuffer = row[Violations.aiBuffer],
+      mitigationScore = row[Violations.mitigationScore],
+      windows = row[Violations.aiWindows],
+      highWindows = row[Violations.aiHighWindows],
     )
   }
 
@@ -463,6 +477,11 @@ class SqlViolationDatabase(
     val createdAt: Column<Long> = long("created_at")
     val createdAtInstant: Column<Instant> =
       registerColumn("created_at_instant", ShardInstantColumnType()).default(Instant.EPOCH)
+    val aiBuffer: Column<Double?> = double("ai_buffer").nullable()
+    val mitigationScore: Column<Double?> = double("mitigation_score").nullable()
+    val aiWindows: Column<Long?> = long("ai_windows").nullable()
+    val aiHighWindows: Column<Long?> = long("ai_high_windows").nullable()
+    val probabilityTrail: Column<ByteArray?> = binary("probability_trail", TRAIL_BYTES).nullable()
 
     override val primaryKey = PrimaryKey(id)
 
@@ -512,6 +531,7 @@ class SqlViolationDatabase(
     val mitigationSessions: Column<Int> = integer("mitigation_sessions").default(0)
     val mitigationDays: Column<Int> = integer("mitigation_days").default(0)
     val mitigationLastDay: Column<Long> = long("mitigation_last_day").default(0L)
+    val probabilityTrail: Column<ByteArray?> = binary("probability_trail", TRAIL_BYTES).nullable()
 
     override val primaryKey = PrimaryKey(uuid)
 
@@ -545,6 +565,10 @@ class SqlViolationDatabase(
         Violations.vl,
         Violations.createdAt,
         Violations.createdAtInstant,
+        Violations.aiBuffer,
+        Violations.mitigationScore,
+        Violations.aiWindows,
+        Violations.aiHighWindows,
       )
 
     private class ShardInstantColumnType : InstantColumnType<Instant>() {

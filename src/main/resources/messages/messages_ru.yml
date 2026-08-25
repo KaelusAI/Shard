@@ -78,7 +78,6 @@ mitigations:
     - "<gradient:#8e9eab:#eef2f3>---- [ Подавление: <player> ] ----</gradient>"
     - " <color:#00b4db>Применено:</color> <white><applied></white> <gray>(<tier>)</gray><gray><waiting></gray>"
     - " <color:#00b4db>Подозрение:</color> <white><score></white>"
-    - " <color:#00b4db>Окон:</color> <white><windows></white>"
     - " <color:#00b4db>Повторялось:</color> <white><sessions></white> <gray>сессий,</gray> <white><days></white> <gray>дней</gray>"
     - " <color:#00b4db>Каналы:</color><newline>   <white><channels></white>"
     - " <color:#00b4db>Пропуск:</color> <white><skipped></white>"
@@ -239,7 +238,7 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>Подсистема истории отключена!</color>"
   header: "<prefix> <color:#00b4db>История нарушений игрока</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <dark_gray>[<white><server></white>]</dark_gray> <color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <dark_gray>[<white><server></white>]</dark_gray> <color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>У этого игрока нет найденных нарушений.</gray>"
 
 logs:
