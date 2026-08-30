@@ -224,7 +224,7 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
 }
 
 bukkit {
-  name = "Shard"
+  name = "Shards"
   main = "ac.shard.Shard"
   version = project.version.toString()
   apiVersion = "1.13"
@@ -250,256 +250,256 @@ bukkit {
     )
 
   permissions {
-    register("shard.help") {
+    register("shards.help") {
       description = "Allows usage of the help command"
       default = Permission.Default.OP
     }
-    register("shard.alerts") {
+    register("shards.alerts") {
       description = "Receive alerts for violations"
       default = Permission.Default.OP
     }
-    register("shard.alerts.enable-on-join") {
+    register("shards.alerts.enable-on-join") {
       description = "Automatically enables alerts on join"
       default = Permission.Default.OP
     }
-    register("shard.reload") {
+    register("shards.reload") {
       description = "Allows reloading the config"
       default = Permission.Default.OP
     }
-    register("shard.connect") {
+    register("shards.connect") {
       description = "Allows linking/unlinking this server to the Shard web panel"
       default = Permission.Default.OP
     }
-    register("shard.setup") {
+    register("shards.setup") {
       description = "Allows running the setup wizard"
       default = Permission.Default.OP
     }
-    register("shard.editor") {
+    register("shards.editor") {
       description = "Allows opening the configuration editor"
       default = Permission.Default.OP
     }
-    register("shard.editor.apply") {
+    register("shards.editor.apply") {
       description = "Allows writing what the editor produced to the config files"
       default = Permission.Default.OP
     }
-    register("shard.exempt") {
+    register("shards.exempt") {
       description = "Keeps the checks running but never punishes the player"
       default = Permission.Default.FALSE
     }
-    register("shard.nomitigate") {
+    register("shards.nomitigate") {
       description = "Keeps the checks running but never mitigates the player"
       default = Permission.Default.FALSE
     }
-    register("shard.mitigations") {
+    register("shards.mitigations") {
       description = "Allows listing who is currently mitigated and why"
       default = Permission.Default.OP
     }
-    register("shard.mitigations.clear") {
+    register("shards.mitigations.clear") {
       description = "Allows resetting a player's mitigation score by hand"
       default = Permission.Default.OP
     }
-    register("shard.mitigations.alerts") {
+    register("shards.mitigations.alerts") {
       description = "Allows receiving an alert when a player starts being mitigated"
       default = Permission.Default.OP
     }
-    register("shard.mitigations.alerts.enable-on-join") {
+    register("shards.mitigations.alerts.enable-on-join") {
       description = "Automatically enables mitigation alerts on join"
       default = Permission.Default.OP
     }
-    register("shard.disable") {
+    register("shards.disable") {
       description = "Stops every check for the player, nothing is sent to the API"
       default = Permission.Default.FALSE
     }
-    register("shard.collect") {
+    register("shards.collect") {
       description = "Parent permission for data collection commands"
       default = Permission.Default.OP
       children =
         listOf(
-          "shard.collect.start",
-          "shard.collect.stop",
-          "shard.collect.cancel",
-          "shard.collect.status",
+          "shards.collect.start",
+          "shards.collect.stop",
+          "shards.collect.cancel",
+          "shards.collect.status",
         )
     }
-    register("shard.collect.start") {
+    register("shards.collect.start") {
       description = "Allows starting a data collection session"
       default = Permission.Default.FALSE
     }
-    register("shard.collect.stop") {
+    register("shards.collect.stop") {
       description = "Allows stopping a data collection session"
       default = Permission.Default.FALSE
     }
-    register("shard.collect.cancel") {
+    register("shards.collect.cancel") {
       description = "Allows cancelling a data collection session without saving"
       default = Permission.Default.FALSE
     }
-    register("shard.collect.status") {
+    register("shards.collect.status") {
       description = "Allows viewing data collection session status"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor") {
+    register("shards.monitor") {
       description = "Allows usage of the monitor command"
       default = Permission.Default.OP
       children =
         listOf(
-          "shard.monitor.self",
-          "shard.monitor.list",
-          "shard.monitor.others",
-          "shard.monitor.multi",
-          "shard.monitor.output",
-          "shard.monitor.collect",
-          "shard.monitor.all",
-          "shard.monitor.suspicious",
-          "shard.monitor.auto",
+          "shards.monitor.self",
+          "shards.monitor.list",
+          "shards.monitor.others",
+          "shards.monitor.multi",
+          "shards.monitor.output",
+          "shards.monitor.collect",
+          "shards.monitor.all",
+          "shards.monitor.suspicious",
+          "shards.monitor.auto",
         )
     }
-    register("shard.monitor.auto") {
+    register("shards.monitor.auto") {
       description = "Allows watching whoever is fighting or already suspicious"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.all") {
+    register("shards.monitor.all") {
       description = "Allows watching every online player at once"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.suspicious") {
+    register("shards.monitor.suspicious") {
       description = "Allows watching the players whose AI buffer is over the threshold"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.others") {
+    register("shards.monitor.others") {
       description = "Allows monitoring players other than yourself"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.multi") {
+    register("shards.monitor.multi") {
       description = "Allows watching more than one player at the same time"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.collect") {
+    register("shards.monitor.collect") {
       description = "Shows the data collection and inference rows in the monitor"
       default = Permission.Default.OP
     }
-    register("shard.monitor.output") {
+    register("shards.monitor.output") {
       description = "Parent permission for monitor output selection"
       default = Permission.Default.OP
       children =
         listOf(
-          "shard.monitor.output.actionbar",
-          "shard.monitor.output.bossbar",
-          "shard.monitor.output.sidebar",
-          "shard.monitor.output.chat",
-          "shard.monitor.output.tablist",
+          "shards.monitor.output.actionbar",
+          "shards.monitor.output.bossbar",
+          "shards.monitor.output.sidebar",
+          "shards.monitor.output.chat",
+          "shards.monitor.output.tablist",
         )
     }
-    register("shard.monitor.output.actionbar") {
+    register("shards.monitor.output.actionbar") {
       description = "Allows using the action bar monitor output"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.output.bossbar") {
+    register("shards.monitor.output.bossbar") {
       description = "Allows using the boss bar monitor output"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.output.sidebar") {
+    register("shards.monitor.output.sidebar") {
       description = "Allows using the scoreboard sidebar monitor output"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.output.chat") {
+    register("shards.monitor.output.chat") {
       description = "Allows using the chat monitor output"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.output.tablist") {
+    register("shards.monitor.output.tablist") {
       description = "Allows using the tab list monitor output"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.self") {
+    register("shards.monitor.self") {
       description = "Allows enabling the monitor display only on self"
       default = Permission.Default.FALSE
     }
-    register("shard.monitor.list") {
+    register("shards.monitor.list") {
       description = "Allows listing active monitor sessions"
       default = Permission.Default.OP
     }
-    register("shard.prob") {
-      description = "Legacy alias for shard.monitor"
+    register("shards.prob") {
+      description = "Legacy alias for shards.monitor"
       default = Permission.Default.FALSE
-      children = listOf("shard.monitor")
+      children = listOf("shards.monitor")
     }
-    register("shard.prob.self") {
-      description = "Legacy alias for shard.monitor.self"
+    register("shards.prob.self") {
+      description = "Legacy alias for shards.monitor.self"
       default = Permission.Default.FALSE
-      children = listOf("shard.monitor.self")
+      children = listOf("shards.monitor.self")
     }
-    register("shard.prob.list") {
-      description = "Legacy alias for shard.monitor.list"
+    register("shards.prob.list") {
+      description = "Legacy alias for shards.monitor.list"
       default = Permission.Default.FALSE
-      children = listOf("shard.monitor.list")
+      children = listOf("shards.monitor.list")
     }
-    register("shard.view") {
+    register("shards.view") {
       description = "Allows toggling the AI nametag view on players"
       default = Permission.Default.OP
     }
-    register("shard.profile") {
+    register("shards.profile") {
       description = "Allows usage of the profile command"
       default = Permission.Default.OP
     }
-    register("shard.brand") {
+    register("shards.brand") {
       description = "Receive client brand notifications"
       default = Permission.Default.OP
     }
-    register("shard.brand.enable-on-join") {
+    register("shards.brand.enable-on-join") {
       description = "Automatically enables brand notifications on join"
       default = Permission.Default.OP
     }
-    register("shard.history") {
+    register("shards.history") {
       description = "Allows viewing a player's violation history"
       default = Permission.Default.OP
     }
-    register("shard.logs") {
+    register("shards.logs") {
       description = "Allows viewing recent violations"
       default = Permission.Default.OP
     }
-    register("shard.stats") {
+    register("shards.stats") {
       description = "Allows viewing server statistics"
       default = Permission.Default.OP
     }
-    register("shard.exempt.manage") {
+    register("shards.exempt.manage") {
       description = "Allows managing punishment exemptions for players"
       default = Permission.Default.OP
     }
-    register("shard.punish.manage") {
+    register("shards.punish.manage") {
       description = "Allows managing player punishments"
       default = Permission.Default.OP
     }
-    register("shard.buffer.reset") {
+    register("shards.buffer.reset") {
       description = "Allows resetting the AI buffer of a player"
       default = Permission.Default.OP
     }
-    register("shard.suspicious") {
+    register("shards.suspicious") {
       description = "Permission for suspicious player commands"
       default = Permission.Default.OP
       children =
         listOf(
-          "shard.suspicious.alerts",
-          "shard.suspicious.list",
-          "shard.suspicious.top",
-          "shard.suspicious.flagged",
+          "shards.suspicious.alerts",
+          "shards.suspicious.list",
+          "shards.suspicious.top",
+          "shards.suspicious.flagged",
         )
     }
-    register("shard.suspicious.alerts") {
+    register("shards.suspicious.alerts") {
       description = "Allows toggling suspicious player alerts"
       default = Permission.Default.OP
     }
-    register("shard.suspicious.alerts.enable-on-join") {
+    register("shards.suspicious.alerts.enable-on-join") {
       description = "Automatically enables suspicious alerts on join"
       default = Permission.Default.OP
     }
-    register("shard.suspicious.list") {
+    register("shards.suspicious.list") {
       description = "Allows listing suspicious players"
       default = Permission.Default.OP
     }
-    register("shard.suspicious.top") {
+    register("shards.suspicious.top") {
       description = "Allows viewing the top suspicious player"
       default = Permission.Default.OP
     }
-    register("shard.suspicious.flagged") {
+    register("shards.suspicious.flagged") {
       description = "Allows viewing online players with recorded flags"
       default = Permission.Default.OP
     }
@@ -552,9 +552,9 @@ bukkit {
       )
       .forEach { node ->
         register("sloth.$node") {
-          description = "Legacy alias for shard.$node"
+          description = "Legacy alias for shards.$node"
           default = Permission.Default.FALSE
-          children = listOf("shard.$node")
+          children = listOf("shards.$node")
         }
       }
   }

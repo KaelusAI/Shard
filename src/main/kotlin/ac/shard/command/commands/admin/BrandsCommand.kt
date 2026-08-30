@@ -36,8 +36,8 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 class BrandsCommand(private val alertManager: AlertManager) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("brands").permission("shard.brand").handler(this@BrandsCommand::execute)
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
+      literal("brands").permission("shards.brand").handler(this@BrandsCommand::execute)
     }
   }
 

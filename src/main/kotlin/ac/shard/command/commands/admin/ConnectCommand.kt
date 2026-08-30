@@ -66,22 +66,22 @@ class ConnectCommand(
   private val pendingDisconnect = ConcurrentHashMap<UUID, Long>()
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("connect")
         .optional("code", StringParser.stringParser())
         .permission(PERMISSION)
         .handler(this@ConnectCommand::connect)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("disconnect").permission(PERMISSION).handler(this@ConnectCommand::disconnect)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("disconnect")
         .literal("confirm")
         .permission(PERMISSION)
         .handler(this@ConnectCommand::disconnectConfirm)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("connect")
         .literal("status")
         .permission(PERMISSION)
@@ -441,7 +441,7 @@ class ConnectCommand(
   )
 
   private companion object {
-    const val PERMISSION = "shard.connect"
+    const val PERMISSION = "shards.connect"
     const val MILLIS_PER_SECOND = 1000L
     const val MASK_VISIBLE = 4
     const val CONFIRM_WINDOW_SECONDS = 30L

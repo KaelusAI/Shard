@@ -120,7 +120,7 @@ class MonitorViewService(
   }
 }
 
-internal const val VIEW_PERMISSION = "shard.view"
+internal const val VIEW_PERMISSION = "shards.view"
 
 internal fun isTrackableViewTarget(viewer: Player, target: Player): Boolean {
   return target.isOnline && viewer.world.uid == target.world.uid && viewer.canSee(target)

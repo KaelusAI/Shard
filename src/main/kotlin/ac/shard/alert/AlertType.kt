@@ -24,15 +24,15 @@ enum class AlertType(
   val enabledMessage: Message,
   val disabledMessage: Message,
 ) {
-  REGULAR("shard.alerts", Message.ALERTS_ENABLED, Message.ALERTS_DISABLED),
-  BRAND("shard.brand", Message.BRAND_ALERTS_ENABLED, Message.BRAND_ALERTS_DISABLED),
+  REGULAR("shards.alerts", Message.ALERTS_ENABLED, Message.ALERTS_DISABLED),
+  BRAND("shards.brand", Message.BRAND_ALERTS_ENABLED, Message.BRAND_ALERTS_DISABLED),
   SUSPICIOUS(
-    "shard.suspicious.alerts",
+    "shards.suspicious.alerts",
     Message.SUSPICIOUS_ALERTS_ENABLED,
     Message.SUSPICIOUS_ALERTS_DISABLED,
   ),
   MITIGATION(
-    "shard.mitigations.alerts",
+    "shards.mitigations.alerts",
     Message.MITIGATION_ALERTS_ENABLED,
     Message.MITIGATION_ALERTS_DISABLED,
   ),

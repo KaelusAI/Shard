@@ -94,7 +94,7 @@ class MonitorInfoCommand(
 
   private fun toggleCommand(player: Player, kind: MonitorOutputKind): String {
     val verb = if (kind in settingsService.getSettings(player.uniqueId).outputs) "remove" else "add"
-    return "/shard monitor output $verb ${kind.key}"
+    return "/shards monitor output $verb ${kind.key}"
   }
 
   private fun statusKey(player: Player, kind: MonitorOutputKind): Message =
@@ -114,7 +114,7 @@ class MonitorInfoCommand(
           MessageUtil.getMessage(Message.MONITOR_SETTINGS_ENTRY_HOVER, "setting", setting)
         )
       )
-      .clickEvent(ClickEvent.suggestCommand("/shard monitor set $setting "))
+      .clickEvent(ClickEvent.suggestCommand("/shards monitor set $setting "))
 
   private fun settingRows(settings: MonitorSettings): List<Pair<String, String>> =
     listOf(

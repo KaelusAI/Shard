@@ -30,9 +30,9 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 class PunishCommand(private val databaseManager: DatabaseManager) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("punish")
-        .permission("shard.punish.manage")
+        .permission("shards.punish.manage")
         .literal("reset")
         .required("target", OfflinePlayerParser.offlinePlayerParser())
         .handler(this@PunishCommand::reset)

@@ -48,7 +48,7 @@ import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.StringParser
 
-private const val PERMISSION = "shard.setup"
+private const val PERMISSION = "shards.setup"
 private const val MILLIS_PER_SECOND = 1000L
 private const val FAST_POLL_MINUTES = 15L
 private const val FAST_POLL_SECONDS = 5L
@@ -76,23 +76,23 @@ internal class SetupCommand(
   private val held = AtomicReference<Confirmable?>(null)
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("setup").permission(PERMISSION).handler(this@SetupCommand::open)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("setup").literal("status").permission(PERMISSION).handler(this@SetupCommand::status)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("setup").literal("cancel").permission(PERMISSION).handler(this@SetupCommand::cancel)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("setup")
         .literal("apply")
         .literal("confirm")
         .permission(PERMISSION)
         .handler(this@SetupCommand::confirm)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("setup")
         .literal("apply")
         .required("code", StringParser.stringParser())

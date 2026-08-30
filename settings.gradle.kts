@@ -5,4 +5,4 @@ pluginManagement {
   }
 }
 
-rootProject.name = "Shard"
+rootProject.name = "Shards"

@@ -43,8 +43,8 @@ import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.StringParser
 
-private const val PERMISSION = "shard.editor"
-private const val APPLY_PERMISSION = "shard.editor.apply"
+private const val PERMISSION = "shards.editor"
+private const val APPLY_PERMISSION = "shards.editor.apply"
 private const val CONFIRM_WINDOW_SECONDS = 600L
 private const val MAX_DIFF_ROWS = 20
 private const val WATCH_MINUTES = 15L
@@ -64,37 +64,37 @@ internal class EditorCommand(
   private val watching = AtomicBoolean(false)
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor").permission(PERMISSION).handler(this@EditorCommand::open)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor")
         .literal("apply")
         .permission(APPLY_PERMISSION)
         .handler(this@EditorCommand::apply)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor")
         .literal("apply")
         .literal("confirm")
         .permission(APPLY_PERMISSION)
         .handler(this@EditorCommand::confirm)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor").literal("cancel").permission(PERMISSION).handler(this@EditorCommand::cancel)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor")
         .literal("backups")
         .permission(APPLY_PERMISSION)
         .handler(this@EditorCommand::backups)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor").literal("undo").permission(APPLY_PERMISSION).handler { context ->
         undo(context, null)
       }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("editor")
         .literal("undo")
         .required("stamp", StringParser.stringParser())

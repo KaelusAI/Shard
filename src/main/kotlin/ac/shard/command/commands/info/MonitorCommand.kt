@@ -70,7 +70,7 @@ class MonitorCommand(
     monitorCommand(
       manager,
       path = listOf("list"),
-      permission = "shard.monitor.list",
+      permission = "shards.monitor.list",
       playerOnly = false,
     ) {
       handler(this@MonitorCommand::listSessions)

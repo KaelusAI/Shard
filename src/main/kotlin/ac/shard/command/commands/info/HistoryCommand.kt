@@ -53,9 +53,9 @@ class HistoryCommand(
   private val scheduler: SchedulerService,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("history", Description.empty(), "hist")
-        .permission("shard.history")
+        .permission("shards.history")
         .required("target", OfflinePlayerParser.offlinePlayerParser())
         .optional("page", IntegerParser.integerParser(1))
         .handler(this@HistoryCommand::handleHistory)

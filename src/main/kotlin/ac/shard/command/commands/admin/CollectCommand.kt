@@ -47,36 +47,36 @@ class CollectCommand(
 
     val typeProvider = SuggestionProvider.suggesting<Sender>(typeSuggestions)
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("collect", Description.empty(), "dc")
         .literal("start")
-        .permission("shard.collect.start")
+        .permission("shards.collect.start")
         .required("target", PlayerParser.playerParser())
         .required("type", StringParser.stringParser()) { suggestionProvider = typeProvider }
         .optional("details", StringParser.greedyStringParser())
         .handler(this@CollectCommand::start)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("collect", Description.empty(), "dc")
         .literal("stop")
-        .permission("shard.collect.stop")
+        .permission("shards.collect.stop")
         .required("target", PlayerParser.playerParser())
         .handler(this@CollectCommand::stop)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("collect", Description.empty(), "dc")
         .literal("cancel")
-        .permission("shard.collect.cancel")
+        .permission("shards.collect.cancel")
         .required("target", PlayerParser.playerParser())
         .handler(this@CollectCommand::cancel)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("collect", Description.empty(), "dc")
         .literal("status")
-        .permission("shard.collect.status")
+        .permission("shards.collect.status")
         .optional("target", PlayerParser.playerParser())
         .handler(this@CollectCommand::status)
     }

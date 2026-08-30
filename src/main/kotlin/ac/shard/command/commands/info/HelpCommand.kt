@@ -27,18 +27,18 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 class HelpCommand : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      permission("shard.help")
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
+      permission("shards.help")
       handler(this@HelpCommand::help)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      permission("shard.help")
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
+      permission("shards.help")
       literal("help").handler(this@HelpCommand::help)
     }
   }
 
   private fun help(context: CommandContext<Sender>) {
     val sender = context.sender()
-    MessageUtil.sendMessageList(sender.nativeSender, Message.HELP_MESSAGE, "command", "shard")
+    MessageUtil.sendMessageList(sender.nativeSender, Message.HELP_MESSAGE, "command", "shards")
   }
 }

@@ -28,8 +28,8 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 class ReloadCommand(private val plugin: Shard) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("reload").permission("shard.reload").handler(this@ReloadCommand::execute)
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
+      literal("reload").permission("shards.reload").handler(this@ReloadCommand::execute)
     }
   }
 

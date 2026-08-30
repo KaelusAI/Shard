@@ -56,36 +56,36 @@ class SuspiciousCommand(
   private data class FlaggedPlayerEntry(val playerName: String, val flags: Int)
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("suspicious")
-        .permission("shard.suspicious")
+        .permission("shards.suspicious")
         .literal("alerts")
-        .permission("shard.suspicious.alerts")
+        .permission("shards.suspicious.alerts")
         .mutate { it.apply(CommandRegister.REQUIREMENT_FACTORY.create(PlayerSenderRequirement)) }
         .handler(this@SuspiciousCommand::executeAlerts)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("suspicious")
-        .permission("shard.suspicious")
+        .permission("shards.suspicious")
         .literal("list")
-        .permission("shard.suspicious.list")
+        .permission("shards.suspicious.list")
         .handler(this@SuspiciousCommand::executeList)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("suspicious")
-        .permission("shard.suspicious")
+        .permission("shards.suspicious")
         .literal("top")
-        .permission("shard.suspicious.top")
+        .permission("shards.suspicious.top")
         .handler(this@SuspiciousCommand::executeTop)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("suspicious")
-        .permission("shard.suspicious")
+        .permission("shards.suspicious")
         .literal("flagged")
-        .permission("shard.suspicious.flagged")
+        .permission("shards.suspicious.flagged")
         .handler(this@SuspiciousCommand::executeFlagged)
     }
   }

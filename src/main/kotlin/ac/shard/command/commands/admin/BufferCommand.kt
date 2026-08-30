@@ -49,9 +49,9 @@ class BufferCommand(
   private val scheduler: SchedulerService,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("buffer")
-      permission("shard.buffer.reset")
+      permission("shards.buffer.reset")
       literal("reset")
       required("target", PlayerParser.playerParser())
       optional("label", StringParser.stringParser()) { suggestionProvider = trackedLabels() }

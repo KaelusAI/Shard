@@ -67,38 +67,38 @@ internal class MitigationsCommand(
 ) : ShardCommand {
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("mitigations").permission("shard.mitigations").handler(this@MitigationsCommand::list)
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
+      literal("mitigations").permission("shards.mitigations").handler(this@MitigationsCommand::list)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("mitigations")
-        .permission("shard.mitigations")
+        .permission("shards.mitigations")
         .required("target", PlayerParser.playerParser())
         .handler(this@MitigationsCommand::explain)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("mitigations")
         .literal("alerts")
-        .permission("shard.mitigations.alerts")
+        .permission("shards.mitigations.alerts")
         .handler(this@MitigationsCommand::alerts)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("mitigations")
         .literal("logs")
-        .permission("shard.mitigations")
+        .permission("shards.mitigations")
         .handler(this@MitigationsCommand::logs)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("mitigations")
         .literal("history")
-        .permission("shard.mitigations")
+        .permission("shards.mitigations")
         .required("target", OfflinePlayerParser.offlinePlayerParser())
         .handler(this@MitigationsCommand::history)
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("mitigations")
         .literal("clear")
-        .permission("shard.mitigations.clear")
+        .permission("shards.mitigations.clear")
         .required("target", PlayerParser.playerParser())
         .handler(this@MitigationsCommand::clear)
     }

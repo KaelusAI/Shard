@@ -30,8 +30,8 @@ import org.incendo.cloud.kotlin.extension.suggestionProvider
 import org.incendo.cloud.parser.standard.StringParser
 import org.incendo.cloud.suggestion.SuggestionProvider
 
-internal const val MONITOR_SELF_PERMISSION = "shard.monitor.self"
-internal const val MONITOR_PARENT_PERMISSION = "shard.monitor"
+internal const val MONITOR_SELF_PERMISSION = "shards.monitor.self"
+internal const val MONITOR_PARENT_PERMISSION = "shards.monitor"
 
 internal fun monitorCommand(
   manager: CommandManager<Sender>,
@@ -40,7 +40,7 @@ internal fun monitorCommand(
   playerOnly: Boolean = true,
   configure: MutableCommandBuilder<Sender>.() -> Unit,
 ) {
-  manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+  manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
     literal("monitor").permission(permission)
     if (playerOnly) {
       mutate { it.apply(CommandRegister.REQUIREMENT_FACTORY.create(PlayerSenderRequirement)) }
@@ -54,7 +54,7 @@ internal fun probCommand(
   manager: CommandManager<Sender>,
   configure: MutableCommandBuilder<Sender>.() -> Unit,
 ) {
-  manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+  manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
     literal("prob").permission(MONITOR_SELF_PERMISSION)
     configure.invoke(this)
   }
@@ -76,13 +76,13 @@ internal fun registerMonitorSetting(
 }
 
 internal fun canWatchOthers(viewer: Player): Boolean =
-  viewer.hasPermission("shard.monitor.others") || viewer.hasPermission(MONITOR_PARENT_PERMISSION)
+  viewer.hasPermission("shards.monitor.others") || viewer.hasPermission(MONITOR_PARENT_PERMISSION)
 
 internal fun canWatchMany(viewer: Player): Boolean =
-  viewer.hasPermission("shard.monitor.multi") || viewer.hasPermission(MONITOR_PARENT_PERMISSION)
+  viewer.hasPermission("shards.monitor.multi") || viewer.hasPermission(MONITOR_PARENT_PERMISSION)
 
 internal fun canWatchAuto(viewer: Player, mode: MonitorTargetMode): Boolean =
   canWatchOthers(viewer) &&
     canWatchMany(viewer) &&
-    (viewer.hasPermission("shard.monitor.${mode.key}") ||
+    (viewer.hasPermission("shards.monitor.${mode.key}") ||
       viewer.hasPermission(MONITOR_PARENT_PERMISSION))

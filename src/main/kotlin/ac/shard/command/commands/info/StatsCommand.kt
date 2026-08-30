@@ -108,15 +108,15 @@ class StatsCommand(
         StatsPeriod.entries.map { Suggestion.suggestion(it.label) }
       )
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("stats").permission("shard.stats").handler { context ->
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
+      literal("stats").permission("shards.stats").handler { context ->
         execute(context, StatsPeriod.DEFAULT)
       }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("stats")
-        .permission("shard.stats")
+        .permission("shards.stats")
         .required("period", StringParser.stringParser()) { suggestionProvider = periodSuggestions }
         .handler { context ->
           val raw: String = context["period"]

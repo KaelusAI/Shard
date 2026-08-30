@@ -36,25 +36,25 @@ class ExemptCommand(
   private val localeManager: LocaleManager,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("exempt")
-        .permission("shard.exempt.manage")
+        .permission("shards.exempt.manage")
         .required("target", PlayerParser.playerParser())
         .optional("duration", StringParser.stringParser())
         .handler(this@ExemptCommand::handleExempt)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("exempt")
-        .permission("shard.exempt.manage")
+        .permission("shards.exempt.manage")
         .literal("remove")
         .required("target", PlayerParser.playerParser())
         .handler(this@ExemptCommand::handleRemoveExempt)
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("exempt")
-        .permission("shard.exempt.manage")
+        .permission("shards.exempt.manage")
         .literal("status")
         .required("target", PlayerParser.playerParser())
         .handler(this@ExemptCommand::handleStatus)
@@ -118,7 +118,7 @@ class ExemptCommand(
     val sender = context.sender()
     val target: Player = context["target"]
 
-    if (target.hasPermission("shard.exempt")) {
+    if (target.hasPermission("shards.exempt")) {
       MessageUtil.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_STATUS_PERM_PERMISSION,

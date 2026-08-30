@@ -226,4 +226,4 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
     )
 }
 
-private const val COLLECT_VIEW_PERMISSION = "shard.monitor.collect"
+private const val COLLECT_VIEW_PERMISSION = "shards.monitor.collect"

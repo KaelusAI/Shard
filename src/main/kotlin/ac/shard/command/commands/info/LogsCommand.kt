@@ -40,9 +40,9 @@ class LogsCommand(
   private val scheduler: SchedulerService,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("logs")
-        .permission("shard.logs")
+        .permission("shards.logs")
         .optional("page", IntegerParser.integerParser(1))
         .handler(this@LogsCommand::handleLogs)
     }

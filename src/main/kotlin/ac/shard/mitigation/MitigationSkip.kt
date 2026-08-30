@@ -23,7 +23,7 @@ import ac.shard.config.ConfigManager
 import ac.shard.player.ShardPlayer
 import ac.shard.region.RegionProvider
 
-const val NO_MITIGATE_PERMISSION = "shard.nomitigate"
+const val NO_MITIGATE_PERMISSION = "shards.nomitigate"
 
 enum class SkipReason {
   TURNED_OFF,

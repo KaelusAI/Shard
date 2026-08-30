@@ -62,7 +62,7 @@ class ExemptManager {
   }
 
   companion object {
-    const val EXEMPT_PERMISSION = "shard.exempt"
-    const val DISABLE_PERMISSION = "shard.disable"
+    const val EXEMPT_PERMISSION = "shards.exempt"
+    const val DISABLE_PERMISSION = "shards.disable"
   }
 }

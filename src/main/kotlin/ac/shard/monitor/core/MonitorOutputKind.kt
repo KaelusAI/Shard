@@ -27,7 +27,7 @@ enum class MonitorOutputKind(val key: String) {
   TABLIST("tablist");
 
   val permission: String
-    get() = "shard.monitor.output.$key"
+    get() = "shards.monitor.output.$key"
 
   companion object {
     private const val SEPARATOR = ","

@@ -59,9 +59,9 @@ class ProfileCommand(
   private val logger: Logger,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("profile")
-        .permission("shard.profile")
+        .permission("shards.profile")
         .required("target", OfflinePlayerParser.offlinePlayerParser())
         .handler(this@ProfileCommand::execute)
     }

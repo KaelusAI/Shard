@@ -31,7 +31,7 @@ import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 class ViewCommand(private val monitorViewService: MonitorViewService) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.buildAndRegister("shards", aliases = arrayOf("shardsac", "shrd")) {
       literal("view")
         .permission(VIEW_PERMISSION)
         .mutate { it.apply(CommandRegister.REQUIREMENT_FACTORY.create(PlayerSenderRequirement)) }
