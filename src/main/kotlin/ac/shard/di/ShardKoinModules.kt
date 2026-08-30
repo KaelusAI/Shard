@@ -39,6 +39,7 @@ import ac.shard.api.service.PunishmentApi
 import ac.shard.checks.CheckFactory
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.checks.impl.ai.AiSnapshotStore
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.checks.impl.misc.ClientBrand
@@ -212,7 +213,7 @@ private fun coreModule(plugin: Shard) = module {
   single<RegionProvider> { get<WorldGuardManager>() }
 
   single { { get<ConfigManager>().mitigationSettings } }
-  singleOf(::HitStamps)
+  single { HitStamps() }
   single { MitigationScorer(get(), get()) }
   single { MitigationSkip(get(), get(), get()) }
   single { RuleEngine(get(), System::currentTimeMillis) }
@@ -220,6 +221,7 @@ private fun coreModule(plugin: Shard) = module {
   single<DamageProcessor> { get<MitigationDamageProcessor>() }
   single { MitigationScoreStore(get(), get(), get()) }
   single { MitigationLogStore(get(), get(), get()) }
+  single { AiSnapshotStore(get()) }
   single {
     MitigationRuntime(
       plugin = get(),

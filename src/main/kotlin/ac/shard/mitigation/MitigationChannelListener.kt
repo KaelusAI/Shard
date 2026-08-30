@@ -22,7 +22,6 @@ package ac.shard.mitigation
 import ac.shard.api.event.MitigationEvent
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
-import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent
 import kotlin.random.Random
 import org.bukkit.entity.EnderCrystal
 import org.bukkit.entity.Player
@@ -33,6 +32,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityRegainHealthEvent
+import org.bukkit.event.entity.ProjectileLaunchEvent
 
 private const val SURVIVES_BY = 0.5
 
@@ -70,10 +70,12 @@ class MitigationChannelListener(
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  fun onLaunch(event: PlayerLaunchProjectileEvent) {
-    val shardPlayer = playerDataManager.getPlayer(event.player) ?: return
+  fun onLaunch(event: ProjectileLaunchEvent) {
+    val projectile = event.entity
+    val shooter = projectile.shooter as? Player ?: return
+    val shardPlayer = playerDataManager.getPlayer(shooter) ?: return
     stamps.remember(
-      event.projectile.uniqueId,
+      projectile.uniqueId,
       shardPlayer.uuid,
       multiplier(shardPlayer, MitigationSettings.PROJECTILE),
     )

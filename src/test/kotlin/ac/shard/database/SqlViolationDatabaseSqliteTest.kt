@@ -214,6 +214,40 @@ class SqlViolationDatabaseSqliteTest {
     assertEquals(1, violationDatabase.getMitigationLog(hunted, limit = 1).size)
   }
 
+  @Test
+  fun `the ai snapshot survives a round trip and stays absent until it is written`() {
+    val databaseFile = Files.createTempFile("shard-sqlite-ai-snapshot-", ".db").toFile()
+    databaseFile.deleteOnExit()
+    val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+    migrateFreshSqlite(jdbcUrl)
+    val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
+    val violationDatabase = SqlViolationDatabase(mockk(relaxed = true), database)
+    val playerId = UUID.randomUUID()
+
+    assertEquals(null, violationDatabase.loadAiSnapshot(playerId), "nothing was written yet")
+
+    violationDatabase.saveAiSnapshot(
+      playerId,
+      AiSnapshot(
+        highWindows = 41L,
+        windows = 900L,
+        low = 500L,
+        middle = 300L,
+        high = 100L,
+        savedAt = 1_786_000_000_000L,
+      ),
+    )
+
+    val loaded = assertNotNull(violationDatabase.loadAiSnapshot(playerId))
+    assertEquals(41L, loaded.highWindows)
+    assertEquals(900L, loaded.windows)
+    assertEquals(listOf(500L, 300L, 100L), listOf(loaded.low, loaded.middle, loaded.high))
+    assertEquals(1_786_000_000_000L, loaded.savedAt)
+
+    violationDatabase.saveAiSnapshot(playerId, loaded.copy(windows = 950L))
+    assertEquals(950L, violationDatabase.loadAiSnapshot(playerId)?.windows, "a second save updates")
+  }
+
   @Suppress("LongParameterList")
   private fun entry(
     name: String,

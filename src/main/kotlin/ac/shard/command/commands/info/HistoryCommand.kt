@@ -31,7 +31,10 @@ import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
+import ac.shard.utils.Sparkline
 import ac.shard.utils.TimeUtil
+import java.util.Locale
+import net.kyori.adventure.text.Component
 import org.bukkit.OfflinePlayer
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.bukkit.parser.OfflinePlayerParser
@@ -39,6 +42,9 @@ import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.description.Description
 import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.IntegerParser
+
+private const val SPARKLINE_WIDTH = 20
+private const val DEFAULT_SERVER_NAME = "server"
 
 class HistoryCommand(
   private val databaseManager: DatabaseManager,
@@ -91,21 +97,11 @@ class HistoryCommand(
           maxPages.toString(),
         )
 
-      val entries = violations.map { violation ->
-        MessageUtil.getMessage(
-          Message.HISTORY_ENTRY,
-          "server",
-          violation.serverName,
-          "check",
-          violation.checkName,
-          "vl",
-          violation.vl.toString(),
-          "verbose",
-          violation.verbose,
-          "timeago",
-          TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
-        )
-      }
+      val here =
+        configManager.config.getString("history.server-name", DEFAULT_SERVER_NAME).orEmpty()
+      val named = here.isNotBlank() && here != DEFAULT_SERVER_NAME
+      val elsewhere = violations.any { it.serverName.isNotBlank() && it.serverName != here }
+      val entries = violations.map { violation -> entryLine(violation, named || elsewhere) }
 
       scheduler.runSync {
         sender.sendMessage(header)
@@ -121,6 +117,38 @@ class HistoryCommand(
       }
     }
   }
+
+  private fun entryLine(violation: Violation, showServer: Boolean): Component =
+    MessageUtil.getMessage(
+      Message.HISTORY_ENTRY,
+      "server",
+      serverTag(violation.serverName, showServer),
+      "check",
+      violation.checkName,
+      "vl",
+      violation.vl.toString(),
+      "verbose",
+      violation.verbose,
+      "timeago",
+      TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
+      "buffer",
+      violation.aiBuffer?.let { String.format(Locale.US, "%.2f", it) } ?: "-",
+      "score",
+      violation.mitigationScore?.let { String.format(Locale.US, "%.1f", it) } ?: "-",
+      "windows",
+      violation.windows?.toString() ?: "-",
+      "high",
+      violation.highWindows?.toString() ?: "-",
+      "trail",
+      Sparkline.of(violation.trail, SPARKLINE_WIDTH).ifEmpty { "-" },
+    )
+
+  private fun serverTag(name: String, show: Boolean): String =
+    if (!show || name.isBlank()) {
+      ""
+    } else {
+      "<dark_gray>[<white>${MessageUtil.escape(name)}</white>]</dark_gray> "
+    }
 
   private fun warnIfStorageDegraded(sender: Sender) {
     if (!databaseManager.isAvailable) {

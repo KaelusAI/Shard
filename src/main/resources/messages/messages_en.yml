@@ -236,11 +236,22 @@ profile:
     - " <color:#ff416c>AI Probs >90%:</color> <white><ai_probs_90></white>"
     - " <color:#FBBF24>Mitigation:</color> <white><mitigation_tier></white> <gray>(suspicion <mitigation_score>)</gray>"
     - " <color:#FBBF24>Rule:</color> <white><mitigation_active></white>"
+    - " <color:#00b4db>Windows:</color> <white><windows></white>"
+    - " <color:#00b4db>Probabilities:</color> <gray><probabilities></gray>"
+  offline-lines:
+    - "<gradient:#8e9eab:#eef2f3>---- [ Profile: <player> ] ----</gradient>"
+    - " <color:#00b4db>Last seen:</color> <white><seen></white>"
+    - " <color:#ff416c>AI buffer:</color> <white><ai_buffer></white> <gray>(<buffer_seen>)</gray>"
+    - " <color:#00b4db>Windows:</color> <white><windows></white> <gray>(over 0.9:</gray> <white><high></white><gray>)</gray>"
+    - " <color:#00b4db>Probabilities:</color> <gray><probabilities></gray>"
+    - " <color:#FBBF24>Suspicion:</color> <white><mitigation_score></white>"
+    - " <color:#FBBF24>Mitigated:</color> <white><sessions></white> <gray>sessions,</gray> <white><days></white> <gray>days</gray>"
+    - " <color:#00b4db>Violations:</color> <white><violations></white>"
 
 history:
   disabled: "<prefix> <color:#ff4b2b>History subsystem is disabled!</color>"
   header: "<prefix> <color:#00b4db>Showing logs for</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <dark_gray>[<white><server></white>]</dark_gray> <color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <server><color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white><newline><gray>Buffer: <white><buffer></white><newline><gray>Suspicion: <white><score></white><newline><gray>Windows: <white><windows></white><gray>, over 0.9: <white><high></white><newline><gray>Last minute: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>No violations found for this player.</gray>"
 
 logs:

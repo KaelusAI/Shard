@@ -58,6 +58,7 @@ private const val TIER_LENGTH = 16
 private const val TEXT_LENGTH = 255
 private const val UUID_LENGTH = 36
 private const val NAME_LENGTH = 64
+private const val TRAIL_BYTES = 1024
 
 class SqlViolationDatabase(
   private val configManager: ConfigManager,
@@ -70,6 +71,7 @@ class SqlViolationDatabase(
     checkName: String,
     vls: Int,
     labels: String,
+    facts: AiFacts,
   ) {
     transaction(database) {
       val now = Instant.now()
@@ -83,6 +85,11 @@ class SqlViolationDatabase(
         it[createdAt] = now.toEpochMilli()
         it[createdAtInstant] = now
         it[Violations.labels] = labels
+        it[aiBuffer] = facts.buffer
+        it[mitigationScore] = facts.score
+        it[aiWindows] = facts.windows
+        it[aiHighWindows] = facts.highWindows
+        it[probabilityTrail] = facts.trail.takeIf { trail -> trail.isNotEmpty() }
       }
     }
   }
@@ -101,6 +108,59 @@ class SqlViolationDatabase(
         .limit(limit)
         .offset(((page - 1) * limit).toLong())
         .map(::toViolation)
+    }
+  }
+
+  override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) {
+    transaction(database) {
+      val uuidString = playerUUID.toString()
+      val updated =
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) { writeSnapshot(it, snapshot) }
+      if (updated > 0) return@transaction
+      try {
+        PlayerLogins.insert {
+          it[uuid] = uuidString
+          it[lastSeen] = snapshot.savedAt
+          writeSnapshot(it, snapshot)
+        }
+      } catch (_: java.sql.SQLException) {
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) { writeSnapshot(it, snapshot) }
+      }
+    }
+  }
+
+  private fun writeSnapshot(statement: UpdateBuilder<*>, snapshot: AiSnapshot) {
+    statement[PlayerLogins.aiHighWindows] = snapshot.highWindows
+    statement[PlayerLogins.aiWindows] = snapshot.windows
+    statement[PlayerLogins.probLow] = snapshot.low
+    statement[PlayerLogins.probMid] = snapshot.middle
+    statement[PlayerLogins.probHigh] = snapshot.high
+    statement[PlayerLogins.aiStateAt] = snapshot.savedAt
+  }
+
+  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? {
+    return transaction(database) {
+      PlayerLogins.select(
+          PlayerLogins.aiHighWindows,
+          PlayerLogins.aiWindows,
+          PlayerLogins.probLow,
+          PlayerLogins.probMid,
+          PlayerLogins.probHigh,
+          PlayerLogins.aiStateAt,
+        )
+        .where { PlayerLogins.uuid eq playerUUID.toString() }
+        .firstOrNull()
+        ?.let { row ->
+          AiSnapshot(
+            highWindows = row[PlayerLogins.aiHighWindows],
+            windows = row[PlayerLogins.aiWindows],
+            low = row[PlayerLogins.probLow],
+            middle = row[PlayerLogins.probMid],
+            high = row[PlayerLogins.probHigh],
+            savedAt = row[PlayerLogins.aiStateAt],
+          )
+        }
+        ?.takeIf { it.savedAt != 0L }
     }
   }
 
@@ -502,6 +562,11 @@ class SqlViolationDatabase(
       verbose = row[Violations.verbose],
       vl = row[Violations.vl],
       createdAt = row[Violations.createdAtInstant],
+      aiBuffer = row[Violations.aiBuffer],
+      mitigationScore = row[Violations.mitigationScore],
+      windows = row[Violations.aiWindows],
+      highWindows = row[Violations.aiHighWindows],
+      trail = row[Violations.probabilityTrail] ?: ByteArray(0),
     )
   }
 
@@ -517,6 +582,11 @@ class SqlViolationDatabase(
     val createdAtInstant: Column<Instant> =
       registerColumn("created_at_instant", ShardInstantColumnType()).default(Instant.EPOCH)
     val labels: Column<String> = varchar("labels", 255).default("")
+    val aiBuffer: Column<Double?> = double("ai_buffer").nullable()
+    val mitigationScore: Column<Double?> = double("mitigation_score").nullable()
+    val aiWindows: Column<Long?> = long("ai_windows").nullable()
+    val aiHighWindows: Column<Long?> = long("ai_high_windows").nullable()
+    val probabilityTrail: Column<ByteArray?> = binary("probability_trail", TRAIL_BYTES).nullable()
 
     override val primaryKey = PrimaryKey(id)
 
@@ -575,6 +645,13 @@ class SqlViolationDatabase(
     val mitigationSessions: Column<Int> = integer("mitigation_sessions").default(0)
     val mitigationDays: Column<Int> = integer("mitigation_days").default(0)
     val mitigationLastDay: Column<Long> = long("mitigation_last_day").default(0L)
+    val aiHighWindows: Column<Long> = long("ai_high_windows").default(0L)
+    val aiWindows: Column<Long> = long("ai_windows").default(0L)
+    val probLow: Column<Long> = long("prob_low").default(0L)
+    val probMid: Column<Long> = long("prob_mid").default(0L)
+    val probHigh: Column<Long> = long("prob_high").default(0L)
+    val aiStateAt: Column<Long> = long("ai_state_at").default(0L)
+    val probabilityTrail: Column<ByteArray?> = binary("probability_trail", TRAIL_BYTES).nullable()
 
     override val primaryKey = PrimaryKey(uuid)
 
@@ -614,6 +691,11 @@ class SqlViolationDatabase(
         Violations.createdAt,
         Violations.createdAtInstant,
         Violations.labels,
+        Violations.aiBuffer,
+        Violations.mitigationScore,
+        Violations.aiWindows,
+        Violations.aiHighWindows,
+        Violations.probabilityTrail,
       )
 
     private class ShardInstantColumnType : InstantColumnType<Instant>() {

@@ -130,6 +130,8 @@ class AiCheck(
 
   @Volatile var prob90: Int = 0
 
+  val trail = ProbabilityTrail()
+
   val inferenceTicks: Int
     get() = window.ticksSinceAttack
 
@@ -281,6 +283,7 @@ class AiCheck(
 
     val probability = apiResponse.probability
     lastProbability = probability
+    trail.record(probability)
     mitigationScorer.record(shardPlayer, probability)
     damageProcessor.applyProbability(shardPlayer, probability)
 

@@ -29,6 +29,7 @@ import ac.shard.api.event.PunishmentTriggeredEvent
 import ac.shard.checks.ICheck
 import ac.shard.config.ConfigManager
 import ac.shard.coroutines.ShardCoroutines
+import ac.shard.database.AiFacts
 import ac.shard.database.DatabaseManager
 import ac.shard.database.ViolationDatabase
 import ac.shard.player.ShardPlayer
@@ -121,6 +122,7 @@ class PunishmentManager(
   fun handleFlag(check: ICheck, labels: Set<String>, debug: String) {
     val playerName = shardPlayer.player.name
     val checkName = check.checkName
+    val facts = AiFacts.of(shardPlayer)
 
     if (shardPlayer.exemptManager.isDisabled(shardPlayer.player)) {
       plugin.logger.info("[Punish] $checkName flag on $playerName ignored: checks disabled")
@@ -152,7 +154,7 @@ class PunishmentManager(
           continue
         }
         try {
-          executeCommands(group, newVl, debug, entry.value, playerName, checkName, labelText)
+          executeCommands(group, newVl, debug, entry.value, playerName, checkName, labelText, facts)
         } catch (e: Exception) {
           plugin.logger.warning("Failed to execute punishment actions: ${e.message}")
         }
@@ -169,6 +171,7 @@ class PunishmentManager(
     playerName: String,
     checkName: String,
     labels: String,
+    facts: AiFacts,
   ) {
     val event =
       PunishmentTriggeredEvent(
@@ -185,7 +188,7 @@ class PunishmentManager(
       return
     }
     for (command in commands) {
-      executeCommand(group, vl, verbose, command, playerName, checkName, labels)
+      executeCommand(group, vl, verbose, command, playerName, checkName, labels, facts)
     }
   }
 
@@ -198,6 +201,7 @@ class PunishmentManager(
     playerName: String,
     checkName: String,
     labels: String,
+    facts: AiFacts,
   ) {
     val trimmed = command.trim()
     val lower = trimmed.lowercase(Locale.ROOT)
@@ -207,7 +211,7 @@ class PunishmentManager(
       return
     }
     if (lower == "[log]") {
-      runAsync { database.logAlert(shardPlayer, verbose, checkName, vl, labels) }
+      runAsync { database.logAlert(shardPlayer, verbose, checkName, vl, labels, facts) }
       return
     }
     if (lower == "[reset]") {

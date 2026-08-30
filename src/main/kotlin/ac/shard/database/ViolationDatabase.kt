@@ -33,6 +33,7 @@ interface ViolationDatabase {
     checkName: String,
     vls: Int,
     labels: String,
+    facts: AiFacts,
   )
 
   fun getLogCount(player: UUID): Int
@@ -60,6 +61,10 @@ interface ViolationDatabase {
   fun saveMitigationScore(playerUUID: UUID, state: StoredScore)
 
   fun loadMitigationScore(playerUUID: UUID): StoredScore?
+
+  fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot)
+
+  fun loadAiSnapshot(playerUUID: UUID): AiSnapshot?
 
   fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry)
 

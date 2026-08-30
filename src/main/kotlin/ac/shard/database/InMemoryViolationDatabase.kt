@@ -37,6 +37,7 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private val aiBuffers = ConcurrentHashMap<UUID, AiBufferState>()
   private val aiLabelBuffers = ConcurrentHashMap<UUID, ConcurrentHashMap<String, AiBufferState>>()
   private val mitigationScores = ConcurrentHashMap<UUID, StoredScore>()
+  private val aiSnapshots = ConcurrentHashMap<UUID, AiSnapshot>()
   private val mitigationLog = ArrayDeque<Pair<UUID, MitigationLogEntry>>()
   private val mitigationLogLock = Any()
   private val violations = ArrayDeque<Violation>()
@@ -48,6 +49,7 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
     checkName: String,
     vls: Int,
     labels: String,
+    facts: AiFacts,
   ) {
     val entry =
       Violation(
@@ -59,6 +61,11 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
         vl = vls,
         createdAt = Instant.now(),
         labels = labels,
+        aiBuffer = facts.buffer,
+        mitigationScore = facts.score,
+        windows = facts.windows,
+        highWindows = facts.highWindows,
+        trail = facts.trail,
       )
 
     synchronized(violationsLock) {
@@ -130,6 +137,12 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   }
 
   override fun loadMitigationScore(playerUUID: UUID): StoredScore? = mitigationScores[playerUUID]
+
+  override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) {
+    aiSnapshots[playerUUID] = snapshot
+  }
+
+  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? = aiSnapshots[playerUUID]
 
   override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
     synchronized(mitigationLogLock) {

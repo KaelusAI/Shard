@@ -43,8 +43,9 @@ internal class ResilientViolationDatabase(
     checkName: String,
     vls: Int,
     labels: String,
+    facts: AiFacts,
   ) {
-    execute { database -> database.logAlert(player, verbose, checkName, vls, labels) }
+    execute { database -> database.logAlert(player, verbose, checkName, vls, labels, facts) }
   }
 
   override fun getLogCount(player: UUID): Int {
@@ -101,6 +102,14 @@ internal class ResilientViolationDatabase(
 
   override fun loadMitigationScore(playerUUID: UUID): StoredScore? {
     return execute { database -> database.loadMitigationScore(playerUUID) }
+  }
+
+  override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) {
+    execute { database -> database.saveAiSnapshot(playerUUID, snapshot) }
+  }
+
+  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? {
+    return execute { database -> database.loadAiSnapshot(playerUUID) }
   }
 
   override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {

@@ -21,6 +21,7 @@ import ac.shard.Shard
 import ac.shard.alert.AlertManager
 import ac.shard.api.event.ShardEventBus
 import ac.shard.checks.CheckManager
+import ac.shard.checks.impl.ai.AiSnapshotStore
 import ac.shard.checks.impl.ai.PersistentBufferService
 import ac.shard.config.ConfigManager
 import ac.shard.data.CollectManager
@@ -153,6 +154,7 @@ class PlayerDataManagerTest {
         persistentBufferService = mockk<PersistentBufferService>(relaxed = true),
         mitigationScoreStore = mockk<MitigationScoreStore>(relaxed = true),
         mitigationLogStore = mitigationLogStore,
+        aiSnapshotStore = mockk<AiSnapshotStore>(relaxed = true),
       )
 
     return Fixture(
