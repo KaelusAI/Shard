@@ -2,7 +2,8 @@ prefix: "<gradient:#8e9eab:#eef2f3>Shard</gradient> <gray>|</gray>"
 
 alerts-enabled: "<prefix> <color:#eef2f3>Уведомления</color> <color:#a8ff78>включены</color>."
 alerts-disabled: "<prefix> <color:#eef2f3>Уведомления</color> <color:#ff4b2b>выключены</color>."
-alerts-format: "<prefix> <hover:show_text:'<gray>Нажми, чтобы телепортироваться к <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>подозревается в</gray> <hover:show_text:'<gray>Детали: <white><verbose></white>'><color:#ff416c><check_name></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
+alerts-labels-line: "<newline><gray>Метки:</gray> <white><labels></white>"
+alerts-format: "<prefix> <hover:show_text:'<gray>Нажми, чтобы телепортироваться к <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>подозревается в</gray> <hover:show_text:'<color:#ff416c><check_label></color><labels_line><newline><gray>Буферы на момент срабатывания:</gray> <white><verbose></white><newline><gray>Срабатываний группы:</gray> <white><vl></white>'><color:#ff416c><check_label></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
 
 player-not-found: "<prefix> <color:#ff4b2b>Игрок исключен или находится вне сети!</color>"
 run-as-player: "<prefix> <color:#ff4b2b>Эту команду могут использовать только игроки!</color>"
@@ -234,6 +235,7 @@ profile:
     - " <color:#00b4db>Общее время игры:</color> <white><total_playtime></white>"
     - " <color:#ff416c>AI буфер:</color> <white><ai_buffer></white>"
     - " <color:#ff416c>AI вер-ть >90%:</color> <white><ai_probs_90></white>"
+    - " <color:#ff416c>AI метки:</color> <white><ai_labels></white>"
     - " <color:#FBBF24>Подавление:</color> <white><mitigation_tier></white> <gray>(подозрение <mitigation_score>)</gray>"
     - " <color:#FBBF24>Правило:</color> <white><mitigation_active></white>"
     - " <color:#00b4db>Окон:</color> <white><windows></white>"
@@ -251,16 +253,24 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>Подсистема истории отключена!</color>"
   header: "<prefix> <color:#00b4db>История нарушений игрока</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <server><color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white><newline><gray>Последняя минута: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <server><color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white><labels_line><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white><newline><gray>Последняя минута: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>У этого игрока нет найденных нарушений.</gray>"
 
 logs:
   header: "<prefix> <color:#00b4db>Последние нарушения</color> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Детали: <white><verbose></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Детали: <white><verbose></white><labels_line>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>Нарушения не найдены.</gray>"
 
 punish:
+  no-group: "<prefix> <color:#ff4b2b>Ни одна группа наказаний не подошла к</color> <white><check_name></white> <gray>у</gray> <white><player></white><gray>, детект остался без реакции. Проверь punishments.yml.</gray>"
   reset-success: "<prefix> <color:#a8ff78>Наказания сброшены для</color> <white><player></white>."
+
+buffer:
+  reset-all: "<prefix> <color:#a8ff78>Сброшено буферов: <white><count></white> у</color> <white><player></white><gray> - <labels></gray>"
+  reset-label: "<prefix> <color:#a8ff78>Сброшен</color> <white><label></white> <gray>(<buffer>)</gray> <color:#a8ff78>у</color> <white><player></white>."
+  reset-empty: "<prefix> <color:#f6d365>У <white><player></white> нечего сбрасывать.</color>"
+  reset-no-data: "<prefix> <color:#ff4b2b>Проверка ИИ для <white><player></white> не запущена.</color>"
+  reset-unknown-label: "<prefix> <color:#ff4b2b>У <white><player></white> нет буфера с меткой <white><label></white>.</color>"
 
 exempt:
   invalid-duration: "<prefix> <color:#ff4b2b>Неверный формат времени. Используйте: 10s, 5m, 1h, 1d, или perm.</color>"
@@ -274,10 +284,11 @@ exempt:
   status-expired: "<prefix> <color:#f6d365>Срок отключения наказаний для <white><player></white> истек.</color>"
   status-temp: "<prefix> <color:#00b4db>Для игрока <white><player></white> наказания отключены еще на <white><duration></white>.</color>"
 
+
 suspicious:
   alerts-enabled: "<prefix> <color:#eef2f3>Уведомления о подозрительных игроках</color> <color:#a8ff78>включены</color>."
   alerts-disabled: "<prefix> <color:#eef2f3>Уведомления о подозрительных игроках</color> <color:#ff4b2b>выключены</color>."
-  alert-triggered: "<prefix> <color:#ff416c>Игрок</color> <white><player></white> <color:#ff416c>подозрителен</color> <dark_gray>|</dark_gray> <color:#ff4b2b><buffer></color>"
+  alert-triggered: "<prefix> <color:#ff416c>Игрок</color> <white><player></white> <color:#ff416c>подозрителен</color> <dark_gray>|</dark_gray> <color:#ff4b2b><buffer></color> <gray><label></gray>"
   list-empty: "<prefix> <gray>Сейчас нет подозрительных игроков.</gray>"
   list-header: "<gradient:#ff416c:#ff4b2b>--- Подозрительные Игроки (<count>) ---</gradient>"
   list-entry: "<color:#f6d365> ▶ <player>:</color> <gray>Буфер:</gray> <color:#ff4b2b><buffer></color> <dark_gray>|</dark_gray> <gray>Подавление:</gray> <color:#FBBF24><level></color> <gray>(<score>)</gray> <dark_gray>|</dark_gray> <gray>Пинг:</gray> <white><ping>мс</white>"
@@ -303,6 +314,8 @@ stats:
   violators: " <color:#00b4db>Нарушителей (<period>):</color> <white><violators></white> <gray>(<violators_percent>)</gray>"
   violators-hover: "<white><violators_percent></white> <gray>от тех, кто атаковал за</gray> <white><period></white>: <white><attackers></white>"
   online: " <color:#00b4db>Игроков онлайн:</color> <white><online_players></white>"
+  model: " <color:#00b4db>Модель:</color> <white><model></white> <gray>(<labels>)</gray>"
+  model-hover: "<white><config></white>"
   suspicious: " <color:#ff416c>Подозрительных сейчас:</color> <white><suspicious_now></white> <gray>(<suspicious_percent_now>)</gray>"
   suspicious-hover: "<white><suspicious_now></white> <gray>из</gray> <white><online_players></white> <gray>онлайн-игроков</gray><newline><gray>Порог:</gray> <white>AI буфер > <suspicious_threshold></white>"
 

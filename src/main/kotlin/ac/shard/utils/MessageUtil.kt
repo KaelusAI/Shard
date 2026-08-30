@@ -116,6 +116,16 @@ object MessageUtil {
     }
   }
 
+  @JvmStatic fun rawMessage(key: Message): String = localeManager.getRawMessage(key)
+
+  @JvmStatic
+  fun labelsLine(shown: String): String =
+    if (shown.isBlank()) {
+      ""
+    } else {
+      rawMessage(Message.ALERTS_LABELS_LINE).replace("<labels>", shown)
+    }
+
   @JvmStatic
   fun getMessage(key: Message, vararg placeholders: String): Component {
     val rawMessage = localeManager.getRawMessage(key)

@@ -122,8 +122,12 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
     buffers: Map<String, Double>,
     updatedAt: Long,
   ) {
-    if (buffers.isEmpty()) return
+    if (buffers.isEmpty()) {
+      aiLabelBuffers.remove(playerUUID)
+      return
+    }
     val stored = aiLabelBuffers.getOrPut(playerUUID) { ConcurrentHashMap() }
+    stored.keys.retainAll(buffers.keys)
     for ((label, value) in buffers) {
       stored[label] = AiBufferState(value, updatedAt)
     }

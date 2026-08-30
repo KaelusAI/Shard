@@ -27,6 +27,7 @@ import ac.shard.sender.Sender
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
 import ac.shard.utils.TimeUtil
+import net.kyori.adventure.text.Component
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.buildAndRegister
@@ -77,23 +78,7 @@ class LogsCommand(
           maxPages.toString(),
         )
 
-      val entries = violations.map { violation ->
-        MessageUtil.getMessage(
-          Message.LOGS_ENTRY,
-          "server",
-          violation.serverName,
-          "player",
-          violation.playerName,
-          "check",
-          violation.checkName,
-          "vl",
-          violation.vl.toString(),
-          "verbose",
-          violation.verbose,
-          "timeago",
-          TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
-        )
-      }
+      val entries = violations.map { violation -> renderEntry(violation) }
 
       scheduler.runSync {
         sender.sendMessage(header)
@@ -108,5 +93,31 @@ class LogsCommand(
         }
       }
     }
+  }
+
+  private fun renderEntry(violation: Violation): Component {
+    val shown =
+      configManager.labelCatalog.format(
+        violation.labels.split(',').map(String::trim).filter(String::isNotEmpty)
+      )
+    return MessageUtil.getMessage(
+      Message.LOGS_ENTRY,
+      "server",
+      violation.serverName,
+      "player",
+      violation.playerName,
+      "check",
+      violation.checkName,
+      "vl",
+      violation.vl.toString(),
+      "verbose",
+      violation.verbose,
+      "timeago",
+      TimeUtil.formatTimeAgo(violation.createdAt, localeManager),
+      "labels",
+      shown,
+      "labels_line",
+      MessageUtil.labelsLine(shown),
+    )
   }
 }

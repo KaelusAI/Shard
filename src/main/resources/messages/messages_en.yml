@@ -2,7 +2,8 @@ prefix: "<gradient:#8e9eab:#eef2f3>Shard</gradient> <gray>|</gray>"
 
 alerts-enabled: "<prefix> <color:#eef2f3>Alerts</color> <color:#a8ff78>enabled</color>."
 alerts-disabled: "<prefix> <color:#eef2f3>Alerts</color> <color:#ff4b2b>disabled</color>."
-alerts-format: "<prefix> <hover:show_text:'<gray>Click to teleport to <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>flagged</gray> <hover:show_text:'<gray>Details: <white><verbose></white>'><color:#ff416c><check_name></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
+alerts-labels-line: "<newline><gray>Labels:</gray> <white><labels></white>"
+alerts-format: "<prefix> <hover:show_text:'<gray>Click to teleport to <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>flagged</gray> <hover:show_text:'<color:#ff416c><check_label></color><labels_line><newline><gray>Buffers at the flag:</gray> <white><verbose></white><newline><gray>Times this group has fired:</gray> <white><vl></white>'><color:#ff416c><check_label></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
 
 player-not-found: "<prefix> <color:#ff4b2b>Player is exempt or offline!</color>"
 run-as-player: "<prefix> <color:#ff4b2b>This command can only be used by players!</color>"
@@ -234,6 +235,7 @@ profile:
     - " <color:#00b4db>Total Playtime:</color> <white><total_playtime></white>"
     - " <color:#ff416c>AI Buffer:</color> <white><ai_buffer></white>"
     - " <color:#ff416c>AI Probs >90%:</color> <white><ai_probs_90></white>"
+    - " <color:#ff416c>AI Labels:</color> <white><ai_labels></white>"
     - " <color:#FBBF24>Mitigation:</color> <white><mitigation_tier></white> <gray>(suspicion <mitigation_score>)</gray>"
     - " <color:#FBBF24>Rule:</color> <white><mitigation_active></white>"
     - " <color:#00b4db>Windows:</color> <white><windows></white>"
@@ -251,16 +253,24 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>History subsystem is disabled!</color>"
   header: "<prefix> <color:#00b4db>Showing logs for</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <server><color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white><newline><gray>Buffer: <white><buffer></white><newline><gray>Suspicion: <white><score></white><newline><gray>Windows: <white><windows></white><gray>, over 0.9: <white><high></white><newline><gray>Last minute: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <server><color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white><labels_line><newline><gray>Buffer: <white><buffer></white><newline><gray>Suspicion: <white><score></white><newline><gray>Windows: <white><windows></white><gray>, over 0.9: <white><high></white><newline><gray>Last minute: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>No violations found for this player.</gray>"
 
 logs:
   header: "<prefix> <color:#00b4db>Recent violations</color> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Details: <white><verbose></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Details: <white><verbose></white><labels_line>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>No violations found within this time period.</gray>"
 
 punish:
+  no-group: "<prefix> <color:#ff4b2b>No punishment group matches</color> <white><check_name></white> <gray>on</gray> <white><player></white><gray>, so the detection was not acted on. Check punishments.yml.</gray>"
   reset-success: "<prefix> <color:#a8ff78>Reset punishments for</color> <white><player></white>."
+
+buffer:
+  reset-all: "<prefix> <color:#a8ff78>Cleared <white><count></white> buffer(s) for</color> <white><player></white><gray>: <labels></gray>"
+  reset-label: "<prefix> <color:#a8ff78>Cleared</color> <white><label></white> <gray>(<buffer>)</gray> <color:#a8ff78>for</color> <white><player></white>."
+  reset-empty: "<prefix> <color:#f6d365><white><player></white> had no buffer to clear.</color>"
+  reset-no-data: "<prefix> <color:#ff4b2b>No AI check running for <white><player></white>.</color>"
+  reset-unknown-label: "<prefix> <color:#ff4b2b><white><player></white> has no buffer named <white><label></white>.</color>"
 
 exempt:
   invalid-duration: "<prefix> <color:#ff4b2b>Invalid time format. Use: 10s, 5m, 1h, 1d, or perm.</color>"
@@ -274,10 +284,11 @@ exempt:
   status-expired: "<prefix> <color:#f6d365><white><player></white>'s exemption has expired.</color>"
   status-temp: "<prefix> <color:#00b4db>Player <white><player></white> is exempt for another <white><duration></white>.</color>"
 
+
 suspicious:
   alerts-enabled: "<prefix> <color:#eef2f3>Suspicious Player Alerts</color> <color:#a8ff78>enabled</color>."
   alerts-disabled: "<prefix> <color:#eef2f3>Suspicious Player Alerts</color> <color:#ff4b2b>disabled</color>."
-  alert-triggered: "<prefix> <color:#ff416c>Player</color> <white><player></white> <color:#ff416c>is suspicious</color> <dark_gray>|</dark_gray> <color:#ff4b2b><buffer></color>"
+  alert-triggered: "<prefix> <color:#ff416c>Player</color> <white><player></white> <color:#ff416c>is suspicious</color> <dark_gray>|</dark_gray> <color:#ff4b2b><buffer></color> <gray><label></gray>"
   list-empty: "<prefix> <gray>No players are currently flagged as suspicious.</gray>"
   list-header: "<gradient:#ff416c:#ff4b2b>--- Suspicious Players (<count>) ---</gradient>"
   list-entry: "<color:#f6d365> \u25B6 <player>:</color> <gray>Buffer:</gray> <color:#ff4b2b><buffer></color> <dark_gray>|</dark_gray> <gray>Mitigation:</gray> <color:#FBBF24><level></color> <gray>(<score>)</gray> <dark_gray>|</dark_gray> <gray>Ping:</gray> <white><ping>ms</white>"
@@ -303,6 +314,8 @@ stats:
   violators: " <color:#00b4db>Violators (<period>):</color> <white><violators></white> <gray>(<violators_percent>)</gray>"
   violators-hover: "<white><violators_percent></white> <gray>of the players who fought over</gray> <white><period></white>: <white><attackers></white>"
   online: " <color:#00b4db>Players Online:</color> <white><online_players></white>"
+  model: " <color:#00b4db>Model:</color> <white><model></white> <gray>(<labels>)</gray>"
+  model-hover: "<white><config></white>"
   suspicious: " <color:#ff416c>Suspicious Now:</color> <white><suspicious_now></white> <gray>(<suspicious_percent_now>)</gray>"
   suspicious-hover: "<white><suspicious_now></white> <gray>out of</gray> <white><online_players></white> <gray>online players</gray><newline><gray>Threshold:</gray> <white>AI buffer > <suspicious_threshold></white>"
 

@@ -118,8 +118,12 @@ class HistoryCommand(
     }
   }
 
-  private fun entryLine(violation: Violation, showServer: Boolean): Component =
-    MessageUtil.getMessage(
+  private fun entryLine(violation: Violation, showServer: Boolean): Component {
+    val shown =
+      configManager.labelCatalog.format(
+        violation.labels.split(',').map(String::trim).filter(String::isNotEmpty)
+      )
+    return MessageUtil.getMessage(
       Message.HISTORY_ENTRY,
       "server",
       serverTag(violation.serverName, showServer),
@@ -141,7 +145,12 @@ class HistoryCommand(
       violation.highWindows?.toString() ?: "-",
       "trail",
       Sparkline.of(violation.trail, SPARKLINE_WIDTH).ifEmpty { "-" },
+      "labels",
+      shown,
+      "labels_line",
+      MessageUtil.labelsLine(shown),
     )
+  }
 
   private fun serverTag(name: String, show: Boolean): String =
     if (!show || name.isBlank()) {

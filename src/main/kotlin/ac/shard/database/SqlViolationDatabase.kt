@@ -385,9 +385,16 @@ class SqlViolationDatabase(
     buffers: Map<String, Double>,
     updatedAt: Long,
   ) {
-    if (buffers.isEmpty()) return
     transaction(database) {
       val uuidString = playerUUID.toString()
+      val keep = buffers.keys
+      AiLabelBuffers.deleteWhere {
+        if (keep.isEmpty()) {
+          AiLabelBuffers.uuid eq uuidString
+        } else {
+          (AiLabelBuffers.uuid eq uuidString) and (AiLabelBuffers.label notInList keep)
+        }
+      }
       for ((label, value) in buffers) {
         val updated =
           AiLabelBuffers.update({
@@ -516,6 +523,7 @@ class SqlViolationDatabase(
             outputs = MonitorOutputKind.parseSet(row[MonitorSettingsTable.outputKind]),
             chatStyle = MonitorChatStyle.fromConfig(row[MonitorSettingsTable.chatStyle]),
             showCollect = row[MonitorSettingsTable.showCollect],
+            labelFocus = row[MonitorSettingsTable.labelFocus],
             showInference = row[MonitorSettingsTable.showInference],
           )
         }
@@ -532,6 +540,7 @@ class SqlViolationDatabase(
           it[MonitorSettingsTable.showDmg] = insertValue(MonitorSettingsTable.showDmg)
           it[MonitorSettingsTable.showTrend] = insertValue(MonitorSettingsTable.showTrend)
           it[MonitorSettingsTable.showCollect] = insertValue(MonitorSettingsTable.showCollect)
+          it[MonitorSettingsTable.labelFocus] = insertValue(MonitorSettingsTable.labelFocus)
           it[MonitorSettingsTable.showInference] = insertValue(MonitorSettingsTable.showInference)
           it[MonitorSettingsTable.showName] = insertValue(MonitorSettingsTable.showName)
           it[MonitorSettingsTable.outputKind] = insertValue(MonitorSettingsTable.outputKind)
@@ -545,6 +554,7 @@ class SqlViolationDatabase(
         it[showDmg] = settings.showDmg
         it[showTrend] = settings.showTrend
         it[showCollect] = settings.showCollect
+        it[labelFocus] = settings.labelFocus
         it[showInference] = settings.showInference
         it[showName] = settings.showName.name
         it[outputKind] = MonitorOutputKind.store(settings.outputs)
@@ -562,6 +572,7 @@ class SqlViolationDatabase(
       verbose = row[Violations.verbose],
       vl = row[Violations.vl],
       createdAt = row[Violations.createdAtInstant],
+      labels = row[Violations.labels],
       aiBuffer = row[Violations.aiBuffer],
       mitigationScore = row[Violations.mitigationScore],
       windows = row[Violations.aiWindows],
@@ -668,6 +679,7 @@ class SqlViolationDatabase(
     val showDmg: Column<Boolean> = bool("show_dmg")
     val showTrend: Column<Boolean> = bool("show_trend")
     val showCollect: Column<Boolean> = bool("show_collect").default(true)
+    val labelFocus: Column<String> = varchar("label_focus", LABEL_LENGTH).default("")
     val showInference: Column<Boolean> = bool("show_inference").default(true)
     val showName: Column<String> = varchar("show_name", 16)
     val outputKind: Column<String> = varchar("output_kind", 64)

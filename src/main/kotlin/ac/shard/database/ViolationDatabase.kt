@@ -27,6 +27,7 @@ import ac.shard.player.ShardPlayer
 import java.util.UUID
 
 interface ViolationDatabase {
+  @Suppress("LongParameterList")
   fun logAlert(
     player: ShardPlayer,
     verbose: String,

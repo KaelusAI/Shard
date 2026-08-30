@@ -22,6 +22,7 @@ enum class Message(val path: String) {
   ALERTS_ENABLED("alerts-enabled"),
   ALERTS_DISABLED("alerts-disabled"),
   ALERTS_FORMAT("alerts-format"),
+  ALERTS_LABELS_LINE("alerts-labels-line"),
   PLAYER_NOT_FOUND("player-not-found"),
   RUN_AS_PLAYER("run-as-player"),
   RELOAD_START("reload-start"),
@@ -217,6 +218,11 @@ enum class Message(val path: String) {
 
   // Punish
   PUNISH_RESET_SUCCESS("punish.reset-success"),
+  BUFFER_RESET_ALL("buffer.reset-all"),
+  BUFFER_RESET_LABEL("buffer.reset-label"),
+  BUFFER_RESET_EMPTY("buffer.reset-empty"),
+  BUFFER_RESET_NO_DATA("buffer.reset-no-data"),
+  BUFFER_RESET_UNKNOWN_LABEL("buffer.reset-unknown-label"),
 
   // Exempt
   EXEMPT_INVALID_DURATION("exempt.invalid-duration"),
@@ -233,6 +239,7 @@ enum class Message(val path: String) {
   // Suspicious
   SUSPICIOUS_ALERTS_ENABLED("suspicious.alerts-enabled"),
   SUSPICIOUS_ALERTS_DISABLED("suspicious.alerts-disabled"),
+  PUNISH_NO_GROUP("punish.no-group"),
   SUSPICIOUS_ALERT_TRIGGERED("suspicious.alert-triggered"),
   SUSPICIOUS_LIST_EMPTY("suspicious.list-empty"),
   SUSPICIOUS_LIST_HEADER("suspicious.list-header"),
@@ -259,6 +266,8 @@ enum class Message(val path: String) {
   STATS_VIOLATORS("stats.violators"),
   STATS_VIOLATORS_HOVER("stats.violators-hover"),
   STATS_ONLINE("stats.online"),
+  STATS_MODEL("stats.model"),
+  STATS_MODEL_HOVER("stats.model-hover"),
   STATS_SUSPICIOUS("stats.suspicious"),
   STATS_SUSPICIOUS_HOVER("stats.suspicious-hover"),
 
