@@ -22,6 +22,7 @@
  */
 package ac.shard.punishment
 
+import ac.shard.ai.label.LabelKey
 import ac.shard.checks.ICheck
 import java.util.Locale
 import java.util.NavigableMap
@@ -33,7 +34,7 @@ class PunishGroup(
   val actions: NavigableMap<Int, List<String>>,
 ) {
   val associatedCheckNames: Set<String> = checkNames.map { it.lowercase(Locale.ROOT) }.toSet()
-  val associatedLabels: Set<String> = labels.map { it.lowercase(Locale.ROOT) }.toSet()
+  val associatedLabels: Set<String> = labels.mapNotNull(LabelKey::canonical).toSet()
 
   fun isCheckAssociated(check: ICheck): Boolean {
     val names = (listOf(check.checkName) + check.legacyCheckNames).map { it.lowercase(Locale.ROOT) }
@@ -42,5 +43,5 @@ class PunishGroup(
 
   fun matches(check: ICheck, labels: Set<String>): Boolean =
     isCheckAssociated(check) &&
-      (associatedLabels.isEmpty() || labels.any { it.lowercase(Locale.ROOT) in associatedLabels })
+      (associatedLabels.isEmpty() || labels.any { LabelKey.canonical(it) in associatedLabels })
 }

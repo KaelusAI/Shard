@@ -24,4 +24,6 @@ data class AiSnapshot(
   val prob90: Int,
   val mitigationTier: String = "NONE",
   val mitigationScore: Double = 0.0,
+  val labelBuffers: Map<String, Double> = emptyMap(),
+  val labelProbabilities: Map<String, Double> = emptyMap(),
 )

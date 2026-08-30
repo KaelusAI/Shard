@@ -15,6 +15,25 @@
 #
 # labels: an optional list under a group. The group then only fires when the detection carries
 #         one of those labels; leave it out and the group fires on every detection of its checks.
+#         Label names are matched loosely, so "Aim Assist", aim-assist and aim_assist are one label.
+#
+# Splitting a check by label:
+#
+#   Punishments:
+#     AI-Aim:
+#       checks: ["AI"]
+#       labels: ["aim"]
+#       actions: { 1: ["[alert]", "[log]"], 3: ["tempban <player> 1d Aim assistance."] }
+#     AI-Trigger:
+#       checks: ["AI"]
+#       labels: ["trigger"]
+#       actions: { 1: ["[alert]", "[log]"], 5: ["tempban <player> 6h Auto clicking."] }
+#     AI:                      # keep this one, with no labels: key
+#       checks: ["AI"]
+#       actions: { 1: ["[alert]", "[log]"] }
+#
+#         Without that last group, a detection with an unlisted label goes unpunished.
+#         Every matching group fires.
 #
 # Anything else is run from the console as a command.
 #

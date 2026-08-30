@@ -30,5 +30,6 @@ data class CheckFlagEvent(
   val checkName: String,
   val configName: String,
   val debug: String,
+  val labels: Set<String> = emptySet(),
   override var cancelled: Boolean = false,
 ) : ShardCancellableEvent

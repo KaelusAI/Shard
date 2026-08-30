@@ -46,7 +46,14 @@ abstract class AbstractCheck(protected val shardPlayer: ShardPlayer) : ICheck {
 
   protected fun flag(debug: String, labels: Set<String> = emptySet()) {
     val event =
-      CheckFlagEvent(shardPlayer.uuid, shardPlayer.player.name, checkName, configName, debug)
+      CheckFlagEvent(
+        shardPlayer.uuid,
+        shardPlayer.player.name,
+        checkName,
+        configName,
+        debug,
+        labels,
+      )
     shardPlayer.eventBus.post(event)
     if (event.cancelled) {
       return

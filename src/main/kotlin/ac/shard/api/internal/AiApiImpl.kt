@@ -36,12 +36,14 @@ class AiApiImpl(
     val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java) ?: return Optional.empty()
     return Optional.of(
       AiSnapshot(
-        aiCheck.lastProbability,
+        aiCheck.lastCheatProbability,
         aiCheck.buffer,
         shardPlayer.combat.damageMultiplier,
         aiCheck.prob90,
         shardPlayer.mitigation.appliedTier.name,
         shardPlayer.mitigation.score,
+        aiCheck.labelBufferSnapshot(),
+        aiCheck.lastLabelProbabilities,
       )
     )
   }

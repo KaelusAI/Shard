@@ -35,4 +35,5 @@ data class AiPredictionEvent(
   val prob90: Int,
   val flagged: Boolean,
   val labelBuffers: Map<String, Double> = emptyMap(),
+  val labelProbabilities: Map<String, Double> = emptyMap(),
 ) : ShardEvent

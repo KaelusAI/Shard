@@ -78,7 +78,7 @@ class FlagSnapshotTest {
         coroutines = ShardCoroutines(scheduler, Logger.getLogger("test")),
       )
 
-    manager.handleFlag(mockk<ICheck>(relaxed = true), "debug")
+    manager.handleFlag(mockk<ICheck>(relaxed = true), emptySet(), "debug")
 
     assertTrue(
       reads > 0,

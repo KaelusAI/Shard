@@ -33,5 +33,6 @@ data class PunishmentTriggeredEvent(
   val violationLevel: Int,
   val actions: ImmutableList<String>,
   val debug: String,
+  val labels: Set<String> = emptySet(),
   override var cancelled: Boolean = false,
 ) : ShardCancellableEvent

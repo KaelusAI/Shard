@@ -23,6 +23,7 @@
 package ac.shard.punishment
 
 import ac.shard.Shard
+import ac.shard.ai.label.LabelKey
 import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.api.event.PunishmentTriggeredEvent
@@ -108,6 +109,34 @@ class PunishmentManager(
         punishmentGroups[groupName] = punishGroup
       }
     }
+    onGroupsLoaded()
+  }
+
+  private fun onGroupsLoaded() {
+    val signature =
+      punishmentGroups.values.joinToString(";") {
+        "${it.groupName}|${it.associatedCheckNames.sorted()}|${it.associatedLabels.sorted()}"
+      }
+    if (!loadedSignature.getAndSet(signature).let { it != signature }) return
+    reportedUnmatched.clear()
+    warnAboutChecksWithoutCatchAll()
+  }
+
+  private fun warnAboutChecksWithoutCatchAll() {
+    val filtered = punishmentGroups.values.filter { it.associatedLabels.isNotEmpty() }
+    if (filtered.isEmpty()) return
+    val covered =
+      punishmentGroups.values
+        .filter { it.associatedLabels.isEmpty() }
+        .flatMap { it.associatedCheckNames }
+        .toSet()
+    val uncovered = filtered.flatMap { it.associatedCheckNames }.toSet() - covered
+    for (check in uncovered) {
+      plugin.logger.severe(
+        "[Punish] every group for check '$check' filters by labels, so a detection carrying a " +
+          "label none of them lists goes unpunished. Add a group for '$check' with no labels: key."
+      )
+    }
   }
 
   private fun getStringList(node: ConfigurationNode): List<String> {
@@ -135,14 +164,11 @@ class PunishmentManager(
 
     val matched = punishmentGroups.values.filter { it.matches(check, labels) }
     if (matched.isEmpty()) {
-      plugin.logger.warning(
-        "[Punish] $checkName flag on $playerName matched no punishment group. " +
-          "Groups: ${punishmentGroups.keys}, labels: $labels"
-      )
+      reportUnmatchedFlag(checkName, playerName, labels)
       return
     }
 
-    val labelText = labels.joinToString(",")
+    val labelText = joinForStorage(labels)
     coroutines.scope.launch(coroutines.async) {
       for (group in matched) {
         val newVl = database.incrementViolationLevel(shardPlayer.uuid, group.groupName)
@@ -182,6 +208,7 @@ class PunishmentManager(
         vl,
         commands.toImmutableList(),
         verbose,
+        labelKeys(labels).toSet(),
       )
     shardPlayer.eventBus.post(event)
     if (event.cancelled) {
@@ -235,6 +262,8 @@ class PunishmentManager(
           verbose,
           "labels",
           displayLabels(labels),
+          "labels_line",
+          labelsLine(labels),
         )
       runSync { adventure.players().sendMessage(component) }
       return
@@ -252,6 +281,7 @@ class PunishmentManager(
         .replace("<check_name>", checkName)
         .replace("<vl>", vl.toString())
         .replace("<verbose>", verbose)
+        .replace("<labels>", displayLabels(labels))
 
     runSync { Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formattedCmd) }
   }
@@ -339,24 +369,64 @@ class PunishmentManager(
         playerName,
         "check_name",
         checkName,
+        "check_label",
+        configManager.labelCatalog.decorate(checkName, labelKeys(labels)),
         "vl",
         vl.toString(),
         "verbose",
         verbose,
         "labels",
         displayLabels(labels),
+        "labels_line",
+        labelsLine(labels),
       )
 
     alertManager.send(message, AlertType.REGULAR)
   }
 
+  private fun reportUnmatchedFlag(checkName: String, playerName: String, labels: Set<String>) {
+    val message =
+      "[Punish] $checkName flag on $playerName went unpunished: no group matches labels " +
+        "$labels. Groups: ${punishmentGroups.keys}"
+    if (!reportedUnmatched.add("$checkName|$playerName|${labels.sorted()}")) {
+      plugin.logger.fine(message)
+      return
+    }
+    plugin.logger.severe(message)
+    alertManager.send(
+      MessageUtil.getMessage(
+        Message.PUNISH_NO_GROUP,
+        "check_name",
+        configManager.labelCatalog.decorate(checkName, labels),
+        "player",
+        playerName,
+      ),
+      AlertType.REGULAR,
+    )
+  }
+
+  private fun joinForStorage(labels: Set<String>): String {
+    val kept = StringBuilder()
+    for (label in labels) {
+      val addition = if (kept.isEmpty()) label else ",$label"
+      if (kept.length + addition.length > LABELS_COLUMN_LENGTH) break
+      kept.append(addition)
+    }
+    return kept.toString()
+  }
+
+  private fun labelKeys(labels: String): List<String> =
+    labels.split(',').map(String::trim).filter { it.isNotBlank() && !LabelKey.isReserved(it) }
+
   private fun displayLabels(labels: String): String =
-    labels
-      .split(',')
-      .filter { it.isNotBlank() && !it.startsWith(RESERVED_LABEL_PREFIX) }
-      .joinToString(", ")
+    configManager.labelCatalog.format(labelKeys(labels))
+
+  private fun labelsLine(labels: String): String = MessageUtil.labelsLine(displayLabels(labels))
 
   private companion object {
-    private const val RESERVED_LABEL_PREFIX = "_"
+    private const val LABELS_COLUMN_LENGTH = 255
+
+    private val reportedUnmatched = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val loadedSignature = java.util.concurrent.atomic.AtomicReference("")
   }
 }
