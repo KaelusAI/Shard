@@ -82,6 +82,7 @@ private fun formatThreshold(value: Double): String {
   }
 }
 
+@Suppress("TooManyFunctions")
 class StatsCommand(
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
@@ -180,8 +181,27 @@ class StatsCommand(
         snapshot.onlinePlayers.toString(),
       ),
       buildSuspiciousLine(snapshot),
+      buildModelLine(),
     )
   }
+
+  private fun buildModelLine(): Component =
+    MessageUtil.getMessage(
+        Message.STATS_MODEL,
+        "model",
+        configManager.modelTitle(),
+        "labels",
+        configManager.labelCatalog.format(configManager.aiLabels).ifEmpty { "-" },
+      )
+      .hoverEvent(
+        HoverEvent.showText(
+          MessageUtil.getMessage(
+            Message.STATS_MODEL_HOVER,
+            "config",
+            configManager.describeModelConfig(),
+          )
+        )
+      )
 
   private fun buildFlagsLine(snapshot: StatsSnapshot): Component =
     MessageUtil.getMessage(

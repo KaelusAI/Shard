@@ -166,6 +166,7 @@ class TelemetryService(
         put("tps", beat.tps)
         put("plugin_version", plugin.description.version)
         put("uptime_seconds", (System.currentTimeMillis() - startedAtMs) / MILLIS_PER_SECOND)
+        put("model_config", configManager.modelConfigFingerprint())
         if (beat.punishments > 0) put("punishments", beat.punishments)
         if (stopping) put("stopping", true)
       }
@@ -204,23 +205,10 @@ class TelemetryService(
     val used = field("quota_used_percent")?.asInt()
     if (used != null) quota = QuotaSnapshot(used)
     if (applyParams) {
-      val preWindow = field("pre_window")?.asInt()
-      val postWindow = field("post_window")?.asInt()
-      val step = field("step")?.asInt()
-      val model = field("model")?.asText()
-      val labels = stringList(field("labels"))
-      if (listOf(preWindow, postWindow, step, model, labels).any { it != null }) {
-        configManager.updateAiParams(preWindow, postWindow, step, model, labels = labels)
-      }
+      field("model")?.asText()?.takeIf(String::isNotBlank)?.let(configManager::notePanelModelName)
     }
     return used
   }
-
-  private fun stringList(node: JsonNode?): List<String>? =
-    node
-      ?.takeIf { it.isArray }
-      ?.mapNotNull { it.takeIf(JsonNode::isTextual)?.textValue()?.takeIf(String::isNotBlank) }
-      ?.takeIf { it.isNotEmpty() }
 
   private fun deviceUrl(path: String): String? {
     val inference = configManager.aiServerUrl.trim().trimEnd('/')
