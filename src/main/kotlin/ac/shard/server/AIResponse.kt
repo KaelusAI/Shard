@@ -22,4 +22,10 @@ data class AIResponse(
   val expectedColumns: List<String>? = null,
   val probabilities: List<Double>? = null,
   val labels: List<String>? = null,
+  val labelTitles: Map<String, String>? = null,
+  val legitLabels: List<String>? = null,
+  val labelMode: String? = null,
+  val modelTitle: String? = null,
+  val labelThresholds: Map<String, Map<String, Double>>? = null,
+  val namedProbabilities: Map<String, Double>? = null,
 )

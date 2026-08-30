@@ -94,6 +94,7 @@ class AIServerProvider(
           apiCooldown!!,
           credentialsStore.instanceId(),
           configManager.aiGzipEnabled,
+          configManager::modelConfigFingerprint,
         )
       }
     }

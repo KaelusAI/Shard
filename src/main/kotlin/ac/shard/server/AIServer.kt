@@ -31,8 +31,10 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
+@Suppress("LongParameterList")
 class AIServer(
   private val plugin: Shard,
   url: String,
@@ -40,6 +42,7 @@ class AIServer(
   private val apiCooldown: ApiCooldown,
   private val instanceId: String,
   private val gzipEnabled: Boolean,
+  private val configFingerprint: () -> String = { "" },
 ) : AiTransport, AiBatchTransport {
   private val serverUri: URI = URI.create(url)
   private val userAgent: String = "Shard/" + plugin.description.version
@@ -73,7 +76,9 @@ class AIServer(
         .header("User-Agent", userAgent)
         .header("X-API-Key", apiKey)
         .header("X-Instance-Id", instanceId)
+        .header("X-Model-Config", configFingerprint())
         .header("Accept", "application/json")
+        .header("Accept-Encoding", "gzip")
         .POST(HttpRequest.BodyPublishers.ofByteArray(wireBody))
         .timeout(if (batch) BATCH_REQUEST_TIMEOUT else REQUEST_TIMEOUT)
     if (gzipEnabled) {
@@ -83,7 +88,7 @@ class AIServer(
       builder.header("X-Batch", "1")
     }
 
-    return HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
+    return HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofByteArray())
       .thenApply { response -> catchResponse(response) }
       .exceptionallyCompose { throwable -> catchException(throwable) }
   }
@@ -108,10 +113,11 @@ class AIServer(
     return buf.array()
   }
 
-  private fun catchResponse(response: HttpResponse<String>): String {
+  private fun catchResponse(response: HttpResponse<ByteArray>): String {
     val statusCode = response.statusCode()
+    val body = decodeBody(response)
     if (statusCode !in HTTP_OK_MIN..HTTP_OK_MAX) {
-      val error = ShardError.parse(statusCode, response.body())
+      val error = ShardError.parse(statusCode, body)
       if (error.backoff) {
         apiCooldown.recordFailure()
       }
@@ -119,7 +125,17 @@ class AIServer(
     }
 
     apiCooldown.recordSuccess()
-    return response.body()
+    return body
+  }
+
+  @Suppress("ReturnCount")
+  private fun decodeBody(response: HttpResponse<ByteArray>): String {
+    val raw = response.body() ?: return ""
+    val encoded = response.headers().firstValue("Content-Encoding").orElse("").equals("gzip", true)
+    if (!encoded || raw.isEmpty()) return String(raw, Charsets.UTF_8)
+    return runCatching { GZIPInputStream(raw.inputStream()).use { it.readBytes() } }
+      .map { String(it, Charsets.UTF_8) }
+      .getOrElse { String(raw, Charsets.UTF_8) }
   }
 
   private fun <U> catchException(throwable: Throwable): CompletableFuture<U> {
