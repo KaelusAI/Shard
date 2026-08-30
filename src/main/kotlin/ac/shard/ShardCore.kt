@@ -17,6 +17,7 @@
  */
 package ac.shard
 
+import ac.shard.ai.label.VerdictResolver
 import ac.shard.alert.AlertManager
 import ac.shard.api.ShardApi
 import ac.shard.command.CommandManager
@@ -106,6 +107,7 @@ constructor(
 
   fun reload() {
     configManager.reloadConfig()
+    VerdictResolver.forgetReports()
     localeManager.reload()
     debugManager.reload()
     alertManager.reload()

@@ -68,7 +68,32 @@ class DefaultAiService(
       val columns =
         stringListFromDetails(cause.details, "expected_columns")
           ?: parseStringListFromBody(cause.responseBody, "expected_columns")
-      val negotiated = AiServiceException(cause, preWindow, postWindow, step, columns)
+      val labels =
+        stringListFromDetails(cause.details, "expected_labels", clearable = true)
+          ?: parseStringListFromBody(cause.responseBody, "expected_labels", clearable = true)
+      val labelNames = stringMapFromDetails(cause.details, "expected_label_titles")
+      val legitLabels =
+        stringListFromDetails(cause.details, "expected_legit_labels", clearable = true)
+          ?: parseStringListFromBody(cause.responseBody, "expected_legit_labels", clearable = true)
+      val labelMode = cause.details?.get("expected_label_mode") as? String
+      val labelThresholds = numberMapsFromDetails(cause.details, "expected_label_thresholds")
+      val modelTitle = cause.details?.get("expected_model_title") as? String
+      val model = cause.details?.get("expected_model") as? String
+      val negotiated =
+        AiServiceException(
+          cause,
+          preWindow,
+          postWindow,
+          step,
+          columns,
+          labels,
+          labelNames,
+          legitLabels,
+          labelMode,
+          labelThresholds,
+          modelTitle,
+          model,
+        )
       if (negotiated.hasNewParams) {
         return CompletableFuture.failedFuture(negotiated)
       }
@@ -84,21 +109,67 @@ class DefaultAiService(
       else -> null
     }
 
-  private fun stringListFromDetails(details: Map<String, Any?>?, key: String): List<String>? =
-    (details?.get(key) as? Collection<*>)
-      ?.mapNotNull { (it as? String)?.takeIf(String::isNotBlank) }
-      ?.takeIf { it.isNotEmpty() }
+  private fun stringMapFromDetails(details: Map<String, Any?>?, key: String): Map<String, String>? {
+    val raw = details?.get(key) as? Map<*, *> ?: return null
+    val values =
+      raw
+        .mapNotNull { (name, value) ->
+          val label = name as? String ?: return@mapNotNull null
+          (value as? String)?.takeIf(String::isNotBlank)?.let { label to it }
+        }
+        .toMap()
+    return values.takeIf { it.isNotEmpty() || raw.isEmpty() }
+  }
 
-  internal fun parseStringListFromBody(body: String?, key: String): List<String>? {
-    if (body.isNullOrBlank()) return null
-    return runCatching { OBJECT_MAPPER.readTree(body) }
-      .getOrNull()
-      ?.get("details")
-      ?.takeIf { it.isObject }
-      ?.get(key)
-      ?.takeIf { it.isArray }
-      ?.mapNotNull { it.takeIf(JsonNode::isTextual)?.textValue()?.takeIf(String::isNotBlank) }
-      ?.takeIf { it.isNotEmpty() }
+  private fun numberMapsFromDetails(
+    details: Map<String, Any?>?,
+    key: String,
+  ): Map<String, Map<String, Double>>? {
+    val raw = details?.get(key) as? Map<*, *> ?: return null
+    val values =
+      raw
+        .mapNotNull { (name, value) ->
+          val label = name as? String ?: return@mapNotNull null
+          (value as? Map<*, *>)
+            ?.mapNotNull { (field, number) ->
+              val bound = field as? String ?: return@mapNotNull null
+              (number as? Number)?.let { bound to it.toDouble() }
+            }
+            ?.toMap()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { label to it }
+        }
+        .toMap()
+    return values.takeIf { it.isNotEmpty() || raw.isEmpty() }
+  }
+
+  private fun stringListFromDetails(
+    details: Map<String, Any?>?,
+    key: String,
+    clearable: Boolean = false,
+  ): List<String>? {
+    val raw = details?.get(key) as? Collection<*> ?: return null
+    val values = raw.mapNotNull { (it as? String)?.takeIf(String::isNotBlank) }
+    return values.takeIf { it.isNotEmpty() || (clearable && raw.isEmpty()) }
+  }
+
+  internal fun parseStringListFromBody(
+    body: String?,
+    key: String,
+    clearable: Boolean = false,
+  ): List<String>? {
+    val raw =
+      body
+        ?.takeIf { it.isNotBlank() }
+        ?.let { runCatching { OBJECT_MAPPER.readTree(it) }.getOrNull() }
+        ?.get("details")
+        ?.takeIf { it.isObject }
+        ?.get(key)
+        ?.takeIf { it.isArray } ?: return null
+    val values = raw.mapNotNull {
+      it.takeIf(JsonNode::isTextual)?.textValue()?.takeIf(String::isNotBlank)
+    }
+    return values.takeIf { it.isNotEmpty() || (clearable && raw.isEmpty) }
   }
 
   internal fun parseIntFromBody(body: String?, key: String): Int? {

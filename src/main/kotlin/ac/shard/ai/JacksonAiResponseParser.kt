@@ -31,18 +31,77 @@ class JacksonAiResponseParser : AiResponseParser {
         node.isTextual -> node.textValue().toDoubleOrNull()
         else -> null
       } ?: throw IllegalArgumentException("AI response does not contain a valid probability")
-    return AIResponse(probability, expectedColumns(root), probabilities(root), labels(root))
+    return AIResponse(
+      probability,
+      expectedColumns(root),
+      probabilities(root),
+      labels(root),
+      stringMap(root, "label_titles"),
+      stringList(root, "legit_labels"),
+      text(root, "label_mode"),
+      text(root, "model_title"),
+      thresholds(root),
+      namedProbabilities(root),
+    )
   }
 
   private fun labels(root: com.fasterxml.jackson.databind.JsonNode): List<String>? =
     stringList(root, "labels")
 
+  private fun thresholds(
+    root: com.fasterxml.jackson.databind.JsonNode
+  ): Map<String, Map<String, Double>>? =
+    root
+      .get("label_thresholds")
+      ?.takeIf { it.isObject }
+      ?.properties()
+      ?.mapNotNull { (label, node) ->
+        node
+          .takeIf { it.isObject }
+          ?.properties()
+          ?.filter { it.value.isNumber }
+          ?.associate { it.key to it.value.doubleValue() }
+          ?.takeIf { it.isNotEmpty() }
+          ?.let { label to it }
+      }
+      ?.toMap()
+      ?.takeIf { it.isNotEmpty() }
+
+  private fun text(root: com.fasterxml.jackson.databind.JsonNode, field: String): String? =
+    root.get(field)?.takeIf { it.isTextual }?.textValue()?.takeIf(String::isNotBlank)
+
+  private fun stringMap(
+    root: com.fasterxml.jackson.databind.JsonNode,
+    field: String,
+  ): Map<String, String>? =
+    root
+      .get(field)
+      ?.takeIf { it.isObject }
+      ?.properties()
+      ?.mapNotNull { (key, value) ->
+        value.takeIf { it.isTextual }?.textValue()?.takeIf(String::isNotBlank)?.let { key to it }
+      }
+      ?.toMap()
+      ?.takeIf { it.isNotEmpty() }
+
+  private fun namedProbabilities(
+    root: com.fasterxml.jackson.databind.JsonNode
+  ): Map<String, Double>? =
+    root
+      .get("probabilities")
+      ?.takeIf { it.isObject }
+      ?.properties()
+      ?.mapNotNull { (key, node) -> node.takeIf { it.isNumber }?.let { key to it.doubleValue() } }
+      ?.toMap()
+      ?.takeIf { it.isNotEmpty() }
+
   private fun probabilities(root: com.fasterxml.jackson.databind.JsonNode): List<Double>? =
     root
       .get("probabilities")
       ?.takeIf { it.isArray }
-      ?.map { it.takeIf(com.fasterxml.jackson.databind.JsonNode::isNumber)?.doubleValue() ?: 0.0 }
-      ?.takeIf { it.isNotEmpty() }
+      ?.map { it.takeIf(com.fasterxml.jackson.databind.JsonNode::isNumber)?.doubleValue() }
+      ?.takeIf { it.isNotEmpty() && it.all { value -> value != null } }
+      ?.filterNotNull()
 
   private fun expectedColumns(root: com.fasterxml.jackson.databind.JsonNode): List<String>? =
     stringList(root, "expected_columns")

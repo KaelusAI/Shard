@@ -19,6 +19,7 @@ package ac.shard.ai
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 
 class JacksonAiResponseParserTest {
@@ -61,5 +62,28 @@ class JacksonAiResponseParserTest {
     val response = parser.parse("""{"probability":0.93}""")
     assertEquals(null, response.labels)
     assertEquals(null, response.probabilities)
+  }
+
+  @Test
+  fun `a broken entry throws the whole probabilities array away instead of calling it zero`() {
+    val parsed =
+      JacksonAiResponseParser()
+        .parse("""{"probability":0.9,"labels":["aim","trigger"],"probabilities":[0.95,null]}""")
+
+    assertNull(
+      parsed.probabilities,
+      "a substituted 0.0 keeps the array length, so the size check passes and the buffer is " +
+        "told that label is certainly clean",
+    )
+  }
+
+  @Test
+  fun `probabilities keyed by name are read without relying on order`() {
+    val parsed =
+      JacksonAiResponseParser()
+        .parse("""{"probability":0.9,"probabilities":{"trigger":0.96,"aim":0.35}}""")
+
+    assertEquals(mapOf("trigger" to 0.96, "aim" to 0.35), parsed.namedProbabilities)
+    assertNull(parsed.probabilities, "an object is not a positional array")
   }
 }

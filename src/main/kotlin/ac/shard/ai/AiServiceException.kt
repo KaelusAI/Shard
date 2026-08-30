@@ -17,13 +17,35 @@
  */
 package ac.shard.ai
 
+@Suppress("LongParameterList")
 class AiServiceException(
   cause: Throwable,
   val newPreWindow: Int?,
   val newPostWindow: Int?,
   val newStep: Int?,
   val newColumns: List<String>? = null,
+  val newLabels: List<String>? = null,
+  val newLabelNames: Map<String, String>? = null,
+  val newLegitLabels: List<String>? = null,
+  val newLabelMode: String? = null,
+  val newLabelThresholds: Map<String, Map<String, Double>>? = null,
+  val newModelTitle: String? = null,
+  val newModel: String? = null,
 ) : RuntimeException(cause.message, cause) {
   val hasNewParams: Boolean
-    get() = sequenceOf(newPreWindow, newPostWindow, newStep, newColumns).any { it != null }
+    get() =
+      sequenceOf(
+          newPreWindow,
+          newPostWindow,
+          newStep,
+          newColumns,
+          newLabels,
+          newLabelNames,
+          newLegitLabels,
+          newLabelMode,
+          newLabelThresholds,
+          newModelTitle,
+          newModel,
+        )
+        .any { it != null }
 }

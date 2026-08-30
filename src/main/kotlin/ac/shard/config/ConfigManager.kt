@@ -23,6 +23,10 @@
 package ac.shard.config
 
 import ac.shard.Shard
+import ac.shard.ai.label.LabelCatalog
+import ac.shard.ai.label.LabelKey
+import ac.shard.ai.label.LabelMode
+import ac.shard.ai.label.LabelThresholds
 import ac.shard.config.yaml.YamlPatcher
 import ac.shard.connect.CredentialsStore
 import ac.shard.data.TickData
@@ -35,10 +39,12 @@ import java.util.EnumSet
 import java.util.Locale
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import java.util.zip.CRC32
 import org.spongepowered.configurate.CommentedConfigurationNode
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 import ru.vyarus.yaml.updater.YamlUpdater
 
+@Suppress("LargeClass")
 class ConfigManager(private val plugin: Shard, private val credentialsStore: CredentialsStore) {
   private val modelStore = ModelStore(plugin)
 
@@ -82,6 +88,11 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   var aiModel: String? = null
     private set
 
+  @Volatile private var aiPanelModelName: String = ""
+
+  var aiModelTitle: String = ""
+    private set
+
   @Volatile
   var aiColumns: List<String>? = null
     private set
@@ -93,6 +104,45 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
   @Volatile
   var aiColumnMask: LongArray = TickSchema.fullMask
     private set
+
+  @Volatile
+  var aiLabelNames: Map<String, String> = emptyMap()
+    private set
+
+  @Volatile
+  var aiServerLabelNames: Map<String, String> = emptyMap()
+    private set
+
+  val labelCatalog = LabelCatalog(local = { aiLabelNames }, fromServer = { aiServerLabelNames })
+
+  @Volatile
+  var aiLabelMode: LabelMode? = null
+    private set
+
+  @Volatile
+  var aiServerLabelMode: LabelMode? = null
+    private set
+
+  val effectiveLabelMode: LabelMode?
+    get() = aiLabelMode ?: aiServerLabelMode
+
+  @Volatile
+  var aiLabelSplit: Boolean = true
+    private set
+
+  @Volatile
+  var aiLabelMaxTracked: Int = DEFAULT_MAX_TRACKED_LABELS
+    private set
+
+  @Volatile
+  var aiLegitLabels: Set<String> = emptySet()
+    private set
+
+  @Volatile
+  var aiLabelThresholds: Map<String, LabelThresholds> = emptyMap()
+    private set
+
+  @Volatile private var fingerprint: String = ""
 
   var aiGzipEnabled: Boolean = true
     private set
@@ -222,12 +272,22 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
     model: String? = null,
     columns: List<String>? = null,
     labels: List<String>? = null,
-  ) {
+    labelNames: Map<String, String>? = null,
+    legitLabels: List<String>? = null,
+    modelTitle: String? = null,
+    labelMode: String? = null,
+    labelThresholds: Map<String, Map<String, Double>>? = null,
+  ): Boolean {
     var changed = columns != null && columns != aiColumns && applyAiColumns(columns)
-    if (labels != null && labels != aiLabels) {
-      plugin.logger.info("[Config] AI labels $aiLabels -> $labels (from server)")
-      aiLabels = labels
-      changed = true
+    changed = applyLabelParams(labels, labelNames, legitLabels, modelTitle) || changed
+    changed = applyLabelMode(labelMode) || changed
+    if (labelThresholds != null) {
+      val parsed = parseThresholds(labelThresholds)
+      if (parsed != aiLabelThresholds) {
+        plugin.logger.info("[Config] AI label thresholds -> ${parsed.keys} (from server)")
+        aiLabelThresholds = parsed
+        changed = true
+      }
     }
     changed = applyAiWindow(preWindow, postWindow, step) || changed
     if (!model.isNullOrBlank() && model != aiModel) {
@@ -236,8 +296,149 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
       changed = true
     }
     if (changed) {
-      modelStore.write(aiPreWindow, aiPostWindow, aiStep, aiModel, aiColumns, aiLabels)
+      fingerprint = computeFingerprint()
+      plugin.logger.info("[Config] Model config now: ${describeModelConfig()}")
+      modelStore.write(
+        aiPreWindow,
+        aiPostWindow,
+        aiStep,
+        aiModel,
+        aiColumns,
+        aiLabels,
+        aiServerLabelNames,
+        aiLegitLabels,
+        aiModelTitle,
+        aiServerLabelMode?.wire,
+        aiLabelThresholds,
+      )
     }
+    return changed
+  }
+
+  private fun applyLabelMode(labelMode: String?): Boolean {
+    val parsed = labelMode?.let { LabelMode.fromConfig(it) }
+    val unreadable = labelMode != null && parsed == null && labelMode.isNotBlank()
+    if (unreadable) {
+      plugin.logger.warning("[Config] Inference server sent an unknown label mode $labelMode")
+    }
+    val moves = labelMode != null && !unreadable && parsed != aiServerLabelMode
+    if (moves) {
+      plugin.logger.info(
+        "[Config] AI label mode $aiServerLabelMode -> ${parsed?.wire ?: "none"} (from server)"
+      )
+      aiServerLabelMode = parsed
+    }
+    return moves
+  }
+
+  private fun applyLabelParams(
+    labels: List<String>?,
+    labelNames: Map<String, String>?,
+    legitLabels: List<String>?,
+    modelTitle: String?,
+  ): Boolean {
+    var changed = false
+    if (labels != null) {
+      val canonical = canonicalLabels(labels)
+      if (canonical != aiLabels) {
+        plugin.logger.info("[Config] AI labels $aiLabels -> $canonical (from server)")
+        aiLabels = canonical
+        changed = true
+      }
+    }
+    if (labelNames != null) {
+      val canonical =
+        labelNames
+          .mapNotNull { (key, name) ->
+            val label = LabelKey.canonical(key) ?: return@mapNotNull null
+            LabelKey.title(name)?.let { label to it }
+          }
+          .toMap()
+      if (canonical != aiServerLabelNames) {
+        aiServerLabelNames = canonical
+        changed = true
+      }
+    }
+    if (legitLabels != null) {
+      val canonical = legitLabels.mapNotNull(LabelKey::canonical).toSet()
+      if (canonical != aiLegitLabels) {
+        aiLegitLabels = canonical
+        changed = true
+      }
+    }
+    if (modelTitle != null && modelTitle != aiModelTitle) {
+      aiModelTitle = modelTitle
+      changed = true
+    }
+    return changed
+  }
+
+  fun notePanelModelName(name: String) {
+    aiPanelModelName = name
+  }
+
+  fun modelTitle(): String =
+    aiModelTitle.ifBlank { aiPanelModelName }.ifBlank { aiModel.orEmpty() }.ifBlank { "-" }
+
+  fun describeModelConfig(): String = buildString {
+    append("model=").append(aiModel ?: "-")
+    append(" window=").append(aiPreWindow).append('/').append(aiPostWindow)
+    append(" step=").append(aiStep)
+    append(" columns=").append(aiColumns?.size ?: TickSchema.columnCount(aiColumnMask))
+    append(" labels=").append(if (aiLabels.isEmpty()) "-" else aiLabels.joinToString(","))
+    append(" mode=").append(effectiveLabelMode?.wire ?: "-")
+    append(" titles=").append(aiServerLabelNames.size)
+    append(" legit=").append(if (aiLegitLabels.isEmpty()) "-" else aiLegitLabels.joinToString(","))
+    append(" fingerprint=").append(modelConfigFingerprint())
+  }
+
+  fun modelConfigFingerprint(): String = fingerprint
+
+  private fun computeFingerprint(): String {
+    val canonical =
+      buildString {
+          appendLine("pre_window=$aiPreWindow")
+          appendLine("post_window=$aiPostWindow")
+          appendLine("step=$aiStep")
+          appendLine("model=${aiModel.orEmpty()}")
+          appendLine("labels=${aiLabels.joinToString(",")}")
+          appendLine("legit_labels=${aiLegitLabels.sorted().joinToString(",")}")
+          appendLine("label_mode=${aiServerLabelMode?.wire.orEmpty()}")
+          append(
+            "label_thresholds=" +
+              aiLabelThresholds.toSortedMap().entries.joinToString(",") {
+                "${it.key}:${it.value.cheat}:${it.value.legit}"
+              }
+          )
+        }
+        .toByteArray(Charsets.UTF_8)
+    val crc = CRC32()
+    crc.update(canonical)
+    return "%08x".format(crc.value)
+  }
+
+  private fun parseThresholds(raw: Map<String, Map<String, Double>>) =
+    raw
+      .mapNotNull { (key, values) ->
+        val label = LabelKey.canonical(key) ?: return@mapNotNull null
+        LabelThresholds.parse(values["cheat"], values["legit"])?.let { label to it }
+      }
+      .toMap()
+
+  private fun canonicalLabels(raw: List<String>): List<String> {
+    val dropped = mutableListOf<String>()
+    val canonical = LabelKey.canonicalList(raw) { value, key -> dropped += "$value -> $key" }
+    if (dropped.isNotEmpty()) {
+      plugin.logger.warning(
+        "[Config] Inference server sent labels that collapse into one key: " +
+          dropped.joinToString(", ")
+      )
+    }
+    val lost = raw.size - canonical.size - dropped.size
+    if (lost > 0) {
+      plugin.logger.warning("[Config] Dropped $lost unusable label name(s) from the server")
+    }
+    return canonical
   }
 
   private fun applyAiWindow(preWindow: Int?, postWindow: Int?, step: Int?): Boolean {
@@ -275,8 +476,22 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
       modelStore.readStep()
         ?: config.getInt("ai.inference.step", DEFAULT_AI_STEP).coerceAtLeast(MIN_AI_STEP)
     aiModel = modelStore.readModel()
-    aiLabels = modelStore.readLabels().orEmpty()
+    aiModelTitle = modelStore.readModelTitle()
+    aiServerLabelMode = LabelMode.fromConfig(modelStore.readLabelMode())
+    aiLabels = canonicalLabels(modelStore.readLabels().orEmpty())
+    aiServerLabelNames =
+      modelStore
+        .readLabelNames()
+        .mapNotNull { (key, name) -> LabelKey.canonical(key)?.let { it to name } }
+        .toMap()
+    aiLegitLabels = modelStore.readLegitLabels().mapNotNull(LabelKey::canonical).toSet()
+    aiLabelThresholds =
+      modelStore
+        .readLabelThresholds()
+        .mapNotNull { (key, value) -> LabelKey.canonical(key)?.let { it to value } }
+        .toMap()
     modelStore.readColumns()?.let { applyAiColumns(it) }
+    fingerprint = computeFingerprint()
   }
 
   private fun applyAiColumns(columns: List<String>): Boolean {
@@ -432,6 +647,22 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
       System.getenv("SHARD_GROUP_ID")?.trim()?.takeIf { it.isNotBlank() }
         ?: config.getString("telemetry.group-id", "").trim().takeIf { it.isNotBlank() }
     loadNegotiatedAiParams()
+    aiLabelNames =
+      config
+        .getStringMap("ai.labels.names")
+        .mapNotNull { (key, name) ->
+          LabelKey.canonical(key)?.let { it to name }
+        }
+        .toMap()
+    aiLabelMode = LabelMode.fromConfig(config.getString("ai.labels.mode", "auto"))
+    aiLabelSplit =
+      when (config.getString("ai.labels.split", "auto").trim().lowercase(Locale.ROOT)) {
+        "never",
+        "false" -> false
+        else -> true
+      }
+    aiLabelMaxTracked =
+      config.getInt("ai.labels.max-tracked", DEFAULT_MAX_TRACKED_LABELS).coerceAtLeast(1)
     aiGzipEnabled = config.getBoolean("ai.gzip", true)
     collectPreWindow = config.getInt("ai.collect.pre-window", DEFAULT_COLLECT_WINDOW)
     collectPostWindow = config.getInt("ai.collect.post-window", DEFAULT_COLLECT_WINDOW)
@@ -580,6 +811,8 @@ class ConfigManager(private val plugin: Shard, private val credentialsStore: Cre
         "place-end-crystal" to TickData.START_PLACE_END_CRYSTAL.toInt(),
         "explosion-received" to TickData.START_EXPLOSION_RECEIVED.toInt(),
       )
+
+    const val DEFAULT_MAX_TRACKED_LABELS = 32
 
     const val MIN_AI_WINDOW = 1
     const val MIN_AI_STEP = 1

@@ -18,6 +18,7 @@
 package ac.shard.config
 
 import ac.shard.Shard
+import ac.shard.ai.label.LabelThresholds
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -39,9 +40,39 @@ class ModelStore(private val plugin: Shard) {
     return node.node("model").getString("").takeIf { it.isNotBlank() }
   }
 
+  fun readModelTitle(): String = loadCurrentFormat()?.node("model-title")?.getString("").orEmpty()
+
+  fun readLabelMode(): String = loadCurrentFormat()?.node("label-mode")?.getString("").orEmpty()
+
   fun readLabels(): List<String>? = readStringList("labels")
 
   fun readColumns(): List<String>? = readStringList("columns")
+
+  fun readLabelNames(): Map<String, String> =
+    loadCurrentFormat()
+      ?.node("label-titles")
+      ?.takeIf { it.isMap }
+      ?.childrenMap()
+      ?.mapNotNull { (key, child) -> child.string?.let { key.toString() to it } }
+      ?.toMap()
+      .orEmpty()
+
+  fun readLegitLabels(): List<String> = readStringList("legit-labels").orEmpty()
+
+  fun readLabelThresholds(): Map<String, LabelThresholds> =
+    loadCurrentFormat()
+      ?.node("label-thresholds")
+      ?.takeIf { it.isMap }
+      ?.childrenMap()
+      ?.mapNotNull { (key, child) ->
+        LabelThresholds.parse(
+            child.node("cheat").getDouble(Double.NaN),
+            child.node("legit").getDouble(Double.NaN),
+          )
+          ?.let { key.toString() to it }
+      }
+      ?.toMap()
+      .orEmpty()
 
   private fun readStringList(key: String): List<String>? =
     loadCurrentFormat()
@@ -72,6 +103,11 @@ class ModelStore(private val plugin: Shard) {
     model: String?,
     columns: List<String>? = null,
     labels: List<String>? = null,
+    labelNames: Map<String, String>? = null,
+    legitLabels: Set<String>? = null,
+    modelTitle: String? = null,
+    labelMode: String? = null,
+    labelThresholds: Map<String, LabelThresholds>? = null,
   ) {
     val tmp = File(plugin.dataFolder, "$FILE_NAME.tmp")
     try {
@@ -86,8 +122,22 @@ class ModelStore(private val plugin: Shard) {
       node.node("post-window").set(postWindow)
       node.node("step").set(step)
       if (model != null) node.node("model").set(model)
+      if (!modelTitle.isNullOrBlank()) node.node("model-title").set(modelTitle)
+      if (!labelMode.isNullOrBlank()) node.node("label-mode").set(labelMode)
       if (columns != null) node.node("columns").set(columns)
       if (labels != null) node.node("labels").set(labels)
+      if (!legitLabels.isNullOrEmpty()) node.node("legit-labels").set(legitLabels.toList())
+      if (!labelNames.isNullOrEmpty()) {
+        val titles = node.node("label-titles")
+        for ((key, value) in labelNames) titles.node(key).set(value)
+      }
+      if (!labelThresholds.isNullOrEmpty()) {
+        val thresholds = node.node("label-thresholds")
+        for ((key, value) in labelThresholds) {
+          thresholds.node(key, "cheat").set(value.cheat)
+          thresholds.node(key, "legit").set(value.legit)
+        }
+      }
       loader.save(node)
       moveIntoPlace(tmp)
     } catch (e: Exception) {

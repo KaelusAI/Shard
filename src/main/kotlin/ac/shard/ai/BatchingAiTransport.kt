@@ -158,10 +158,7 @@ class BatchingAiTransport(
 
   private fun hasNegotiationDetails(error: AIServer.RequestException): Boolean {
     val details = error.details ?: return false
-    return details["expected_pre_window"] != null ||
-      details["expected_post_window"] != null ||
-      details["expected_step"] != null ||
-      details["expected_columns"] != null
+    return NEGOTIATION_DETAILS.any { details[it] != null }
   }
 
   private fun recoverReconfigureRequired(item: PendingItem) {
@@ -180,6 +177,7 @@ class BatchingAiTransport(
     if (!results.isArray) error("'results' is not an array")
     val expectedColumns = root.get("expected_columns")?.takeIf { it.isArray }
     val labels = root.get("labels")?.takeIf { it.isArray }
+    val corrections = CORRECTION_FIELDS.mapNotNull { name -> root.get(name)?.let { name to it } }
     return results.map { node ->
       BatchItemResult(
         probability = node.get("probability")?.takeIf { it.isNumber }?.asDouble(),
@@ -187,6 +185,7 @@ class BatchingAiTransport(
         expectedColumns = expectedColumns,
         probabilities = node.get("probabilities")?.takeIf { it.isArray },
         labels = labels,
+        corrections = corrections,
       )
     }
   }
@@ -197,6 +196,7 @@ class BatchingAiTransport(
       result.expectedColumns?.let { append(""","expected_columns":""").append(it) }
       result.probabilities?.let { append(""","probabilities":""").append(it) }
       result.labels?.let { append(""","labels":""").append(it) }
+      for ((name, value) in result.corrections) append(""","$name":""").append(value)
       append('}')
     }
 
@@ -227,9 +227,18 @@ class BatchingAiTransport(
     val expectedColumns: JsonNode? = null,
     val probabilities: JsonNode? = null,
     val labels: JsonNode? = null,
+    val corrections: List<Pair<String, JsonNode>> = emptyList(),
   )
 
   companion object {
+    private val CORRECTION_FIELDS =
+      listOf("label_titles", "legit_labels", "label_mode", "model_title", "label_thresholds")
+
+    private val NEGOTIATION_DETAILS =
+      (listOf("pre_window", "post_window", "step", "columns", "labels") + CORRECTION_FIELDS).map {
+        "expected_$it"
+      }
+
     private const val HTTP_OK = 200
     private val OBJECT_MAPPER = ObjectMapper()
   }

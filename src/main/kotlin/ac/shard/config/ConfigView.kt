@@ -61,6 +61,15 @@ class ConfigView(private val rootNode: CommentedConfigurationNode) {
     }
   }
 
+  fun getStringMap(path: String): Map<String, String> {
+    val sectionNode = node(path)
+    if (sectionNode.virtual() || !sectionNode.isMap) return emptyMap()
+    return sectionNode
+      .childrenMap()
+      .mapNotNull { (key, child) -> child.string?.let { key.toString() to it } }
+      .toMap()
+  }
+
   fun getStringListMap(path: String): Map<String, List<String>> {
     val sectionNode = node(path)
     if (sectionNode.virtual() || !sectionNode.isMap) return emptyMap()
