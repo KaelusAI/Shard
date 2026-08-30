@@ -468,6 +468,10 @@ bukkit {
       description = "Allows managing player punishments"
       default = Permission.Default.OP
     }
+    register("shard.buffer.reset") {
+      description = "Allows resetting the AI buffer of a player"
+      default = Permission.Default.OP
+    }
     register("shard.suspicious") {
       description = "Permission for suspicious player commands"
       default = Permission.Default.OP

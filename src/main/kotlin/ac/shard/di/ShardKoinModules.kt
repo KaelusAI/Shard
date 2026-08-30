@@ -48,6 +48,7 @@ import ac.shard.command.CommandRegister
 import ac.shard.command.ShardCommand
 import ac.shard.command.commands.admin.AlertsCommand
 import ac.shard.command.commands.admin.BrandsCommand
+import ac.shard.command.commands.admin.BufferCommand
 import ac.shard.command.commands.admin.CollectCommand
 import ac.shard.command.commands.admin.ConnectCommand
 import ac.shard.command.commands.admin.EditorCommand
@@ -252,7 +253,7 @@ private fun coreModule(plugin: Shard) = module {
 
 private fun monitorModule() = module {
   singleOf(::MonitorServices)
-  singleOf(::MonitorFrameBuilder)
+  single { MonitorFrameBuilder(get<ConfigManager>().labelCatalog) }
   singleOf(::MonitorTargetIndex)
   singleOf(::MonitorTargetsService)
   singleOf(::MonitorOutputSelector)
@@ -315,6 +316,7 @@ private fun adminCommandsModule() = module {
   singleOf(::SetupCommand).bind<ShardCommand>()
   singleOf(::ExemptCommand).bind<ShardCommand>()
   singleOf(::PunishCommand).bind<ShardCommand>()
+  singleOf(::BufferCommand).bind<ShardCommand>()
   singleOf(::ReloadCommand).bind<ShardCommand>()
   singleOf(::SuspiciousCommand).bind<ShardCommand>()
 }
