@@ -23,6 +23,7 @@ import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -34,7 +35,7 @@ class CrossServerSuspiciousService(
   private val scheduler: SchedulerService,
   private val logger: Logger,
 ) {
-  private val mapper = ObjectMapper()
+  private val mapper = ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 
   @Volatile private var enabled = false
   @Volatile private var refreshTask: TaskHandle? = null

@@ -24,6 +24,7 @@ import ac.shard.config.ConfigManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.utils.Message
 import ac.shard.utils.MessageUtil
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.EnumSet
 import java.util.UUID
@@ -40,7 +41,7 @@ class CrossServerAlertService(
   private val logger: Logger,
 ) {
   private val origin: String = UUID.randomUUID().toString()
-  private val mapper = ObjectMapper()
+  private val mapper = ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
   private val componentSerializer = GsonComponentSerializer.gson()
 
   @Volatile private var enabled = false
