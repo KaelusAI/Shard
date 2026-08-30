@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [next/2.0]
+    branches: [shards]
   pull_request:
   workflow_dispatch:
 
@@ -74,13 +74,13 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Shard-${{ github.sha }}
+          name: Shards-${{ github.sha }}
           path: ${{ steps.shadow-jar.outputs.path }}
           if-no-files-found: error
 
   release-candidate:
     name: Release candidate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/next/2.0'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/shards'
     needs: [check, build]
     runs-on: ubuntu-latest
     permissions:
@@ -125,14 +125,29 @@ jobs:
             -PshardVersion=${{ steps.version.outputs.number }})
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
+      - name: Build unbundled JAR
+        run: |
+          ./gradlew shadowJar -PshadePE=false \
+            -PshardVersion=${{ steps.version.outputs.number }}
+
+      - name: Resolve unbundled JAR path
+        id: unbundled-jar
+        run: |
+          path=$(./gradlew -q printShadowJarPath -PshadePE=false \
+            -PshardVersion=${{ steps.version.outputs.number }})
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
       - name: Publish release candidate
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          tag_name: rc-2.0
-          name: ${{ steps.version.outputs.number }}
+          tag_name: rc-shards
+          name: Shards ${{ steps.version.outputs.number }}
           prerelease: true
           make_latest: false
           body: |
-            Release candidate built from `${{ github.sha }}` on `${{ github.ref_name }}`.
+            Shards build from `${{ github.sha }}` on `${{ github.ref_name }}`.
             Replaced by the next push to `${{ github.ref_name }}`.
-          files: ${{ steps.shadow-jar.outputs.path }}
+            The unbundled jar is built without PacketEvents, for servers that already run it.
+          files: |
+            ${{ steps.shadow-jar.outputs.path }}
+            ${{ steps.unbundled-jar.outputs.path }}
