@@ -120,7 +120,7 @@ internal class ViewTargetTracker(
   ) {
     session.updateTrackedEntityId(target.uniqueId, target.entityId)
     val pingDisplay = state.resolvePingDisplay(target.ping, session.config)
-    val rendered = tagRenderer.render(target, pingDisplay, session.config)
+    val rendered = tagRenderer.render(viewer, target, pingDisplay, session.config)
 
     if (session.usesBelowName()) {
       state.updateBelowName(viewer, session.belowObjectiveName, target.name, rendered, bridge)

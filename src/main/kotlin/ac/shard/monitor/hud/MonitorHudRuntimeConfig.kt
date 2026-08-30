@@ -38,10 +38,14 @@ data class MonitorBehaviorConfig(
   val neutralTier: String,
   val nameMaxLength: Int,
   val nameTruncateSuffix: String,
+  val labelMaxLength: Int,
+  val labelUsesKey: Boolean,
+  val labelKeepWidth: Boolean,
   val keepAliveCycles: Int,
   val pingRefreshCycles: Int,
   val pingBucketMs: Int,
   val trendDecayCycles: Int,
+  val labelRotateMillis: Long,
 ) {
   companion object {
     fun from(config: ConfigView, updateTicks: Long): MonitorBehaviorConfig =
@@ -56,6 +60,16 @@ data class MonitorBehaviorConfig(
           config.getInt("behavior.name.max-length", DEFAULT_NAME_MAX_LENGTH).coerceAtLeast(0),
         nameTruncateSuffix =
           config.getString("behavior.name.truncate-suffix", DEFAULT_TRUNCATE_SUFFIX),
+        labelMaxLength =
+          config.getInt("behavior.label.max-length", DEFAULT_LABEL_MAX_LENGTH).coerceAtLeast(0),
+        labelUsesKey =
+          !config
+            .getString("behavior.label.style", DEFAULT_LABEL_STYLE)
+            .equals(
+              "title",
+              ignoreCase = true,
+            ),
+        labelKeepWidth = config.getBoolean("behavior.label.keep-width", false),
         keepAliveCycles = ticksToCycles(sharedKeepAliveTicks(config), updateTicks),
         pingRefreshCycles =
           ticksToCycles(
@@ -73,6 +87,10 @@ data class MonitorBehaviorConfig(
               .coerceAtLeast(1L),
             updateTicks,
           ),
+        labelRotateMillis =
+          config
+            .getLong("behavior.label-rotate-ticks", DEFAULT_LABEL_ROTATE_TICKS)
+            .coerceAtLeast(0L) * MILLIS_PER_TICK,
       )
 
     internal fun sharedKeepAliveTicks(config: ConfigView): Long =
@@ -201,6 +219,9 @@ internal const val DEFAULT_KEEPALIVE_TICKS = 20L
 internal const val DEFAULT_HUD_PING_REFRESH_TICKS = 20L
 internal const val DEFAULT_HUD_PING_BUCKET_MS = 10
 internal const val DEFAULT_TREND_DECAY_TICKS = 100L
+internal const val DEFAULT_LABEL_ROTATE_TICKS = 40L
+internal const val DEFAULT_LABEL_MAX_LENGTH = 12
+internal const val DEFAULT_LABEL_STYLE = "key"
 internal const val DEFAULT_NAME_MAX_LENGTH = 12
 internal const val DEFAULT_TRUNCATE_SUFFIX = "…"
 internal const val DEFAULT_NEUTRAL_PING = "<gray>Ping --</gray>"

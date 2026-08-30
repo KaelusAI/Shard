@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
 import ac.shard.config.LocaleManager
@@ -97,7 +98,7 @@ class MonitorTargetsTest {
       scheduler,
       settingsService,
       mockk<MonitorSampler>(relaxed = true),
-      MonitorFrameBuilder(),
+      MonitorFrameBuilder(LabelCatalog(local = { emptyMap() })),
       MonitorOutputRegistry(outputs),
       index,
       configManager,

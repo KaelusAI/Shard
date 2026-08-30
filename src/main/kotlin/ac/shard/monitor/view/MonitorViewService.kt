@@ -21,6 +21,7 @@ import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorSampler
+import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.scheduler.SchedulerService
@@ -40,11 +41,25 @@ class MonitorViewService(
   scheduler: SchedulerService,
   componentCache: ComponentCache,
   sampler: MonitorSampler,
+  private val settingsService: MonitorSettingsService,
   slotRegistry: ScoreboardSlotRegistry,
   bridge: ScoreboardPacketBridge,
 ) : Listener {
   private val coordinator =
-    ViewSessionCoordinator(plugin, scheduler, componentCache, sampler, slotRegistry, bridge)
+    ViewSessionCoordinator(
+      plugin,
+      scheduler,
+      componentCache,
+      ViewTagRenderer(
+        sampler,
+        configManager.labelCatalog,
+        { viewer ->
+          settingsService.getSettings(viewer.uniqueId).labelFocus
+        },
+      ),
+      slotRegistry,
+      bridge,
+    )
   private val trackingObserver =
     ViewTrackingObserver(scheduler, coordinator) { viewerId ->
       resolveActiveViewViewer(viewerId, coordinator)

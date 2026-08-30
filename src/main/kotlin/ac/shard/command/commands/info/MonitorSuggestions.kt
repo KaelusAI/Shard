@@ -17,6 +17,7 @@
  */
 package ac.shard.command.commands.info
 
+import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -52,6 +53,11 @@ internal object MonitorSuggestions {
       }
       .map { Suggestion.suggestion(it.key) }
   }
+
+  fun labelFocus(configManager: ConfigManager): SuggestionProvider<Sender> =
+    SuggestionProvider.blocking { _, _ ->
+      (listOf("auto", "off") + configManager.aiLabels).map(Suggestion::suggestion)
+    }
 
   fun watched(targets: MonitorTargetsService): SuggestionProvider<Sender> =
     SuggestionProvider.blocking { context, _ ->

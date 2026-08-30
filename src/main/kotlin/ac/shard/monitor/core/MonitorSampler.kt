@@ -37,7 +37,12 @@ class MonitorSampler(
       targetName = target.name,
       dataPresent = shardTarget != null,
       aiActive = aiCheck != null,
-      probability = aiCheck?.lastProbability ?: 0.0,
+      probability =
+        MonitorLabelInfo.probabilityOfLeader(
+          aiCheck?.labelBufferSnapshot().orEmpty(),
+          aiCheck?.lastLabelProbabilities.orEmpty(),
+          aiCheck?.lastCheatProbability ?: 0.0,
+        ),
       buffer = aiCheck?.buffer ?: 0.0,
       rawPing = target.ping,
       damageMultiplier = shardTarget?.combat?.damageMultiplier ?: 1.0,
@@ -45,6 +50,9 @@ class MonitorSampler(
       collect = collectInfo(target),
       inference = aiCheck?.let { MonitorInferenceInfo(inferenceStatus(it.inferenceProgress)) },
       leadingLabel = aiCheck?.let { leadingLabel(it.labelBufferSnapshot()) },
+      labelBuffers = aiCheck?.labelBufferSnapshot().orEmpty(),
+      labelProbabilities = aiCheck?.lastLabelProbabilities.orEmpty(),
+      declaredLabels = aiCheck?.declaredLabels.orEmpty(),
       tier = shardTarget?.mitigation?.appliedTier?.name ?: "NONE",
       score = shardTarget?.mitigation?.score ?: 0.0,
       rule = shardTarget?.mitigation?.applied?.id.orEmpty(),

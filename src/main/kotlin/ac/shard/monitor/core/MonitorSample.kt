@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.core
 
+import ac.shard.ai.label.LabelKey
 import java.util.UUID
 
 data class MonitorSample(
@@ -32,6 +33,9 @@ data class MonitorSample(
   val collect: MonitorCollectInfo? = null,
   val inference: MonitorInferenceInfo? = null,
   val leadingLabel: MonitorLabelInfo? = null,
+  val labelBuffers: Map<String, Double> = emptyMap(),
+  val labelProbabilities: Map<String, Double> = emptyMap(),
+  val declaredLabels: List<String> = emptyList(),
   val tier: String = "NONE",
   val score: Double = 0.0,
   val rule: String = "",
@@ -40,14 +44,38 @@ data class MonitorSample(
 
 data class MonitorLabelInfo(val label: String, val buffer: Double) {
   companion object {
-    fun leading(buffers: Map<String, Double>): MonitorLabelInfo? =
-      buffers
-        .filterKeys { !it.startsWith(RESERVED_PREFIX) }
-        .maxByOrNull { it.value }
-        ?.takeIf { it.value > 0.0 }
-        ?.let { MonitorLabelInfo(it.key, it.value) }
+    fun leading(buffers: Map<String, Double>): MonitorLabelInfo? = attributed(buffers).firstOrNull()
 
-    private const val RESERVED_PREFIX = "_"
+    fun probabilityOfLeader(
+      buffers: Map<String, Double>,
+      probabilities: Map<String, Double>,
+      fallback: Double,
+    ): Double = leading(buffers)?.let { probabilities[it.label] } ?: fallback
+
+    fun attributed(buffers: Map<String, Double>): List<MonitorLabelInfo> =
+      buffers
+        .asSequence()
+        .filterNot { LabelKey.isReserved(it.key) }
+        .filter { it.value > 0.0 }
+        .sortedByDescending { it.value }
+        .map { MonitorLabelInfo(it.key, it.value) }
+        .toList()
+
+    fun tracked(sample: MonitorSample): List<MonitorLabelInfo> {
+      val declared =
+        (sample.declaredLabels + sample.labelProbabilities.keys + sample.labelBuffers.keys)
+          .asSequence()
+          .filterNot(LabelKey::isReserved)
+          .distinct()
+          .toList()
+      return declared
+        .withIndex()
+        .sortedWith(
+          compareByDescending<IndexedValue<String>> { sample.labelBuffers[it.value] ?: 0.0 }
+            .thenBy { it.index }
+        )
+        .map { MonitorLabelInfo(it.value, sample.labelBuffers[it.value] ?: 0.0) }
+    }
   }
 }
 

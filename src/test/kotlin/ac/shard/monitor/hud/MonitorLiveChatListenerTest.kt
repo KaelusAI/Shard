@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.api.event.AiPredictionEvent
 import ac.shard.config.ConfigView
 import ac.shard.monitor.core.MonitorChatStyle
@@ -60,7 +61,7 @@ class MonitorLiveChatListenerTest {
       index,
       chatOutput,
       settingsService,
-      MonitorFrameBuilder(),
+      MonitorFrameBuilder(LabelCatalog(local = { emptyMap() })),
       scheduler,
       mockk(relaxed = true),
       Logger.getLogger("live-chat-listener"),

@@ -47,6 +47,7 @@ class MonitorCommandTreeTest {
         mockk<MonitorHudService>(relaxed = true),
         mockk<MonitorOutputRegistry>(relaxed = true),
         mockk(relaxed = true),
+        mockk(relaxed = true),
       )
       .register(manager)
     MonitorInfoCommand(

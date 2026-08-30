@@ -25,6 +25,7 @@ import ac.shard.monitor.hud.MonitorOutputCapabilities
 import ac.shard.monitor.hud.MonitorOutputPolicy
 import ac.shard.monitor.hud.MonitorRenderContext
 import ac.shard.monitor.hud.MonitorRenderPayload
+import ac.shard.monitor.hud.fillFrameTemplate
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
 import net.kyori.adventure.text.Component
 
@@ -51,7 +52,10 @@ class ActionBarOutput(private val adventure: BukkitAudiences, private val cache:
     if (!context.viewer.isOnline) {
       return
     }
-    adventure.player(context.viewer).sendActionBar(cache.component(payload.primary.headline))
+    val template = context.config.actionBar.template
+    adventure
+      .player(context.viewer)
+      .sendActionBar(cache.component(fillFrameTemplate(template, payload.primary)))
   }
 
   override fun clear(context: MonitorRenderContext) {

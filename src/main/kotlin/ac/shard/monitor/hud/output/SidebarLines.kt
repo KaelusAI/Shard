@@ -18,7 +18,9 @@
 package ac.shard.monitor.hud.output
 
 import ac.shard.monitor.core.ScoreboardPacketBridge
+import ac.shard.monitor.core.fillTemplate
 import ac.shard.monitor.hud.MonitorFrame
+import ac.shard.monitor.hud.MonitorFrameLabel
 import ac.shard.monitor.hud.MonitorRenderPayload
 import ac.shard.monitor.hud.SIDEBAR_MAX_LINES
 import ac.shard.monitor.hud.SidebarConfig
@@ -38,12 +40,14 @@ internal fun sidebarObjectiveName(viewerId: UUID, sessionId: Long): String {
 
 internal fun sidebarEntryKey(index: Int): String = "§" + ENTRY_KEY_ALPHABET[index]
 
-internal fun buildSidebarLines(payload: MonitorRenderPayload, config: SidebarConfig): List<String> =
-  payload.frames
-    .map { frame -> frameLines(frame, config) }
+internal fun buildSidebarLines(payload: MonitorRenderPayload, config: SidebarConfig): List<String> {
+  val budget = SIDEBAR_MAX_LINES / payload.frames.size.coerceAtLeast(1)
+  return payload.frames
+    .map { frame -> frameLines(frame, config, budget) }
     .reduceOrNull { drawn, next -> drawn + config.targetSeparator + next }
     .orEmpty()
     .take(SIDEBAR_MAX_LINES)
+}
 
 internal fun restoreSidebar(
   bridge: ScoreboardPacketBridge,
@@ -55,12 +59,48 @@ internal fun restoreSidebar(
   bridge.displayObjective(viewer, target, slot)
 }
 
-private fun frameLines(frame: MonitorFrame, config: SidebarConfig): List<String> {
+private fun frameLines(frame: MonitorFrame, config: SidebarConfig, budget: Int): List<String> {
   if (!frame.dataPresent || !frame.aiActive) {
     return listOf(fillFrameTemplate(config.unavailableLine, frame))
   }
-  val lines = config.lines.map { fillFrameTemplate(it, frame) }
+  val room = budget - (config.lines.size - config.lines.count { it.trim() == LABEL_LINES_MARKER })
+  val lines = config.lines.flatMap { expand(it, frame, config, room) }
   return if (config.dropBlankLines) lines.filter { it.isNotBlank() } else lines
+}
+
+private fun expand(
+  line: String,
+  frame: MonitorFrame,
+  config: SidebarConfig,
+  room: Int,
+): List<String> =
+  when {
+    line.trim() != LABEL_LINES_MARKER -> listOf(fillFrameTemplate(line, frame))
+    frame.labels.isEmpty() -> listOf(fillFrameTemplate(config.noLabelsLine, frame))
+    else -> listOf(fillFrameTemplate(config.labelsTitle, frame)) + labelRows(frame, config, room)
+  }
+
+private fun labelRows(frame: MonitorFrame, config: SidebarConfig, room: Int): List<String> {
+  val fits = (room - 1).coerceAtLeast(1)
+  if (frame.labels.size <= fits) return rowsFor(frame.labels.take(fits), config, frame)
+  val shown = (fits - 1).coerceAtLeast(1)
+  return rowsFor(frame.labels.take(shown), config, frame) +
+    fillTemplate(config.labelsOverflow, mapOf("count" to "${frame.labels.size - shown}"))
+}
+
+private fun rowsFor(
+  labels: List<MonitorFrameLabel>,
+  config: SidebarConfig,
+  frame: MonitorFrame,
+): List<String> = labels.map { label ->
+  fillTemplate(config.labelLine) { key ->
+    when (key) {
+      "label" -> label.name
+      "buffer" -> label.buffer
+      "prob" -> label.probability
+      else -> frame.placeholders[key]
+    }
+  }
 }
 
 private fun bukkitObjectiveName(viewer: Player, slot: Int): String? {
@@ -74,6 +114,7 @@ private fun bukkitObjectiveName(viewer: Player, slot: Int): String? {
   return displaySlot?.let { viewer.scoreboard.getObjective(it)?.name }
 }
 
+internal const val LABEL_LINES_MARKER = "{label_lines}"
 internal const val SIDEBAR_MAX_TARGETS = 4
 private const val SIDEBAR_OBJECTIVE_PREFIX = "shm_"
 private const val SIDEBAR_HASH_LENGTH = 8

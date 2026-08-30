@@ -100,6 +100,9 @@ class MonitorSamplerTest {
     every { aiCheck.prob90 } returns 4
     every { aiCheck.inferenceProgress } returns null
     every { aiCheck.labelBufferSnapshot() } returns emptyMap()
+    every { aiCheck.lastCheatProbability } returns 0.87
+    every { aiCheck.lastLabelProbabilities } returns emptyMap()
+    every { aiCheck.declaredLabels } returns emptyList()
 
     val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
 

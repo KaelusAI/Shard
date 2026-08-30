@@ -17,6 +17,9 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
+import ac.shard.monitor.core.LabelFocus
+import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSettings
@@ -39,19 +42,42 @@ data class MonitorFrameRequest(
 )
 
 @Suppress("TooManyFunctions")
-class MonitorFrameBuilder {
+class MonitorFrameBuilder(
+  private val labelCatalog: LabelCatalog,
+  private val clock: () -> Long = System::currentTimeMillis,
+) {
+  private fun focusOf(
+    labels: List<MonitorFrameLabel>,
+    config: MonitorHudRuntimeConfig,
+    pinned: String,
+  ): MonitorFrameLabel? {
+    if (labels.isEmpty()) return null
+    val period = config.behavior.labelRotateMillis
+    val rotates = period > 0L && pinned == LabelFocus.AUTO
+    val at = if (rotates) ((clock() / period) % labels.size).toInt() else 0
+    return labels.firstOrNull { it.key == pinned } ?: labels[at]
+  }
+
   fun build(request: MonitorFrameRequest, config: MonitorHudRuntimeConfig): MonitorFrame {
     val sample = request.sample
     val available = sample.dataPresent && sample.aiActive
-    val raw = rawValues(request, config)
-    val extra = extraPlaceholders(sample)
+    val labels = frameLabels(sample, config)
+    val focus = focusOf(labels, config, request.settings.labelFocus)
+    val raw = rawValues(request, config, labels, focus)
+    val extra = extraPlaceholders(sample, config, labels, focus)
     val themed = raw.mapValues { (token, value) ->
-      fillTemplate(config.themes.template(request.settings.theme, token)) { key ->
-        if (key == token.key) value else extra[token]?.get(key)
+      if (token in VANISH_WHEN_EMPTY && value.isEmpty()) {
+        ""
+      } else {
+        dropEmptyTags(
+          fillTemplate(config.themes.template(request.settings.theme, token)) { key ->
+            if (key == token.key) value else extra[token]?.get(key)
+          }
+        )
       }
     }
     val headline =
-      if (available) headlineOf(request, config, themed) else request.unavailableHeadline
+      if (available) headlineOf(request, config, themed, labels) else request.unavailableHeadline
     return MonitorFrame(
       targetId = sample.targetId,
       targetName = sample.targetName,
@@ -63,12 +89,37 @@ class MonitorFrameBuilder {
         if (available) config.bossBar.severityFor(sample.probability) else MonitorSeverity.CALM,
       dataPresent = sample.dataPresent,
       aiActive = sample.aiActive,
+      labels = labels,
     )
   }
+
+  private fun frameLabels(
+    sample: MonitorSample,
+    config: MonitorHudRuntimeConfig,
+  ): List<MonitorFrameLabel> =
+    MonitorLabelInfo.tracked(sample)
+      .map {
+        MonitorFrameLabel(
+          it.label,
+          shorten(
+            labelCatalog.displayName(it.label),
+            config.behavior.labelMaxLength,
+            config.behavior.nameTruncateSuffix,
+          ),
+          formatDecimal(it.buffer, config.format.bufferDecimals),
+          formatDecimal(
+            (sample.labelProbabilities[it.label] ?: 0.0) * PERCENT_SCALE,
+            config.format.probDecimals,
+          ),
+        )
+      }
+      .map { it.copy(written = written(it, config.behavior)) }
 
   private fun rawValues(
     request: MonitorFrameRequest,
     config: MonitorHudRuntimeConfig,
+    labels: List<MonitorFrameLabel>,
+    focus: MonitorFrameLabel?,
   ): Map<MonitorToken, String> {
     val sample = request.sample
     val format = config.format
@@ -80,9 +131,17 @@ class MonitorFrameBuilder {
       }
     return mapOf(
       MonitorToken.NAME to truncateName(sample.targetName, config.behavior),
-      MonitorToken.PROB to formatDecimal(sample.probability * PERCENT_SCALE, format.probDecimals),
+      MonitorToken.PROB to
+        steadyProbability(focus, labels, config.behavior).ifEmpty {
+          formatDecimal(sample.probability * PERCENT_SCALE, format.probDecimals)
+        },
       MonitorToken.TREND to formatSigned(request.trend, format.trendDecimals),
-      MonitorToken.BUFFER to formatDecimal(sample.buffer, format.bufferDecimals),
+      MonitorToken.BUFFER to
+        steadyBuffer(focus, labels, config.behavior).ifEmpty {
+          formatDecimal(sample.buffer, format.bufferDecimals)
+        },
+      MonitorToken.LABEL to steadyName(focus, labels, config.behavior),
+      MonitorToken.LABELS to labelsText(labels),
       MonitorToken.PING to ping,
       MonitorToken.DMG to formatDecimal(sample.damageMultiplier, format.dmgDecimals),
       MonitorToken.PROB90 to sample.prob90.toString(),
@@ -94,8 +153,86 @@ class MonitorFrameBuilder {
     )
   }
 
-  private fun extraPlaceholders(sample: MonitorSample): Map<MonitorToken, Map<String, String>> {
+  private fun written(label: MonitorFrameLabel, behavior: MonitorBehaviorConfig): String =
+    if (behavior.labelUsesKey) {
+      shorten(label.key, behavior.labelMaxLength, behavior.nameTruncateSuffix)
+    } else {
+      label.name
+    }
+
+  private fun steadyName(
+    focus: MonitorFrameLabel?,
+    labels: List<MonitorFrameLabel>,
+    behavior: MonitorBehaviorConfig,
+  ): String {
+    val name = focus?.let { written(it, behavior) } ?: return ""
+    return if (behavior.labelKeepWidth) {
+      name.padEnd(labels.maxOf { written(it, behavior).length })
+    } else {
+      name
+    }
+  }
+
+  private fun steadyProbability(
+    focus: MonitorFrameLabel?,
+    labels: List<MonitorFrameLabel>,
+    behavior: MonitorBehaviorConfig,
+  ): String {
+    val written = focus?.probability ?: return ""
+    return if (behavior.labelKeepWidth) {
+      written.padStart(labels.maxOf { it.probability.length })
+    } else {
+      written
+    }
+  }
+
+  private fun steadyBuffer(
+    focus: MonitorFrameLabel?,
+    labels: List<MonitorFrameLabel>,
+    behavior: MonitorBehaviorConfig,
+  ): String {
+    val written = focus?.buffer ?: return ""
+    return if (behavior.labelKeepWidth) written.padStart(labels.maxOf { it.buffer.length })
+    else written
+  }
+
+  private fun steadySuffix(
+    focus: MonitorFrameLabel?,
+    labels: List<MonitorFrameLabel>,
+    behavior: MonitorBehaviorConfig,
+  ): String {
+    if (focus == null) return ""
+    return " " + steadyName(focus, labels, behavior)
+  }
+
+  private fun labelsText(labels: List<MonitorFrameLabel>): String =
+    labels.joinToString(" · ") { "${it.name} ${it.probability}% ◆${it.buffer}" }
+
+  private fun extraPlaceholders(
+    sample: MonitorSample,
+    config: MonitorHudRuntimeConfig,
+    labels: List<MonitorFrameLabel>,
+    focus: MonitorFrameLabel?,
+  ): Map<MonitorToken, Map<String, String>> {
     val out = mutableMapOf<MonitorToken, Map<String, String>>()
+    val at = labels.indexOf(focus) + 1
+    val name = steadyName(focus, labels, config.behavior)
+    val position = if (labels.size <= 1) "" else " $at/${labels.size}"
+    val more = if (labels.size <= 1) "" else " +${labels.size - 1}"
+    out[MonitorToken.BUFFER] = mapOf("label" to name)
+    out[MonitorToken.PROB] =
+      mapOf(
+        "label" to name,
+        "label_suffix" to steadySuffix(focus, labels, config.behavior),
+        "position" to position,
+      )
+    out[MonitorToken.LABEL] =
+      mapOf(
+        "label" to name,
+        "more" to more,
+        "position" to position,
+        "count" to labels.size.toString(),
+      )
     sample.collect?.let {
       out[MonitorToken.COLLECT] =
         mapOf(
@@ -113,10 +250,11 @@ class MonitorFrameBuilder {
     request: MonitorFrameRequest,
     config: MonitorHudRuntimeConfig,
     themed: Map<MonitorToken, String>,
+    labels: List<MonitorFrameLabel>,
   ): String =
     config
       .tokens(request.settings.mode)
-      .mapNotNull { token -> partFor(token, request, config, themed) }
+      .mapNotNull { token -> partFor(token, request, config, themed, labels) }
       .joinToString(config.themes.separator(request.settings.theme))
 
   private fun mitigationPart(
@@ -147,15 +285,16 @@ class MonitorFrameBuilder {
     return themed[token].takeIf { recordingVisible(request, enabled, info) }
   }
 
+  @Suppress("LongParameterList")
   private fun partFor(
     token: MonitorToken,
     request: MonitorFrameRequest,
     config: MonitorHudRuntimeConfig,
     themed: Map<MonitorToken, String>,
+    labels: List<MonitorFrameLabel>,
   ): String? {
     val settings = request.settings
     val behavior = config.behavior
-    val sample = request.sample
     return when (token) {
       MonitorToken.NAME -> themed[token].takeIf { nameVisible(settings.showName, request.selfView) }
       MonitorToken.TREND ->
@@ -165,6 +304,8 @@ class MonitorFrameBuilder {
       MonitorToken.DMG ->
         if (dmgVisible(settings.showDmg, request.sample.damageMultiplier, config)) themed[token]
         else neutralFor(behavior.neutralDmg, behavior)
+      MonitorToken.LABEL -> themed[token]?.takeIf { it.isNotEmpty() }
+      MonitorToken.LABELS -> themed[token].takeIf { labels.isNotEmpty() }
       MonitorToken.COLLECT,
       MonitorToken.INFERENCE -> recordingPart(token, request, themed)
       MonitorToken.TIER,
@@ -223,14 +364,8 @@ class MonitorFrameBuilder {
     return template.ifBlank { null }
   }
 
-  private fun truncateName(name: String, behavior: MonitorBehaviorConfig): String {
-    val max = behavior.nameMaxLength
-    if (max <= 0 || name.length <= max) {
-      return name
-    }
-    val cut = maxOf(1, max - behavior.nameTruncateSuffix.length)
-    return name.substring(0, cut) + behavior.nameTruncateSuffix
-  }
+  private fun truncateName(name: String, behavior: MonitorBehaviorConfig): String =
+    shorten(name, behavior.nameMaxLength, behavior.nameTruncateSuffix)
 
   private fun placeholdersOf(
     raw: Map<MonitorToken, String>,
@@ -247,6 +382,24 @@ class MonitorFrameBuilder {
   }
 
   private companion object {
+    val VANISH_WHEN_EMPTY = setOf(MonitorToken.LABEL, MonitorToken.LABELS)
+
+    fun shorten(text: String, max: Int, suffix: String): String {
+      if (max <= 0 || text.length <= max) return text
+      return text.substring(0, maxOf(1, max - suffix.length)) + suffix
+    }
+
+    val EMPTY_TAG_PAIR = Regex("<([a-z_]+)(?::[^<>]*)?></\\1>")
+
+    fun dropEmptyTags(rendered: String): String {
+      var out = rendered
+      while (true) {
+        val next = EMPTY_TAG_PAIR.replace(out, "")
+        if (next == out) return out
+        out = next
+      }
+    }
+
     const val PERCENT_SCALE = 100.0
     const val NO_TIER = "NONE"
     const val MILLIS_PER_SECOND = 1000L

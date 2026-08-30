@@ -18,6 +18,8 @@
 package ac.shard.command.commands.info
 
 import ac.shard.command.ShardCommand
+import ac.shard.config.ConfigManager
+import ac.shard.monitor.core.LabelFocus
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -36,11 +38,13 @@ import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.extension.suggestionProvider
 import org.incendo.cloud.parser.standard.StringParser
 
+@Suppress("TooManyFunctions")
 class MonitorSettingsCommand(
   private val settingsService: MonitorSettingsService,
   private val hudService: MonitorHudService,
   private val registry: MonitorOutputRegistry,
   private val selector: MonitorOutputSelector,
+  private val configManager: ConfigManager,
 ) : ShardCommand {
   @Suppress("LongMethod")
   override fun register(manager: CommandManager<Sender>) {
@@ -70,6 +74,14 @@ class MonitorSettingsCommand(
         suggestionProvider = MonitorSuggestions.CHAT
       }
       handler(this@MonitorSettingsCommand::setChatStyle)
+    }
+    listOf(listOf("set", "label"), listOf("label")).forEach { path ->
+      monitorCommand(manager, path = path) {
+        required("label", StringParser.stringParser()) {
+          suggestionProvider = MonitorSuggestions.labelFocus(configManager)
+        }
+        handler(this@MonitorSettingsCommand::setLabelFocus)
+      }
     }
     listOf(listOf("set", "output"), listOf("output")).forEach { path ->
       monitorCommand(manager, path = path) {
@@ -139,6 +151,17 @@ class MonitorSettingsCommand(
       "chat",
       parsed?.let { { s: MonitorSettings -> s.copy(chatStyle = it) } },
       raw,
+    )
+  }
+
+  private fun setLabelFocus(context: CommandContext<Sender>) {
+    val raw: String = context["label"]
+    val parsed = LabelFocus.parse(raw)
+    applyOrReject(
+      context,
+      "label",
+      parsed?.let { { s: MonitorSettings -> s.copy(labelFocus = it) } },
+      parsed?.let(LabelFocus::describe) ?: raw,
     )
   }
 
@@ -232,5 +255,6 @@ internal fun optionsFor(setting: String): String =
     "theme" -> MonitorTheme.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
     "name" -> MonitorNameMode.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
     "chat" -> MonitorChatStyle.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
+    "label" -> "auto/off/<label>"
     else -> "on/off"
   }

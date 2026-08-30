@@ -17,6 +17,9 @@
  */
 package ac.shard.monitor.core
 
+import ac.shard.ai.label.LabelKey
+import java.util.Locale
+
 data class MonitorSettings(
   val mode: MonitorMode,
   val theme: MonitorTheme,
@@ -28,4 +31,31 @@ data class MonitorSettings(
   val chatStyle: MonitorChatStyle = MonitorChatStyle.SUMMARY,
   val showCollect: Boolean = true,
   val showInference: Boolean = true,
+  val labelFocus: String = LabelFocus.AUTO,
 )
+
+object LabelFocus {
+  const val AUTO = ""
+
+  const val STRONGEST = "strongest"
+
+  fun parse(raw: String?): String? {
+    val value = raw?.trim()?.lowercase(Locale.ROOT) ?: return null
+    return when (value) {
+      "auto",
+      "rotate",
+      AUTO -> AUTO
+      "off",
+      "strongest",
+      "top" -> STRONGEST
+      else -> LabelKey.canonical(value)
+    }
+  }
+
+  fun describe(value: String): String =
+    when (value) {
+      AUTO -> "auto"
+      STRONGEST -> "strongest"
+      else -> value
+    }
+}

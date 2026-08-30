@@ -209,12 +209,19 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
       targetName = event.playerName,
       dataPresent = true,
       aiActive = true,
-      probability = event.probability,
+      probability =
+        MonitorLabelInfo.probabilityOfLeader(
+          event.labelBuffers,
+          event.labelProbabilities,
+          event.probability,
+        ),
       buffer = event.bufferAfter,
       rawPing = state.ping,
       damageMultiplier = event.damageMultiplier,
       prob90 = event.prob90,
       leadingLabel = MonitorLabelInfo.leading(event.labelBuffers),
+      labelBuffers = event.labelBuffers,
+      labelProbabilities = event.labelProbabilities,
       tier = tier,
     )
 }

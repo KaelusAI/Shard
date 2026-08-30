@@ -47,9 +47,11 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
     private val FALLBACK_TEMPLATES =
       mapOf(
         MonitorToken.NAME to "<gray>@{name}</gray>",
-        MonitorToken.PROB to "{prob}%",
+        MonitorToken.PROB to "{prob}%{label_suffix}",
         MonitorToken.TREND to "{trend}",
         MonitorToken.BUFFER to "◆ {buffer}",
+        MonitorToken.LABEL to "{label}{position}",
+        MonitorToken.LABELS to "<gray>{labels}</gray>",
         MonitorToken.PING to "Ping {ping}ms",
         MonitorToken.DMG to "Dmg {dmg}x",
         MonitorToken.PROB90 to "<color:#F87171>90+ {prob90}</color>",

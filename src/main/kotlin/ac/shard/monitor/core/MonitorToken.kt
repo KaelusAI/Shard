@@ -24,6 +24,8 @@ enum class MonitorToken(val key: String) {
   PROB("prob"),
   TREND("trend"),
   BUFFER("buffer"),
+  LABEL("label"),
+  LABELS("labels"),
   PING("ping"),
   DMG("dmg"),
   PROB90("prob90"),

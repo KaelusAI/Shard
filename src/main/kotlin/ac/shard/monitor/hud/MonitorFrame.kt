@@ -35,6 +35,15 @@ data class MonitorFrame(
   val severity: MonitorSeverity,
   val dataPresent: Boolean,
   val aiActive: Boolean,
+  val labels: List<MonitorFrameLabel> = emptyList(),
+)
+
+data class MonitorFrameLabel(
+  val key: String,
+  val name: String,
+  val buffer: String,
+  val probability: String,
+  val written: String = name,
 )
 
 class MonitorRenderPayload(val frames: List<MonitorFrame>, val samples: Map<UUID, MonitorSample>) {

@@ -20,6 +20,7 @@ package ac.shard.monitor.hud
 import ac.shard.api.event.AiPredictionEvent
 import ac.shard.api.event.ShardEventBus
 import ac.shard.monitor.core.MonitorChatStyle
+import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.hud.output.ChatOutput
@@ -67,7 +68,16 @@ class MonitorLiveChatListener(
       if (frame != null) {
         chatOutput.deliverLive(
           session.context,
-          LiveSignal(frame, event.flagged, event.probability, System.currentTimeMillis()),
+          LiveSignal(
+            frame,
+            event.flagged,
+            MonitorLabelInfo.probabilityOfLeader(
+              event.labelBuffers,
+              event.labelProbabilities,
+              event.probability,
+            ),
+            System.currentTimeMillis(),
+          ),
         )
       }
     } catch (throwable: Throwable) {

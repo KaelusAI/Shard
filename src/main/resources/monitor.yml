@@ -43,11 +43,14 @@ view:
   format:
     prob-decimals: 0
     buffer-decimals: 2
+  # {label_tag} is the label template below, empty when nothing is detected.
+  # BELOW_NAME draws the below line only, ABOVE_NAME draws prefix and suffix.
   template:
-    prefix: "<dark_gray>[</dark_gray><white>{prob}%</white><dark_gray> • </dark_gray><yellow>{buffer}</yellow><dark_gray> • </dark_gray><aqua>{ping}ms</aqua><dark_gray>]</dark_gray> "
+    prefix: "<dark_gray>[</dark_gray><white>{prob}%</white>{label_tag}<dark_gray> • </dark_gray><yellow>{buffer}</yellow><dark_gray> • </dark_gray><aqua>{ping}ms</aqua><dark_gray>]</dark_gray> "
+    label: " <color:#C4B5FD>{label}</color>"
     suffix: ""
     below-title: "" # legacy fallback: "% AI"
-    below: "<dark_gray>[</dark_gray><white>{prob}%</white><dark_gray> • </dark_gray><yellow>{buffer}</yellow><dark_gray> • </dark_gray><aqua>{ping}ms</aqua><dark_gray>]</dark_gray>"
+    below: "<dark_gray>[</dark_gray><white>{prob}%</white>{label_tag}<dark_gray> • </dark_gray><yellow>{buffer}</yellow><dark_gray> • </dark_gray><aqua>{ping}ms</aqua><dark_gray>]</dark_gray>"
 defaults:
   mode: compact           # compact | full
   theme: calm             # calm | vivid | minimal
@@ -67,6 +70,9 @@ behavior:
   ping-refresh-ticks: 20 # how often the target's ping is read
   ping-bucket-ms: 10     # round ping to N ms so jitter does not force a redraw
   trend-decay-ticks: 100 # reset trend to zero after N ticks without a probability change
+  # One-line outputs show one detection at a time and take turns between them this often.
+  # 0 pins them to the strongest.
+  label-rotate-ticks: 40
   neutral:
     ping: "<gray>Ping --</gray>"
     dmg: "<gray>Dmg 1.00x</gray>"
@@ -74,6 +80,15 @@ behavior:
   name:
     max-length: 12
     truncate-suffix: "…"
+  label:
+    # key or title. The one-line outputs are a row of numbers with units, and "30% aim" sits in
+    # that rhythm the way "30% Aim Assist" does not. The roomy outputs always spell the title out.
+    style: key
+    # Capped so a long name cannot swallow a one-line output.
+    max-length: 12
+    # Pad the rotating name and its numbers to the widest label. The font is proportional, so
+    # the padding reads as a gap rather than a column.
+    keep-width: false
 format:
   prob:
     decimals: 0
@@ -87,7 +102,10 @@ format:
   dmg:
     decimals: 2
     hide-when-default: false
-# Tokens: name, prob, trend, buffer, ping, dmg, prob90, tier, score, rule
+# Tokens: name, prob, trend, buffer, label, labels, ping, dmg, prob90, tier, score, rule,
+#         collect, inference
+# prob and buffer carry the focused detection: {label_suffix} appends its name, "30% aim".
+# label is that name alone and takes {position} (" 2/3") and {more} (" +2"); labels lists them all.
 # rule carries how long it has been running, e.g. "blatant 2m19s".
 # tier is the mitigation step the player is on right now: NONE, LOW, MID or HIGH.
 modes:
@@ -98,11 +116,13 @@ modes:
 #   {prob}     the raw formatted value, no colour
 #   {prob!}    the same value wrapped in the player's theme template
 #   {headline} the whole modes:<mode> line, joined with the theme separator
+# An output that needs more or less than the chosen mode writes its own template out of the tokens.
 outputs:
   actionbar:
     enabled: true
     # -1 inherits behavior.keepalive-ticks. Set a positive value to override it here.
     keepalive-ticks: -1
+    template: "{headline}"
 
   bossbar:
     enabled: true
@@ -126,13 +146,19 @@ outputs:
     unavailable-line: "<gray>no data</gray>"
     # Drawn between two watched players. An empty string leaves a blank line.
     target-separator: ""
+    labels-title: "<gray>Buffer</gray>"
+    label-line: "<color:#C4B5FD>{label}</color>  <white>{prob}%</white>  <yellow>◆ {buffer}</yellow>"
+    no-labels-line: "<gray>Buffer</gray>  {buffer!}"
+    labels-overflow: "<dark_gray>… and {count} more</dark_gray>"
     # Max 15 lines. Requires Minecraft 1.20.3 or newer.
+    # {label_lines} becomes labels-title plus one label-line per label, and each row carries that
+    # label's own probability and buffer. With no labels it becomes no-labels-line instead.
     lines:
       - "<gray>Target</gray>  <white>{name}</white>"
       - ""
-      - "<gray>Prob</gray>    {prob!}"
+      - "<gray>Prob</gray>    <bold><white>{prob}%</white></bold>"
       - "<gray>Trend</gray>   {trend!}"
-      - "<gray>Buffer</gray>  {buffer!}"
+      - "{label_lines}"
       - "<gray>Ping</gray>    {ping!}"
       - "<gray>Dmg</gray>     {dmg!}"
 
@@ -150,20 +176,28 @@ outputs:
       cooldown-ticks: 20
       unknown-ping: "--"
       # {ping} comes from the last render tick; the AI detection itself carries no ping.
+      # {label_hover} wraps label-hover below in a hover with every label's buffer. The line
+      # already names the detection through {prob}, so it is out of the default template.
+      label-hover: "<hover:show_text:'<gray>Buffer by detection:</gray> <white>{labels}</white>'>{label!}</hover>"
       template: "<prefix> <white>{name}</white> <gray>\u00bb</gray> {prob!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {buffer!}"
       flagged-template: "<prefix> <red>\u26a0</red> <white>{name}</white> <gray>\u00bb</gray> {prob!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {buffer!} <gray>\u2022</gray> {dmg!}"
 
   tablist:
     enabled: true
     header: "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"
-    footer: "{headline}"
+    # A line that renders empty is dropped, so an unlabelled model leaves no blank row.
+    footer:
+      - "{headline}"
+      - "{labels!}"
 
 theme:
   calm:
     name: "<gray>@{name}</gray>"
-    prob: "<bold><white>{prob}%</white></bold>"
+    prob: "<bold><white>{prob}%</white></bold><color:#C4B5FD>{label_suffix}</color>"
     trend: "<color:#86EFAC>{trend}</color>"
     buffer: "<color:#FBBF24>◆ {buffer}</color>"
+    label: "<color:#C4B5FD>{label}</color><dark_gray>{position}</dark_gray>"
+    labels: "<gray>{labels}</gray>"
     ping: "<color:#BFDBFE>Ping {ping}ms</color>"
     dmg: "<color:#FECACA>Dmg {dmg}x</color>"
     collect: "<color:#86EFAC>{status} ticks</color> <dark_gray>({label} w{windows} {elapsed})</dark_gray>"
@@ -175,9 +209,11 @@ theme:
     sep: "<dark_gray> • </dark_gray>"
   vivid:
     name: "<gray>@{name}</gray>"
-    prob: "<bold><white>{prob}%</white></bold>"
+    prob: "<bold><white>{prob}%</white></bold><color:#C4B5FD>{label_suffix}</color>"
     trend: "<green>{trend}</green>"
     buffer: "<yellow>◆ {buffer}</yellow>"
+    label: "<light_purple>{label}</light_purple><gray>{position}</gray>"
+    labels: "<gray>{labels}</gray>"
     ping: "<aqua>Ping {ping}ms</aqua>"
     dmg: "<red>Dmg {dmg}x</red>"
     collect: "<white>{status} ticks</white> <gray>({label} w{windows} {elapsed})</gray>"
@@ -189,9 +225,11 @@ theme:
     sep: "<dark_gray> • </dark_gray>"
   minimal:
     name: "<gray>@{name}</gray>"
-    prob: "<white>{prob}%</white>"
+    prob: "<white>{prob}%</white><gray>{label_suffix}</gray>"
     trend: "<gray>{trend}</gray>"
     buffer: "<yellow>◆ {buffer}</yellow>"
+    label: "<light_purple>{label}</light_purple><gray>{position}</gray>"
+    labels: "<gray>{labels}</gray>"
     ping: "<gray>{ping}ms</gray>"
     dmg: "<gray>{dmg}x</gray>"
     collect: "<gray>{status} ticks</gray>"

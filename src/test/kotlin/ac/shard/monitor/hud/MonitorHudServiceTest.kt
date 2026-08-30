@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.checks.CheckManager
 import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
@@ -127,7 +128,7 @@ class MonitorHudServiceTest {
       scheduler,
       settingsService,
       sampler,
-      MonitorFrameBuilder(),
+      MonitorFrameBuilder(LabelCatalog(local = { emptyMap() })),
       MonitorOutputRegistry(outputs),
       index,
       configManager,

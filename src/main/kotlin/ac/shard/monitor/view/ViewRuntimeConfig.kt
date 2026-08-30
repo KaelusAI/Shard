@@ -38,6 +38,10 @@ internal data class ViewRuntimeConfig(
   val prefixTemplate: String,
   val suffixTemplate: String,
   val belowTemplate: String,
+  val labelTemplate: String = DEFAULT_LABEL_TEMPLATE,
+  val labelRotateMillis: Long = 0L,
+  val labelMaxLength: Int = DEFAULT_VIEW_LABEL_MAX_LENGTH,
+  val labelUsesKey: Boolean = true,
   val defaultBelowText: String,
   val usesPing: Boolean,
   val slot: Int = BELOW_NAME_DISPLAY_SLOT,
@@ -63,6 +67,8 @@ internal data class ViewRuntimeConfig(
       val prefixTemplate = config.getString("view.template.prefix", DEFAULT_PREFIX_TEMPLATE)
       val suffixTemplate = config.getString("view.template.suffix", DEFAULT_SUFFIX_TEMPLATE)
       val belowTemplate = config.getString("view.template.below", DEFAULT_BELOW_TEMPLATE)
+      val rotateTicks =
+        config.getLong("behavior.label-rotate-ticks", DEFAULT_VIEW_ROTATE_TICKS).coerceAtLeast(0L)
 
       return ViewRuntimeConfig(
         updateTicks = updateTicks,
@@ -79,6 +85,14 @@ internal data class ViewRuntimeConfig(
         prefixTemplate = prefixTemplate,
         suffixTemplate = suffixTemplate,
         belowTemplate = belowTemplate,
+        labelTemplate = config.getString("view.template.label", DEFAULT_LABEL_TEMPLATE),
+        labelRotateMillis = rotateTicks * VIEW_MILLIS_PER_TICK,
+        labelMaxLength =
+          config
+            .getInt("behavior.label.max-length", DEFAULT_VIEW_LABEL_MAX_LENGTH)
+            .coerceAtLeast(0),
+        labelUsesKey =
+          !config.getString("behavior.label.style", "key").equals("title", ignoreCase = true),
         defaultBelowText =
           fillTemplate(
             belowTemplate,
@@ -86,6 +100,7 @@ internal data class ViewRuntimeConfig(
               "prob" to config.getString("view.fallback.prob", DEFAULT_FALLBACK_PROB),
               "buffer" to config.getString("view.fallback.buffer", DEFAULT_FALLBACK_BUFFER),
               "ping" to DEFAULT_FALLBACK_PING,
+              "label_tag" to "",
             ),
           ),
         usesPing =
@@ -150,7 +165,12 @@ internal const val DEFAULT_PREFIX_TEMPLATE =
   "<dark_gray>[</dark_gray><white>{prob}%</white><dark_gray> • </dark_gray>" +
     "<yellow>{buffer}</yellow><dark_gray> • </dark_gray>" +
     "<aqua>{ping}ms</aqua><dark_gray>]</dark_gray> "
-internal const val DEFAULT_SUFFIX_TEMPLATE = ""
+internal const val DEFAULT_SUFFIX_TEMPLATE = "{label_tag}"
+internal const val DEFAULT_LABEL_TEMPLATE =
+  " <dark_gray>[</dark_gray><color:#C4B5FD>{label}</color><dark_gray>]</dark_gray>"
+internal const val DEFAULT_VIEW_ROTATE_TICKS = 40L
+internal const val VIEW_MILLIS_PER_TICK = 50L
+internal const val DEFAULT_VIEW_LABEL_MAX_LENGTH = 12
 internal const val DEFAULT_BELOW_TEMPLATE =
   "<dark_gray>[</dark_gray><white>{prob}%</white><dark_gray> • </dark_gray>" +
     "<yellow>{buffer}</yellow><dark_gray> • </dark_gray>" +

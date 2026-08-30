@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.api.event.AiPredictionEvent
 import ac.shard.config.ConfigView
 import ac.shard.monitor.core.MonitorChatStyle
@@ -40,7 +41,7 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 class MonitorHudSessionTest {
   private val viewerId = UUID.randomUUID()
   private val targetId = UUID.randomUUID()
-  private val builder = MonitorFrameBuilder()
+  private val builder = MonitorFrameBuilder(LabelCatalog(local = { emptyMap() }))
 
   private class RecordingOutput(private val policy: MonitorOutputPolicy) : MonitorOutput {
     val payloads = mutableListOf<MonitorRenderPayload>()

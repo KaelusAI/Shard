@@ -22,7 +22,11 @@ import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.ticksToCycles
 import java.util.logging.Logger
 
-data class ActionBarConfig(val enabled: Boolean, val keepAliveCycles: Int) {
+data class ActionBarConfig(
+  val enabled: Boolean,
+  val keepAliveCycles: Int,
+  val template: String,
+) {
   companion object {
     fun from(config: ConfigView, updateTicks: Long): ActionBarConfig {
       val own = config.getLong("outputs.actionbar.keepalive-ticks", INHERIT_KEEPALIVE)
@@ -30,6 +34,7 @@ data class ActionBarConfig(val enabled: Boolean, val keepAliveCycles: Int) {
       return ActionBarConfig(
         enabled = config.getBoolean("outputs.actionbar.enabled", true),
         keepAliveCycles = ticksToCycles(ticks, updateTicks),
+        template = config.getString("outputs.actionbar.template", DEFAULT_ACTIONBAR_TEMPLATE),
       )
     }
   }
@@ -44,6 +49,10 @@ data class SidebarConfig(
   val unavailableLine: String,
   val targetSeparator: String,
   val lines: List<String>,
+  val labelsTitle: String,
+  val labelLine: String,
+  val noLabelsLine: String,
+  val labelsOverflow: String,
 ) {
   companion object {
     fun from(config: ConfigView, updateTicks: Long, viewSlot: Int, logger: Logger): SidebarConfig {
@@ -75,6 +84,13 @@ data class SidebarConfig(
           config.getString("outputs.sidebar.unavailable-line", DEFAULT_SIDEBAR_UNAVAILABLE),
         targetSeparator = config.getString("outputs.sidebar.target-separator", ""),
         lines = lines.take(SIDEBAR_MAX_LINES),
+        labelsTitle =
+          config.getString("outputs.sidebar.labels-title", DEFAULT_SIDEBAR_LABELS_TITLE),
+        labelLine = config.getString("outputs.sidebar.label-line", DEFAULT_SIDEBAR_LABEL_LINE),
+        noLabelsLine =
+          config.getString("outputs.sidebar.no-labels-line", DEFAULT_SIDEBAR_NO_LABELS_LINE),
+        labelsOverflow =
+          config.getString("outputs.sidebar.labels-overflow", DEFAULT_SIDEBAR_LABELS_OVERFLOW),
       )
     }
   }
@@ -91,6 +107,7 @@ data class ChatConfig(
   val unknownPing: String,
   val liveTemplate: String,
   val flaggedTemplate: String,
+  val labelHover: String,
 ) {
   companion object {
     fun from(config: ConfigView, updateTicks: Long): ChatConfig {
@@ -116,18 +133,26 @@ data class ChatConfig(
         unknownPing = config.getString("outputs.chat.live.unknown-ping", DEFAULT_UNKNOWN_PING),
         liveTemplate = liveTemplate,
         flaggedTemplate = flagged.ifBlank { liveTemplate },
+        labelHover = config.getString("outputs.chat.live.label-hover", DEFAULT_LABEL_HOVER),
       )
     }
   }
 }
 
-data class TabListConfig(val enabled: Boolean, val header: String, val footer: String) {
+data class TabListConfig(
+  val enabled: Boolean,
+  val header: String,
+  val footerLines: List<String>,
+) {
   companion object {
     fun from(config: ConfigView): TabListConfig =
       TabListConfig(
         enabled = config.getBoolean("outputs.tablist.enabled", false),
         header = config.getString("outputs.tablist.header", DEFAULT_TABLIST_HEADER),
-        footer = config.getString("outputs.tablist.footer", DEFAULT_TABLIST_FOOTER),
+        footerLines =
+          config.getStringList("outputs.tablist.footer").ifEmpty {
+            listOf(config.getString("outputs.tablist.footer", DEFAULT_TABLIST_FOOTER))
+          },
       )
   }
 }
@@ -166,11 +191,17 @@ data class MonitorOutputsConfig(
 }
 
 internal const val INHERIT_KEEPALIVE = -1L
+internal const val DEFAULT_ACTIONBAR_TEMPLATE = "{headline}"
 internal const val SIDEBAR_MAX_LINES = 15
 internal const val MILLIS_PER_TICK = 50L
 internal const val DEFAULT_SIDEBAR_SLOT = 1
 internal const val DEFAULT_SIDEBAR_REASSERT_TICKS = 100L
 internal const val DEFAULT_SIDEBAR_TITLE = "<gradient:#8e9eab:#eef2f3>Shard</gradient>"
+internal const val DEFAULT_SIDEBAR_LABELS_TITLE = "<gray>Buffer</gray>"
+internal const val DEFAULT_SIDEBAR_LABEL_LINE =
+  "<color:#C4B5FD>{label}</color>  <white>{prob}%</white>  <yellow>◆ {buffer}</yellow>"
+internal const val DEFAULT_SIDEBAR_NO_LABELS_LINE = "<gray>Buffer</gray>  {buffer!}"
+internal const val DEFAULT_SIDEBAR_LABELS_OVERFLOW = "<dark_gray>… and {count} more</dark_gray>"
 internal const val DEFAULT_SIDEBAR_UNAVAILABLE = "<gray>no data</gray>"
 internal const val DEFAULT_CHAT_SUMMARY_TICKS = 200L
 internal const val MIN_CHAT_SUMMARY_TICKS = 20L
@@ -180,6 +211,8 @@ internal const val DEFAULT_CHAT_SUMMARY_TEMPLATE = "<prefix> {headline}"
 internal const val DEFAULT_LIVE_TEMPLATE =
   "<prefix> <white>{name}</white> <gray>»</gray> {prob!} <gray>•</gray> {trend!} " +
     "<gray>•</gray> {buffer!}"
+internal const val DEFAULT_LABEL_HOVER =
+  "<hover:show_text:'<gray>Buffer by detection:</gray> <white>{labels}</white>'>{label!}</hover>"
 internal const val DEFAULT_TABLIST_HEADER = "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"
 internal const val DEFAULT_TABLIST_FOOTER = "{headline}"
 internal val DEFAULT_SIDEBAR_LINES =

@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.data.CollectManager
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.ScoreDisplay
@@ -106,7 +107,11 @@ class TargetTeamStateTest {
     every { playerDataManager.getPlayer(target) } returns null
 
     val rendered =
-      ViewTagRenderer(MonitorSampler(playerDataManager, noCollector())).render(target, "", config)
+      ViewTagRenderer(
+          MonitorSampler(playerDataManager, noCollector()),
+          LabelCatalog({ emptyMap() }, { emptyMap() }),
+        )
+        .render(target, target, "", config)
 
     assertEquals("<white>--</white>", rendered.below)
     assertEquals(0, rendered.belowScore)

@@ -19,12 +19,14 @@ package ac.shard.monitor.hud.output
 
 import ac.shard.monitor.core.ComponentCache
 import ac.shard.monitor.core.MonitorOutputKind
+import ac.shard.monitor.hud.MonitorFrame
 import ac.shard.monitor.hud.MonitorHudRuntimeConfig
 import ac.shard.monitor.hud.MonitorOutput
 import ac.shard.monitor.hud.MonitorOutputCapabilities
 import ac.shard.monitor.hud.MonitorOutputPolicy
 import ac.shard.monitor.hud.MonitorRenderContext
 import ac.shard.monitor.hud.MonitorRenderPayload
+import ac.shard.monitor.hud.TabListConfig
 import ac.shard.monitor.hud.fillFrameTemplate
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
 import net.kyori.adventure.text.Component
@@ -58,9 +60,15 @@ class TabListOutput(private val adventure: BukkitAudiences, private val cache: C
       .player(context.viewer)
       .sendPlayerListHeaderAndFooter(
         cache.component(fillFrameTemplate(config.header, frame)),
-        cache.component(fillFrameTemplate(config.footer, frame)),
+        cache.component(footerOf(config, frame)),
       )
   }
+
+  private fun footerOf(config: TabListConfig, frame: MonitorFrame): String =
+    config.footerLines
+      .map { fillFrameTemplate(it, frame) }
+      .filter { it.isNotBlank() }
+      .joinToString("<newline>")
 
   override fun clear(context: MonitorRenderContext) {
     if (!context.viewer.isOnline) {

@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.config.ConfigView
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -32,7 +33,7 @@ import kotlin.test.assertTrue
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
 class MonitorFrameBuilderTest {
-  private val builder = MonitorFrameBuilder()
+  private val builder = MonitorFrameBuilder(LabelCatalog(local = { emptyMap() }))
   private val targetId = UUID.randomUUID()
 
   private val baseYaml =

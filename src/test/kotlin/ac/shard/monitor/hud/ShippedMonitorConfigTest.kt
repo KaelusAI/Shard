@@ -17,6 +17,7 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.config.ConfigView
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -51,7 +52,7 @@ class ShippedMonitorConfigTest {
     )
 
   private fun frame(showName: MonitorNameMode = MonitorNameMode.ALWAYS): MonitorFrame =
-    MonitorFrameBuilder()
+    MonitorFrameBuilder(LabelCatalog(local = { emptyMap() }))
       .build(
         MonitorFrameRequest(
           sample =

@@ -19,7 +19,6 @@ package ac.shard.monitor.view
 
 import ac.shard.Shard
 import ac.shard.monitor.core.ComponentCache
-import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.monitor.core.SlotClaim
@@ -33,13 +32,13 @@ internal class ViewSessionCoordinator(
   private val plugin: Shard,
   private val scheduler: SchedulerService,
   componentCache: ComponentCache,
-  sampler: MonitorSampler,
+  tagRenderer: ViewTagRenderer,
   private val slotRegistry: ScoreboardSlotRegistry,
   private val bridge: ScoreboardPacketBridge,
 ) {
   private val sessions = ConcurrentHashMap<UUID, ViewSession>()
   private val teamBridge = ViewTeamPacketBridge(componentCache)
-  private val tracker = ViewTargetTracker(ViewTagRenderer(sampler), teamBridge, bridge)
+  private val tracker = ViewTargetTracker(tagRenderer, teamBridge, bridge)
   private val slotGuard = ViewSlotGuard(plugin, tracker, bridge) { viewerId -> sessions[viewerId] }
 
   fun session(viewerId: UUID): ViewSession? = sessions[viewerId]

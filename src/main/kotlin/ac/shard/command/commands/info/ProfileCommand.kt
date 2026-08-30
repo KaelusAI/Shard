@@ -24,6 +24,7 @@ package ac.shard.command.commands.info
 
 import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.command.ShardCommand
+import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
 import ac.shard.database.AiSnapshot
 import ac.shard.database.DatabaseManager
@@ -51,6 +52,7 @@ private const val PERCENT = 100
 
 class ProfileCommand(
   private val playerDataManager: PlayerDataManager,
+  private val configManager: ConfigManager,
   private val localeManager: LocaleManager,
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
@@ -111,6 +113,8 @@ class ProfileCommand(
       if (aiCheck != null) String.format("%.2f", aiCheck.buffer) else "N/A",
       "ai_probs_90",
       if (aiCheck != null) aiCheck.prob90.toString() else "N/A",
+      "ai_labels",
+      if (aiCheck != null) labelBreakdown(aiCheck.labelBufferSnapshot()) else "N/A",
       "mitigation_tier",
       shardPlayer.mitigation.tierName,
       "mitigation_score",
@@ -195,4 +199,13 @@ class ProfileCommand(
   }
 
   private fun share(part: Long, total: Long): String = "${part * PERCENT / total}%"
+
+  private fun labelBreakdown(buffers: Map<String, Double>): String {
+    val catalog = configManager.labelCatalog
+    val visible = catalog.visible(buffers)
+    if (visible.isEmpty()) return "-"
+    return visible.joinToString(", ") { key ->
+      "${catalog.displayName(key)} ${String.format(Locale.US, "%.2f", buffers.getValue(key))}"
+    }
+  }
 }

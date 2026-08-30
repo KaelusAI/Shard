@@ -17,40 +17,65 @@
  */
 package ac.shard.monitor.view
 
+import ac.shard.ai.label.LabelCatalog
+import ac.shard.monitor.core.LabelFocus
+import ac.shard.monitor.core.MonitorLabelInfo
+import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.monitor.core.fillTemplate
 import ac.shard.monitor.core.formatDecimal
 import kotlin.math.roundToInt
 import org.bukkit.entity.Player
 
-internal class ViewTagRenderer(private val sampler: MonitorSampler) {
-  fun render(target: Player, pingDisplay: String, config: ViewRuntimeConfig): RenderedTag {
+internal class ViewTagRenderer(
+  private val sampler: MonitorSampler,
+  private val labelCatalog: LabelCatalog,
+  private val labelFocus: (Player) -> String = { LabelFocus.AUTO },
+  private val clock: () -> Long = System::currentTimeMillis,
+) {
+  fun render(
+    viewer: Player,
+    target: Player,
+    pingDisplay: String,
+    config: ViewRuntimeConfig,
+  ): RenderedTag {
     val sample = sampler.sample(target)
+    val pinned = labelFocus(viewer)
+    val focus = if (sample.aiActive) focusOf(sample, config, pinned) else null
+
     val probabilityValue =
       if (sample.aiActive) {
-        formatDecimal(sample.probability * PERCENT_MULTIPLIER, config.probDecimals)
+        formatDecimal(probabilityOf(sample, focus) * PERCENT_MULTIPLIER, config.probDecimals)
       } else {
         config.fallbackProb
       }
     val bufferValue =
       if (sample.aiActive) {
-        formatDecimal(sample.buffer, config.bufferDecimals)
+        formatDecimal(focus?.buffer ?: sample.buffer, config.bufferDecimals)
       } else {
         config.fallbackBuffer
       }
     val belowScore =
       if (sample.aiActive) {
-        (sample.probability * PERCENT_MULTIPLIER).roundToInt().coerceAtLeast(ZERO_BELOW_SCORE)
+        (probabilityOf(sample, focus) * PERCENT_MULTIPLIER)
+          .roundToInt()
+          .coerceAtLeast(ZERO_BELOW_SCORE)
       } else {
         ZERO_BELOW_SCORE
       }
 
+    val labels = MonitorLabelInfo.tracked(sample)
+    val widest = labels.maxOfOrNull { shortName(it.label, config).length } ?: 0
+    val name = focus?.let { shortName(it.label, config) }?.padEnd(widest).orEmpty()
     val values =
       mapOf(
         "prob" to probabilityValue,
         "buffer" to bufferValue,
         "ping" to pingDisplay,
         "tier" to sample.tier,
+        "label" to name,
+        "label_tag" to
+          if (name.isEmpty()) "" else fillTemplate(config.labelTemplate, mapOf("label" to name)),
       )
 
     return RenderedTag(
@@ -60,6 +85,29 @@ internal class ViewTagRenderer(private val sampler: MonitorSampler) {
       belowScore,
     )
   }
+
+  private fun focusOf(
+    sample: MonitorSample,
+    config: ViewRuntimeConfig,
+    pinned: String,
+  ): MonitorLabelInfo? {
+    val labels = MonitorLabelInfo.tracked(sample)
+    if (labels.isEmpty()) return null
+    val period = config.labelRotateMillis
+    val rotates = period > 0L && pinned == LabelFocus.AUTO
+    val at = if (rotates) ((clock() / period) % labels.size).toInt() else 0
+    return labels.firstOrNull { it.label == pinned } ?: labels[at]
+  }
+
+  private fun shortName(label: String, config: ViewRuntimeConfig): String {
+    val name = if (config.labelUsesKey) label else labelCatalog.displayName(label)
+    val max = config.labelMaxLength
+    if (max <= 0 || name.length <= max) return name
+    return name.substring(0, maxOf(1, max - 1)) + "…"
+  }
+
+  private fun probabilityOf(sample: MonitorSample, focus: MonitorLabelInfo?): Double =
+    if (focus == null) sample.probability else sample.labelProbabilities[focus.label] ?: 0.0
 
   private fun applyTemplate(template: String, values: Map<String, String>): String {
     return fillTemplate(template, values)

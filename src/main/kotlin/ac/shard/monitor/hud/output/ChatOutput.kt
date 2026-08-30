@@ -19,6 +19,7 @@ package ac.shard.monitor.hud.output
 
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorOutputKind
+import ac.shard.monitor.hud.ChatConfig
 import ac.shard.monitor.hud.MonitorFrame
 import ac.shard.monitor.hud.MonitorHudRuntimeConfig
 import ac.shard.monitor.hud.MonitorOutput
@@ -91,8 +92,14 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
     state.lastLineAt[signal.frame.targetId] = signal.nowMillis
     val config = context.config.chat
     val template = if (signal.flagged) config.flaggedTemplate else config.liveTemplate
-    sink.send(context.viewer, fillFrameTemplate(template, signal.frame))
+    sink.send(context.viewer, fillLive(template, config, signal.frame))
     return true
+  }
+
+  private fun fillLive(template: String, config: ChatConfig, frame: MonitorFrame): String {
+    val hover =
+      if (frame.labels.isEmpty()) "" else " " + fillFrameTemplate(config.labelHover, frame)
+    return fillFrameTemplate(template.replace(LABEL_HOVER_MARKER, hover), frame)
   }
 
   private fun shouldSendLine(
@@ -134,3 +141,4 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
 }
 
 internal const val CHAT_MAX_TARGETS = 4
+internal const val LABEL_HOVER_MARKER = "{label_hover}"
