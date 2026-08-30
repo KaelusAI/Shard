@@ -22,6 +22,10 @@ import ac.shard.ai.AiResult
 import ac.shard.ai.AiService
 import ac.shard.ai.AiServiceException
 import ac.shard.ai.TickSerializer
+import ac.shard.ai.label.LabelKey
+import ac.shard.ai.label.LabelMode
+import ac.shard.ai.label.LabelledVerdict
+import ac.shard.ai.label.VerdictResolver
 import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.api.event.AiPredictionEvent
@@ -68,6 +72,22 @@ class AiCheck(
 
   private val labelBuffers = ConcurrentHashMap<String, ViolationBuffer>()
 
+  private val verdicts =
+    VerdictResolver(
+      settings = {
+        VerdictResolver.Settings(
+          labels = configManager.aiLabels,
+          mode = configManager.effectiveLabelMode,
+          split = configManager.aiLabelSplit,
+          maxTracked = configManager.aiLabelMaxTracked,
+          legitClasses = configManager.aiLegitLabels,
+          thresholdedLabels = configManager.aiLabelThresholds.keys,
+        )
+      },
+      warn = { plugin.logger.warning(it) },
+      severe = { plugin.logger.severe(it) },
+    )
+
   val buffer: Double
     get() = labelBuffers.values.maxOfOrNull { it.value } ?: 0.0
 
@@ -76,56 +96,123 @@ class AiCheck(
   fun labelBufferSnapshot(): Map<String, Double> =
     labelBuffers.entries.associate { entry -> entry.key to entry.value.value }
 
+  val declaredLabels: List<String>
+    get() {
+      val labels = configManager.aiLabels
+      val mode =
+        configManager.effectiveLabelMode
+          ?: if (labels.size > 1) LabelMode.MULTI_LABEL else LabelMode.SINGLE
+      if (!configManager.aiLabelSplit || mode != LabelMode.MULTI_LABEL) return emptyList()
+      return labels.filterNot { it in configManager.aiLegitLabels }
+    }
+
   fun restoreBuffer(value: Double) {
     restoreLabelBuffer(UNATTRIBUTED_LABEL, value)
   }
 
-  fun restoreLabelBuffer(label: String, value: Double) {
-    labelBuffers.getOrPut(label) { ViolationBuffer() }.restore(value)
+  fun trackedLabels(): Set<String> = labelBuffers.keys.toSet()
+
+  fun clearBuffers(): Map<String, Double> {
+    val cleared = labelBufferSnapshot()
+    labelBuffers.clear()
+    return cleared
   }
 
-  fun feedBuffers(probabilities: Map<String, Double>): Map<String, Double> {
+  fun clearBuffer(label: String): Double? {
+    val removed = labelBuffers.remove(label) ?: return null
+    return removed.value
+  }
+
+  fun restoreLabelBuffer(label: String, value: Double) {
+    bufferFor(label)?.restore(value)
+  }
+
+  private fun bufferFor(label: String): ViolationBuffer? {
+    val existing = labelBuffers[label]
+    return when {
+      existing != null -> existing
+      labelBuffers.size >= configManager.aiLabelMaxTracked.coerceAtLeast(1) && !evictWeakest() ->
+        null
+      else -> labelBuffers.getOrPut(label) { ViolationBuffer() }
+    }
+  }
+
+  private fun evictWeakest(): Boolean {
+    val weakest = labelBuffers.entries.minByOrNull { it.value.value }
+    if (weakest == null || weakest.value.value >= flag) {
+      if (weakest != null && evictionWarned.compareAndSet(false, true)) {
+        plugin.logger.warning(
+          "[AiCheck] Tracking ${labelBuffers.size} labels and every one is near its flag; " +
+            "refusing new ones. Check what the inference server is sending."
+        )
+      }
+      return false
+    }
+    labelBuffers.remove(weakest.key)
+    return true
+  }
+
+  fun feedBuffers(verdict: LabelledVerdict): Map<String, Double> {
     val settings = bufferSettings()
     val crossed = mutableMapOf<String, Double>()
-    for ((label, probability) in probabilities) {
-      val labelBuffer = labelBuffers.getOrPut(label) { ViolationBuffer() }
-      labelBuffer.feed(probability, settings)
+    for ((label, probability) in verdict.values) {
+      val labelBuffer = bufferFor(label) ?: continue
+      labelBuffer.feed(probability, bufferSettings(label))
       if (labelBuffer.value > flag) {
         crossed[label] = labelBuffer.value
         labelBuffer.consumeFlag(bufferResetOnFlag)
       }
     }
+    if (verdict.attributed) retireAbsent(verdict, settings.decrease)
     return crossed
   }
 
-  private fun labelledProbabilities(
-    probabilities: List<Double>?,
-    probability: Double,
-  ): Map<String, Double> {
-    val labels = configManager.aiLabels
-    if (probabilities != null && labels.isNotEmpty() && probabilities.size != labels.size) {
-      plugin.logger.warning(
-        "[AiCheck] Model declares ${labels.size} label(s) but the response carries " +
-          "${probabilities.size} probabilities; falling back to the overall verdict"
-      )
-    }
-    return if (probabilities != null && probabilities.size == labels.size && labels.isNotEmpty()) {
-      labels.zip(probabilities).toMap()
-    } else {
-      mapOf(UNATTRIBUTED_LABEL to probability)
+  private fun retireAbsent(verdict: LabelledVerdict, decrease: Double) {
+    val declared = configManager.aiLabels.toSet()
+    val iterator = labelBuffers.entries.iterator()
+    while (iterator.hasNext()) {
+      val entry = iterator.next()
+      if (entry.key in verdict.values) continue
+      val undeclared =
+        declared.isNotEmpty() && entry.key !in declared && !LabelKey.isReserved(entry.key)
+      if (undeclared) {
+        iterator.remove()
+        debugManager.log(
+          DebugCategory.AI_PERSISTENT_BUFFER,
+          "${shardPlayer.player.name} dropped ${entry.key}=${"%.1f".format(entry.value.value)}, " +
+            "the model no longer has that label",
+        )
+      } else if (entry.value.decay(decrease) <= 0.0) {
+        iterator.remove()
+      }
     }
   }
 
-  private fun bufferSettings() =
-    ViolationBuffer.Settings(
-      CHEAT_PROBABILITY,
-      LEGIT_PROBABILITY,
+  private fun leadingLabelName(): String {
+    val catalog = configManager.labelCatalog
+    return catalog.leading(labelBufferSnapshot())?.let(catalog::displayName) ?: ""
+  }
+
+  private fun bufferSettings(label: String? = null): ViolationBuffer.Settings {
+    val own = label?.let { configManager.aiLabelThresholds[it] }
+    return ViolationBuffer.Settings(
+      own?.cheat ?: CHEAT_PROBABILITY,
+      own?.legit ?: LEGIT_PROBABILITY,
       bufferMultiplier,
       bufferDecrease,
     )
+  }
 
   @Volatile
   var lastProbability: Double = 0.0
+    private set
+
+  @Volatile
+  var lastCheatProbability: Double = 0.0
+    private set
+
+  @Volatile
+  var lastLabelProbabilities: Map<String, Double> = emptyMap()
     private set
 
   @Volatile var prob90: Int = 0
@@ -157,6 +244,7 @@ class AiCheck(
   private var bufferMultiplier = 0.0
   private var bufferDecrease = 0.0
   private var suspiciousAlertBuffer = 0.0
+  private val evictionWarned = java.util.concurrent.atomic.AtomicBoolean(false)
 
   init {
     reload()
@@ -247,6 +335,8 @@ class AiCheck(
     val shardPlayer = shardPlayer
     if (parsed.disabled) {
       lastProbability = 0.0
+      lastCheatProbability = 0.0
+      lastLabelProbabilities = emptyMap()
       damageProcessor.reset(shardPlayer)
       return
     }
@@ -256,6 +346,8 @@ class AiCheck(
         "[AiCheck] Error parsing API response: ${parsed.parseError?.message}. Response Body: ${parsed.raw}"
       )
       lastProbability = 0.0
+      lastCheatProbability = 0.0
+      lastLabelProbabilities = emptyMap()
       damageProcessor.reset(shardPlayer)
       return
     }
@@ -267,32 +359,33 @@ class AiCheck(
         "[AiCheck] API response is missing probability. Response: ${parsed.raw}"
       )
       lastProbability = 0.0
+      lastCheatProbability = 0.0
+      lastLabelProbabilities = emptyMap()
       damageProcessor.reset(shardPlayer)
       return
     }
 
-    if (apiResponse.expectedColumns != null || apiResponse.labels != null) {
-      configManager.updateAiParams(
-        null,
-        null,
-        null,
-        columns = apiResponse.expectedColumns,
-        labels = apiResponse.labels,
-      )
-    }
+    applyServerCorrections(apiResponse)
 
     val probability = apiResponse.probability
     lastProbability = probability
     trail.record(probability)
-    mitigationScorer.record(shardPlayer, probability)
-    damageProcessor.applyProbability(shardPlayer, probability)
 
-    if (probability > 0.9) {
-      prob90++
+    val verdict =
+      verdicts.resolve(apiResponse.probabilities, probability, apiResponse.namedProbabilities)
+    val cheatProbability = verdict.values.values.maxOrNull() ?: 0.0
+    if (verdict.attributed) {
+      lastCheatProbability = cheatProbability
+      lastLabelProbabilities = verdict.values
+      mitigationScorer.record(shardPlayer, cheatProbability, verdict.values)
+      damageProcessor.applyProbability(shardPlayer, cheatProbability)
+      if (cheatProbability > CHEAT_PROBABILITY) {
+        prob90++
+      }
     }
 
     val oldBuffer = buffer
-    val crossed = feedBuffers(labelledProbabilities(apiResponse.probabilities, probability))
+    val crossed = feedBuffers(verdict)
 
     if (buffer > suspiciousAlertBuffer && oldBuffer <= suspiciousAlertBuffer) {
       alertManager.send(
@@ -302,6 +395,8 @@ class AiCheck(
           shardPlayer.player.name,
           "buffer",
           formatAiBuffer(buffer),
+          "label",
+          leadingLabelName(),
         ),
         AlertType.SUSPICIOUS,
       )
@@ -329,7 +424,7 @@ class AiCheck(
         )
       } else {
         flagged = true
-        flag(buildAiFlagDebug(probability, crossed.values.max()), crossed.keys)
+        flag(buildAiFlagDebug(probability, crossed, labelBufferSnapshot()), crossed.keys)
       }
     }
 
@@ -345,12 +440,40 @@ class AiCheck(
         prob90,
         flagged,
         labelBufferSnapshot(),
+        verdict.values,
       )
     )
   }
 
-  private fun onError(error: Throwable): Void? {
+  private fun applyServerCorrections(response: ac.shard.server.AIResponse) {
+    val carriesCorrections =
+      response.expectedColumns != null ||
+        response.labels != null ||
+        response.labelTitles != null ||
+        response.legitLabels != null ||
+        response.labelMode != null ||
+        response.modelTitle != null ||
+        response.labelThresholds != null
+    if (!carriesCorrections) return
+    configManager.updateAiParams(
+      null,
+      null,
+      null,
+      columns = response.expectedColumns,
+      labels = response.labels,
+      labelNames = response.labelTitles,
+      legitLabels = response.legitLabels,
+      modelTitle = response.modelTitle,
+      labelMode = response.labelMode,
+      labelThresholds = response.labelThresholds,
+    )
+  }
+
+  @Suppress("ReturnCount")
+  internal fun onError(error: Throwable): Void? {
     lastProbability = 0.0
+    lastCheatProbability = 0.0
+    lastLabelProbabilities = emptyMap()
     val shardPlayer = shardPlayer
     damageProcessor.reset(shardPlayer)
 
@@ -358,12 +481,26 @@ class AiCheck(
 
     val ex = cause as? AiServiceException
     if (ex != null && ex.hasNewParams) {
-      configManager.updateAiParams(
-        ex.newPreWindow,
-        ex.newPostWindow,
-        ex.newStep,
-        columns = ex.newColumns,
-      )
+      val moved =
+        configManager.updateAiParams(
+          ex.newPreWindow,
+          ex.newPostWindow,
+          ex.newStep,
+          model = ex.newModel,
+          columns = ex.newColumns,
+          labels = ex.newLabels,
+          labelNames = ex.newLabelNames,
+          legitLabels = ex.newLegitLabels,
+          labelMode = ex.newLabelMode,
+          labelThresholds = ex.newLabelThresholds,
+          modelTitle = ex.newModelTitle,
+        )
+      if (moved) {
+        stuckReconfigures.set(0)
+        stuckReported.set(false)
+      } else {
+        noteStuckReconfigure(ex)
+      }
       return null
     }
 
@@ -391,6 +528,27 @@ class AiCheck(
     return null
   }
 
+  private fun noteStuckReconfigure(ex: AiServiceException) {
+    if (stuckReconfigures.incrementAndGet() < STUCK_RECONFIGURES) return
+    if (!stuckReported.compareAndSet(false, true)) return
+    plugin.logger.severe(
+      "[AiCheck] Stuck after $STUCK_RECONFIGURES rejected windows, nothing is being scored. " +
+        "Asked for ${describeAsk(ex)}; holding ${configManager.describeModelConfig()}. " +
+        "Labels are folded to lowercase with underscores here, and a threshold outside 0..1 or " +
+        "a cheat mark below its legit mark is dropped, so either can differ silently."
+    )
+  }
+
+  private fun describeAsk(ex: AiServiceException): String = buildString {
+    append("model=").append(ex.newModel ?: "-")
+    append(" window=").append(ex.newPreWindow ?: "-").append('/').append(ex.newPostWindow ?: "-")
+    append(" step=").append(ex.newStep ?: "-")
+    append(" labels=").append(ex.newLabels?.joinToString(",") ?: "-")
+    append(" legit=").append(ex.newLegitLabels?.joinToString(",") ?: "-")
+    append(" mode=").append(ex.newLabelMode ?: "-")
+    append(" thresholds=").append(ex.newLabelThresholds?.keys?.sorted()?.joinToString(",") ?: "-")
+  }
+
   private fun transientCategoryFor(code: AIServer.ResponseCode): DebugCategory? =
     when (code) {
       AIServer.ResponseCode.TIMEOUT -> DebugCategory.AI_API_TIMEOUT
@@ -401,9 +559,19 @@ class AiCheck(
     }
 
   companion object {
-    const val UNATTRIBUTED_LABEL = "_unattributed"
+    const val UNATTRIBUTED_LABEL = LabelKey.UNATTRIBUTED
 
     private const val CHEAT_PROBABILITY = 0.90
     private const val LEGIT_PROBABILITY = 0.10
+
+    private const val STUCK_RECONFIGURES = 3
+
+    private val stuckReconfigures = java.util.concurrent.atomic.AtomicInteger(0)
+    private val stuckReported = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun forgetStuckReconfigures() {
+      stuckReconfigures.set(0)
+      stuckReported.set(false)
+    }
   }
 }

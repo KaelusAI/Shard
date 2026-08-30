@@ -73,6 +73,53 @@ class AiCheckResponseTest {
   }
 
   @Test
+  fun `the flag detail names every label that crossed, strongest first`() {
+    val debug = buildAiFlagDebug(0.97, mapOf("aim" to 51.2, "trigger" to 63.4))
+
+    assertEquals("prob=0.97 trigger=63.4 aim=51.2", debug)
+  }
+
+  @Test
+  fun `the flag detail carries every tracked label, not only the one that crossed`() {
+    val debug =
+      buildAiFlagDebug(
+        1.0,
+        crossed = mapOf("trigger" to 52.6),
+        tracked = mapOf("trigger" to 25.0, "aim" to 44.9),
+      )
+
+    assertEquals(
+      "prob=1.00 trigger=52.6 aim=44.9",
+      debug,
+      "the crossed label keeps its value from before the reset, and the quiet one is still shown",
+    )
+  }
+
+  @Test
+  fun `a single-headed flag still reads as one buffer`() {
+    val debug = buildAiFlagDebug(0.95, mapOf(AiCheck.UNATTRIBUTED_LABEL to 51.0))
+
+    assertEquals("prob=0.95 buffer=51.0", debug)
+  }
+
+  @Test
+  fun `an unnamed buffer that crossed is shown even while a named one is still draining`() {
+    val debug =
+      buildAiFlagDebug(
+        0.95,
+        crossed = mapOf(AiCheck.UNATTRIBUTED_LABEL to 55.0),
+        tracked = mapOf("aim" to 12.0),
+      )
+
+    assertEquals(
+      "prob=0.95 buffer=55.0 aim=12.0",
+      debug,
+      "the buffer that fired is unnamed here, and hiding it left the line naming only labels " +
+        "that had nothing to do with the flag",
+    )
+  }
+
+  @Test
   fun `ai formatting helpers use stable decimal output`() {
     assertEquals("1.0", formatAiBuffer(1.04))
     assertEquals("0.95", formatAiProbability(0.945))
@@ -100,6 +147,10 @@ class AiCheckResponseTest {
     every { configManager.aiBufferMultiplier } returns bufferMultiplier
     every { configManager.aiBufferDecrease } returns 0.25
     every { configManager.suspiciousAlertsBuffer } returns 25.0
+    every { configManager.aiLabelMaxTracked } returns 32
+    every { configManager.aiLabelSplit } returns true
+    every { configManager.aiLabels } returns emptyList()
+    every { configManager.effectiveLabelMode } returns null
     every { configManager.enabledDebugCategories } returns enabledCategories
 
     val player = mockk<Player>(relaxed = true)

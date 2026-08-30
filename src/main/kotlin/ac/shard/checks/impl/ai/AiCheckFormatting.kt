@@ -17,6 +17,7 @@
  */
 package ac.shard.checks.impl.ai
 
+import ac.shard.ai.label.LabelKey
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -60,12 +61,26 @@ internal fun buildAiProbabilityDebugMessage(
   }
 }
 
-internal fun buildAiFlagDebug(probability: Double, buffer: Double): String {
+internal fun buildAiFlagDebug(
+  probability: Double,
+  crossed: Map<String, Double>,
+  tracked: Map<String, Double> = emptyMap(),
+): String {
   return buildString(FLAG_DEBUG_CAPACITY) {
     append("prob=")
     append(formatAiProbability(probability))
-    append(" buffer=")
-    append(formatAiBuffer(buffer))
+    val attributed = (tracked + crossed).filterKeys { !LabelKey.isReserved(it) }
+    val unnamed = crossed.filterKeys { LabelKey.isReserved(it) }.values.maxOrNull()
+    if (unnamed != null || attributed.isEmpty()) {
+      append(" buffer=")
+      append(formatAiBuffer(unnamed ?: crossed.values.maxOrNull() ?: 0.0))
+    }
+    for ((label, value) in attributed.entries.sortedByDescending { it.value }) {
+      append(' ')
+      append(label)
+      append('=')
+      append(formatAiBuffer(value))
+    }
   }
 }
 

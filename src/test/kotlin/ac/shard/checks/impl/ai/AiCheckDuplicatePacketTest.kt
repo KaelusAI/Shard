@@ -89,6 +89,9 @@ class AiCheckDuplicatePacketTest {
     every { configManager.aiBufferMultiplier } returns 1.0
     every { configManager.aiBufferDecrease } returns 1.0
     every { configManager.suspiciousAlertsBuffer } returns 25.0
+    every { configManager.aiLabelMaxTracked } returns 32
+    every { configManager.aiLabelSplit } returns true
+    every { configManager.aiLabels } returns emptyList()
 
     val player = mockk<Player>(relaxed = true)
     every { player.name } returns "TestPlayer"

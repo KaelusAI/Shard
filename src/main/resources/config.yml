@@ -24,6 +24,19 @@ ai:
     # Ticks captured before and after each attack when recording with /shard collect.
     pre-window: 128
     post-window: 128
+  labels:
+    # Rename a label here to override the title the server sends.
+    names:
+      # aim: "Aimbot"
+      # trigger: "Auto Clicker"
+    # auto | single | multilabel | multiclass. Overrides the mode the server sends.
+    # multiclass needs the model to state its clean labels and a threshold per label.
+    mode: auto
+    # auto | always | never. never puts every label into one shared buffer and one AI check.
+    split: auto
+    # Cap on labels tracked per player. The weakest buffer is evicted first, and one at the
+    # flag is never dropped.
+    max-tracked: 32
   buffer:
     # The violation level (VL) at which a flag will be triggered.
     flag: 50.0

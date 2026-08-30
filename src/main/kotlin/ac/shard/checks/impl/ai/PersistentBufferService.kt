@@ -18,6 +18,7 @@
 package ac.shard.checks.impl.ai
 
 import ac.shard.config.ConfigManager
+import ac.shard.database.AiBufferState
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
@@ -42,62 +43,57 @@ class PersistentBufferService(
     val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java) ?: return
 
     scheduler.runAsync {
-      val state = databaseManager.database.loadAiBuffer(shardPlayer.uuid) ?: return@runAsync
-      val now = System.currentTimeMillis()
-      val ageMillis = now - state.updatedAt
-      val playerName = shardPlayer.player.name
-
-      if (ageMillis < 0L) {
-        logger.warning(
-          "[PersistentBuffer] Skipped restore for $playerName: stored timestamp is in the future"
-        )
-        return@runAsync
-      }
-
+      val scalar = databaseManager.database.loadAiBuffer(shardPlayer.uuid)
+      val labelStates = databaseManager.database.loadAiLabelBuffers(shardPlayer.uuid)
+      if (scalar == null && labelStates.isEmpty()) return@runAsync
       if (!shardPlayer.player.isOnline) return@runAsync
 
-      val labelStates = databaseManager.database.loadAiLabelBuffers(shardPlayer.uuid)
+      val now = System.currentTimeMillis()
+      val playerName = shardPlayer.player.name
+      val restored = LinkedHashMap<String, Double>()
 
-      if (ageMillis < configManager.persistentBufferDisconnectWindowMillis) {
-        scheduler.runSync(shardPlayer.player) {
-          if (!shardPlayer.player.isOnline) return@runSync
-          aiCheck.restoreBuffer(state.buffer)
-          for ((label, labelState) in labelStates) {
-            aiCheck.restoreLabelBuffer(label, labelState.buffer)
-          }
-        }
+      for ((label, state) in labelStates) {
+        surviving(state, now, playerName)?.let { restored[label] = it }
+      }
+
+      if (labelStates.isEmpty() && scalar != null) {
+        surviving(scalar, now, playerName)?.let { restored[AiCheck.UNATTRIBUTED_LABEL] = it }
+      }
+
+      if (restored.isEmpty()) {
         debugManager.log(
           DebugCategory.AI_PERSISTENT_BUFFER,
-          "$playerName reconnected within disconnect window; buffer ${format(state.buffer)} " +
-            "and ${labelStates.size} label buffer(s) kept",
+          "$playerName had nothing left to restore (expired or decayed to zero)",
         )
         return@runAsync
       }
-
-      if (ageMillis > configManager.persistentBufferTtlMillis) {
-        debugManager.log(
-          DebugCategory.AI_PERSISTENT_BUFFER,
-          "$playerName buffer expired (offline ${format(ageMillis / MILLIS_PER_HOUR)}h), discarded",
-        )
-        return@runAsync
-      }
-
-      val ageHours = ageMillis / MILLIS_PER_HOUR
-      val decayed = state.buffer - configManager.persistentBufferDecayPerHour * ageHours
-      val capped = min(decayed, configManager.persistentBufferCap)
-      val finalBuffer = max(0.0, capped)
 
       scheduler.runSync(shardPlayer.player) {
         if (!shardPlayer.player.isOnline) return@runSync
-        aiCheck.restoreBuffer(finalBuffer)
-        for ((label, labelState) in labelStates) {
-          aiCheck.restoreLabelBuffer(label, decayAndCap(labelState.buffer, ageHours))
+        for ((label, value) in restored) {
+          aiCheck.restoreLabelBuffer(label, value)
         }
       }
       debugManager.log(
         DebugCategory.AI_PERSISTENT_BUFFER,
-        "$playerName restored buffer ${format(state.buffer)} → ${format(finalBuffer)} (offline ${format(ageHours)}h)",
+        "$playerName restored " +
+          restored.entries.joinToString(", ") { "${it.key}=${format(it.value)}" },
       )
+    }
+  }
+
+  private fun surviving(state: AiBufferState, now: Long, playerName: String): Double? {
+    val ageMillis = now - state.updatedAt
+    return when {
+      ageMillis < 0L -> {
+        logger.warning(
+          "[PersistentBuffer] Skipped restore for $playerName: stored timestamp is in the future"
+        )
+        null
+      }
+      ageMillis < configManager.persistentBufferDisconnectWindowMillis -> state.buffer
+      ageMillis > configManager.persistentBufferTtlMillis -> null
+      else -> decayAndCap(state.buffer, ageMillis / MILLIS_PER_HOUR).takeIf { it > 0.0 }
     }
   }
 
@@ -109,12 +105,12 @@ class PersistentBufferService(
     val threshold = configManager.persistentBufferSaveThreshold
     if (aiCheck.buffer >= threshold) {
       databaseManager.database.saveAiBuffer(shardPlayer.uuid, aiCheck.buffer, now)
+    } else {
+      databaseManager.database.saveAiBuffer(shardPlayer.uuid, 0.0, 0L)
     }
 
     val labelBuffers = aiCheck.labelBufferSnapshot().filterValues { it >= threshold }
-    if (labelBuffers.isNotEmpty()) {
-      databaseManager.database.saveAiLabelBuffers(shardPlayer.uuid, labelBuffers, now)
-    }
+    databaseManager.database.saveAiLabelBuffers(shardPlayer.uuid, labelBuffers, now)
   }
 
   fun saveOnShutdown(shardPlayer: ShardPlayer) {

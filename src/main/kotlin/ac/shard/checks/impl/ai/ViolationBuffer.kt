@@ -39,6 +39,11 @@ class ViolationBuffer {
     return true
   }
 
+  fun decay(amount: Double): Double {
+    value = max(0.0, value - amount)
+    return value
+  }
+
   fun restore(saved: Double) {
     value = max(value, max(0.0, saved))
   }
