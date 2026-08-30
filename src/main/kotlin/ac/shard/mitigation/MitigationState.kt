@@ -122,14 +122,20 @@ class MitigationState {
   }
 
   @Synchronized
-  fun noteProbability(probability: Double, now: Long, holds: HoldAccounting) {
+  fun noteProbability(
+    probability: Double,
+    now: Long,
+    holds: HoldAccounting,
+    labels: Map<String, Double> = emptyMap(),
+  ) {
     val gap = if (lastAnswerAtMillis == 0L) holds.coverMillis else (now - lastAnswerAtMillis)
     val seen = gap.coerceIn(0L, holds.coverMillis)
     val unseen = (gap - seen).coerceAtLeast(0L)
     lastAnswerAtMillis = now
 
     holds.keys.forEach { key ->
-      if (probability < key.threshold) {
+      val reading = if (key.label == null) probability else labels[key.label] ?: 0.0
+      if (reading < key.threshold) {
         held.remove(key)
         return@forEach
       }

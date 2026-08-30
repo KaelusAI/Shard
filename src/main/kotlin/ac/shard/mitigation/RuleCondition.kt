@@ -19,7 +19,9 @@
 
 package ac.shard.mitigation
 
-data class HoldKey(val threshold: Double, val requiredMillis: Long)
+import ac.shard.ai.label.LabelKey
+
+data class HoldKey(val threshold: Double, val requiredMillis: Long, val label: String? = null)
 
 data class RuleFacts(
   val score: Double,
@@ -31,18 +33,39 @@ data class RuleFacts(
   val onlineMillis: Long,
   val inCombat: Boolean,
   val probabilityHolds: Map<HoldKey, Long> = emptyMap(),
+  val labelBuffers: Map<String, Double> = emptyMap(),
+  val labelProbabilities: Map<String, Double> = emptyMap(),
 )
 
-enum class Fact(val key: String) {
+enum class Fold(val key: String) {
+  MAX("max"),
+  SUM("sum");
+
+  companion object {
+    private val BY_KEY = entries.associateBy { it.key }
+
+    fun of(key: String?): Fold? = BY_KEY[key?.trim()?.lowercase()]
+  }
+}
+
+enum class Fact(val key: String, val labelled: Boolean = false) {
   SCORE("score"),
-  BUFFER("buffer"),
-  PROBABILITY("probability"),
+  BUFFER("buffer", labelled = true),
+  PROBABILITY("probability", labelled = true),
   ANSWERS("answers"),
   SESSIONS("mitigated-sessions"),
   DAYS("mitigated-days"),
   ONLINE_SECONDS("online-seconds");
 
-  fun read(facts: RuleFacts): Double =
+  fun read(facts: RuleFacts, label: String? = null, fold: Fold = Fold.MAX): Double =
+    when {
+      label != null -> byLabel(facts)[label] ?: 0.0
+      fold == Fold.SUM && labelled ->
+        byLabel(facts).entries.filterNot { LabelKey.isReserved(it.key) }.sumOf { it.value }
+      else -> whole(facts)
+    }
+
+  private fun whole(facts: RuleFacts): Double =
     when (this) {
       SCORE -> facts.score
       BUFFER -> facts.buffer
@@ -51,6 +74,13 @@ enum class Fact(val key: String) {
       SESSIONS -> facts.sessions.toDouble()
       DAYS -> facts.days.toDouble()
       ONLINE_SECONDS -> facts.onlineMillis / MILLIS_PER_SECOND
+    }
+
+  private fun byLabel(facts: RuleFacts): Map<String, Double> =
+    when (this) {
+      BUFFER -> facts.labelBuffers
+      PROBABILITY -> facts.labelProbabilities
+      else -> emptyMap()
     }
 
   companion object {
@@ -73,14 +103,16 @@ sealed interface RuleCondition {
     val above: Double? = null,
     val below: Double? = null,
     val heldMillis: Long = 0L,
+    val label: String? = null,
+    val fold: Fold = Fold.MAX,
   ) : RuleCondition {
     override fun holds(facts: RuleFacts): Boolean {
-      val value = fact.read(facts)
+      val value = fact.read(facts, label, fold)
       if (above != null && value < above) return false
       if (below != null && value > below) return false
       if (heldMillis <= 0L) return true
       if (fact != Fact.PROBABILITY || above == null) return true
-      return (facts.probabilityHolds[HoldKey(above, heldMillis)] ?: 0L) >= heldMillis
+      return (facts.probabilityHolds[HoldKey(above, heldMillis, label)] ?: 0L) >= heldMillis
     }
   }
 

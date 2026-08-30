@@ -27,7 +27,11 @@ class MitigationScorer(
   private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
-  fun record(shardPlayer: ShardPlayer, probability: Double) {
+  fun record(
+    shardPlayer: ShardPlayer,
+    probability: Double,
+    labels: Map<String, Double> = emptyMap(),
+  ) {
     val config = settings()
     val now = clock()
     val contribution =
@@ -46,6 +50,7 @@ class MitigationScorer(
         (configManager.aiPreWindow + configManager.aiPostWindow) * MILLIS_PER_TICK,
         config.score.forgetRate,
       ),
+      labels,
     )
   }
 

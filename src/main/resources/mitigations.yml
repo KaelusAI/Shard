@@ -37,6 +37,9 @@ score:
 #     often this player has already been mitigated: mitigated-sessions, mitigated-days.
 #     Each takes above and below. probability also takes for-seconds: seconds of movement
 #     scored above that mark, wiped by one answer below it.
+#     buffer and probability also take label: <name> to read one label instead of all of them.
+#     buffer alone takes fold: sum to add every label up. A sum grows with how many the
+#     model declares, so a threshold tuned on two labels is a different rule on eight.
 #   then    - melee, projectile, crystal scale damage dealt, 0..1. incoming scales damage
 #             received, 1..4, never lands the killing blow. healing 0..1. cancel is the
 #             share of melee hits the server throws away, 0..1. Instead of numbers a channel may

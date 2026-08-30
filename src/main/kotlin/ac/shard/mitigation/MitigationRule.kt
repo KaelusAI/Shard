@@ -44,12 +44,14 @@ sealed interface RuleEffects {
     val from: Double,
     val to: Double,
     val ranges: Map<String, Pair<Double, Double>>,
+    val label: String? = null,
   ) : RuleEffects {
     override val channels: Set<String> = ranges.keys
 
     override fun resolve(facts: RuleFacts): Map<String, Double> {
       val span = to - from
-      val share = if (span == 0.0) 1.0 else ((fact.read(facts) - from) / span).coerceIn(0.0, 1.0)
+      val reading = fact.read(facts, label)
+      val share = if (span == 0.0) 1.0 else ((reading - from) / span).coerceIn(0.0, 1.0)
       return ranges.mapValues { (_, pair) -> pair.first + (pair.second - pair.first) * share }
     }
   }

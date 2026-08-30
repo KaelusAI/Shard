@@ -106,7 +106,7 @@ class MitigationRuntime(
     return RuleFacts(
       score = state.score,
       buffer = aiCheck?.buffer ?: 0.0,
-      probability = if (listening) aiCheck?.lastProbability ?: 0.0 else 0.0,
+      probability = if (listening) aiCheck?.lastCheatProbability ?: 0.0 else 0.0,
       answers = state.answers,
       sessions = state.history.sessions,
       days = state.history.days,
@@ -115,6 +115,8 @@ class MitigationRuntime(
         shardPlayer.combat.ticksSinceAttack <=
           (configManager.aiPreWindow + configManager.aiPostWindow),
       probabilityHolds = if (listening) state.probabilityHolds() else emptyMap(),
+      labelBuffers = aiCheck?.labelBufferSnapshot().orEmpty(),
+      labelProbabilities = if (listening) aiCheck?.lastLabelProbabilities.orEmpty() else emptyMap(),
     )
   }
 

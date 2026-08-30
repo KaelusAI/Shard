@@ -19,7 +19,9 @@
 
 package ac.shard.config
 
+import ac.shard.ai.label.LabelKey
 import ac.shard.mitigation.Fact
+import ac.shard.mitigation.Fold
 import ac.shard.mitigation.MitigationRule
 import ac.shard.mitigation.MitigationSettings
 import ac.shard.mitigation.MitigationTier
@@ -161,6 +163,7 @@ object MitigationsFile {
       complaints += "rule $id scales on ${node.node("fact").string}, which is not a fact"
       return null
     }
+    val pick = selector(fact, node, "rule $id", complaints, foldAllowed = false) ?: return null
     val from = node.node("from").getDouble(0.0)
     val to = node.node("to").getDouble(1.0)
     val ranges = linkedMapOf<String, Pair<Double, Double>>()
@@ -179,7 +182,53 @@ object MitigationsFile {
       complaints += "rule $id scales nothing and was dropped"
       return null
     }
-    return RuleEffects.Scale(fact, from, to, ranges)
+    return RuleEffects.Scale(fact, from, to, ranges, pick.label)
+  }
+
+  private data class Selector(val label: String?, val fold: Fold)
+
+  @Suppress("LongParameterList")
+  private fun selector(
+    fact: Fact,
+    node: ConfigurationNode,
+    where: String,
+    complaints: MutableList<String>,
+    foldAllowed: Boolean = true,
+  ): Selector? {
+    val named = node.node("label").string?.trim().orEmpty()
+    if (named.startsWith(LabelKey.RESERVED_PREFIX)) {
+      complaints += "$where asks about $named, a buffer this server keeps for itself"
+      return null
+    }
+    val label = if (named.isEmpty()) null else LabelKey.canonical(named)
+    if (named.isNotEmpty() && label == null) {
+      complaints += "$where asks about the label $named, which is not a name a model can send"
+      return null
+    }
+    if (label != null && !fact.labelled) {
+      complaints += "$where puts a label on ${fact.key}, which is one number for the whole player"
+      return null
+    }
+    val folded = node.node("fold").string?.trim().orEmpty()
+    if (folded.isEmpty()) return Selector(label, Fold.MAX)
+    if (!foldAllowed) {
+      complaints += "$where folds ${fact.key} on a scale, which reads a single number"
+      return Selector(label, Fold.MAX)
+    }
+    if (label != null) {
+      complaints += "$where sets both label and fold on ${fact.key}, and one label is one number"
+      return Selector(label, Fold.MAX)
+    }
+    if (fact != Fact.BUFFER) {
+      complaints += "$where folds ${fact.key} across labels, which only buffer can do"
+      return Selector(null, Fold.MAX)
+    }
+    val fold = Fold.of(folded)
+    if (fold == null) {
+      complaints += "$where folds buffer with $folded, and the choices are max and sum"
+      return Selector(null, Fold.MAX)
+    }
+    return Selector(null, fold)
   }
 
   private fun clampChannel(channel: String, value: Double): Double =
@@ -265,12 +314,20 @@ object MitigationsFile {
       complaints += "$where asks about $name without an above or a below"
       return null
     }
+    val pick = selector(fact, node, where, complaints) ?: return null
     val held = node.node("for-seconds").getLong(0L) * SECOND
     if (held > 0L && (fact != Fact.PROBABILITY || above == null)) {
       complaints +=
         "$where sets for-seconds on $name, which only counts alongside probability above"
     }
-    return RuleCondition.Threshold(fact = fact, above = above, below = below, heldMillis = held)
+    return RuleCondition.Threshold(
+      fact = fact,
+      above = above,
+      below = below,
+      heldMillis = held,
+      label = pick.label,
+      fold = pick.fold,
+    )
   }
 
   private fun readScore(node: ConfigurationNode, complaints: MutableList<String>): ScoreSettings {

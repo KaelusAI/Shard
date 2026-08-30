@@ -45,7 +45,7 @@ data class MitigationSettings(
         if (
           condition.fact == Fact.PROBABILITY && condition.above != null && condition.heldMillis > 0L
         ) {
-          into += HoldKey(condition.above, condition.heldMillis)
+          into += HoldKey(condition.above, condition.heldMillis, condition.label)
         }
       is RuleCondition.All -> condition.parts.forEach { collect(it, into) }
       is RuleCondition.Any -> condition.parts.forEach { collect(it, into) }
