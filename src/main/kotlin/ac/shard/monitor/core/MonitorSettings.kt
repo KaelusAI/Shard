@@ -39,6 +39,8 @@ object LabelFocus {
 
   const val STRONGEST = "strongest"
 
+  const val ALL = "all"
+
   fun parse(raw: String?): String? {
     val value = raw?.trim()?.lowercase(Locale.ROOT) ?: return null
     return when (value) {
@@ -48,9 +50,14 @@ object LabelFocus {
       "off",
       "strongest",
       "top" -> STRONGEST
+      "every",
+      "both",
+      ALL -> ALL
       else -> LabelKey.canonical(value)
     }
   }
+
+  fun rotates(value: String): Boolean = value == AUTO || value == ALL
 
   fun describe(value: String): String =
     when (value) {

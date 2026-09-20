@@ -94,7 +94,7 @@ internal class ViewTagRenderer(
     val labels = MonitorLabelInfo.tracked(sample)
     if (labels.isEmpty()) return null
     val period = config.labelRotateMillis
-    val rotates = period > 0L && pinned == LabelFocus.AUTO
+    val rotates = period > 0L && LabelFocus.rotates(pinned)
     val at = if (rotates) ((clock() / period) % labels.size).toInt() else 0
     return labels.firstOrNull { it.label == pinned } ?: labels[at]
   }

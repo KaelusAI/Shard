@@ -53,10 +53,13 @@ class MonitorFrameBuilder(
   ): MonitorFrameLabel? {
     if (labels.isEmpty()) return null
     val period = config.behavior.labelRotateMillis
-    val rotates = period > 0L && pinned == LabelFocus.AUTO
+    val rotates = period > 0L && LabelFocus.rotates(pinned)
     val at = if (rotates) ((clock() / period) % labels.size).toInt() else 0
     return labels.firstOrNull { it.key == pinned } ?: labels[at]
   }
+
+  private fun showsAll(settings: MonitorSettings, labels: List<MonitorFrameLabel>): Boolean =
+    settings.labelFocus == LabelFocus.ALL && labels.isNotEmpty()
 
   fun build(request: MonitorFrameRequest, config: MonitorHudRuntimeConfig): MonitorFrame {
     val sample = request.sample
@@ -90,6 +93,7 @@ class MonitorFrameBuilder(
       dataPresent = sample.dataPresent,
       aiActive = sample.aiActive,
       labels = labels,
+      allLabels = showsAll(request.settings, labels),
     )
   }
 
@@ -285,6 +289,17 @@ class MonitorFrameBuilder(
     return themed[token].takeIf { recordingVisible(request, enabled, info) }
   }
 
+  private fun focusPart(
+    token: MonitorToken,
+    all: Boolean,
+    themed: Map<MonitorToken, String>,
+  ): String? =
+    when {
+      !all -> themed[token]
+      token == MonitorToken.PROB -> themed[MonitorToken.LABELS]
+      else -> null
+    }
+
   @Suppress("LongParameterList")
   private fun partFor(
     token: MonitorToken,
@@ -297,6 +312,8 @@ class MonitorFrameBuilder(
     val behavior = config.behavior
     return when (token) {
       MonitorToken.NAME -> themed[token].takeIf { nameVisible(settings.showName, request.selfView) }
+      MonitorToken.PROB,
+      MonitorToken.BUFFER -> focusPart(token, showsAll(settings, labels), themed)
       MonitorToken.TREND ->
         if (settings.showTrend) themed[token] else neutralFor(behavior.neutralTrend, behavior)
       MonitorToken.PING ->

@@ -107,8 +107,18 @@ data class ChatConfig(
   val unknownPing: String,
   val liveTemplate: String,
   val flaggedTemplate: String,
+  val allLabelsTemplate: String,
+  val flaggedAllLabelsTemplate: String,
   val labelHover: String,
 ) {
+  fun templateFor(flagged: Boolean, allLabels: Boolean): String =
+    when {
+      allLabels && flagged -> flaggedAllLabelsTemplate
+      allLabels -> allLabelsTemplate
+      flagged -> flaggedTemplate
+      else -> liveTemplate
+    }
+
   companion object {
     fun from(config: ConfigView, updateTicks: Long): ChatConfig {
       val summaryTicks =
@@ -117,6 +127,9 @@ data class ChatConfig(
           .coerceAtLeast(MIN_CHAT_SUMMARY_TICKS)
       val liveTemplate = config.getString("outputs.chat.live.template", DEFAULT_LIVE_TEMPLATE)
       val flagged = config.getString("outputs.chat.live.flagged-template", "")
+      val allLabels =
+        config.getString("outputs.chat.live.all-labels-template", DEFAULT_ALL_LABELS_TEMPLATE)
+      val flaggedAllLabels = config.getString("outputs.chat.live.flagged-all-labels-template", "")
       return ChatConfig(
         enabled = config.getBoolean("outputs.chat.enabled", false),
         summaryCycles = ticksToCycles(summaryTicks, updateTicks),
@@ -133,6 +146,8 @@ data class ChatConfig(
         unknownPing = config.getString("outputs.chat.live.unknown-ping", DEFAULT_UNKNOWN_PING),
         liveTemplate = liveTemplate,
         flaggedTemplate = flagged.ifBlank { liveTemplate },
+        allLabelsTemplate = allLabels,
+        flaggedAllLabelsTemplate = flaggedAllLabels.ifBlank { allLabels },
         labelHover = config.getString("outputs.chat.live.label-hover", DEFAULT_LABEL_HOVER),
       )
     }
@@ -211,6 +226,8 @@ internal const val DEFAULT_CHAT_SUMMARY_TEMPLATE = "<prefix> {headline}"
 internal const val DEFAULT_LIVE_TEMPLATE =
   "<prefix> <white>{name}</white> <gray>»</gray> {prob!} <gray>•</gray> {trend!} " +
     "<gray>•</gray> {buffer!}"
+internal const val DEFAULT_ALL_LABELS_TEMPLATE =
+  "<prefix> <white>{name}</white> <gray>»</gray> {labels!} <gray>•</gray> {trend!}"
 internal const val DEFAULT_LABEL_HOVER =
   "<hover:show_text:'<gray>Buffer by detection:</gray> <white>{labels}</white>'>{label!}</hover>"
 internal const val DEFAULT_TABLIST_HEADER = "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"

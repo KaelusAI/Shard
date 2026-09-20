@@ -60,15 +60,9 @@ class TabListOutput(private val adventure: BukkitAudiences, private val cache: C
       .player(context.viewer)
       .sendPlayerListHeaderAndFooter(
         cache.component(fillFrameTemplate(config.header, frame)),
-        cache.component(footerOf(config, frame)),
+        cache.component(buildTabListFooter(config, frame)),
       )
   }
-
-  private fun footerOf(config: TabListConfig, frame: MonitorFrame): String =
-    config.footerLines
-      .map { fillFrameTemplate(it, frame) }
-      .filter { it.isNotBlank() }
-      .joinToString("<newline>")
 
   override fun clear(context: MonitorRenderContext) {
     if (!context.viewer.isOnline) {
@@ -80,4 +74,15 @@ class TabListOutput(private val adventure: BukkitAudiences, private val cache: C
   }
 
   override fun detach(context: MonitorRenderContext) = Unit
+}
+
+internal fun buildTabListFooter(config: TabListConfig, frame: MonitorFrame): String {
+  val lines = ArrayList<String>(config.footerLines.size)
+  for (template in config.footerLines) {
+    val line = fillFrameTemplate(template, frame)
+    if (line.isNotBlank() && lines.none { line in it }) {
+      lines += line
+    }
+  }
+  return lines.joinToString("<newline>")
 }

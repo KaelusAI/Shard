@@ -255,6 +255,6 @@ internal fun optionsFor(setting: String): String =
     "theme" -> MonitorTheme.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
     "name" -> MonitorNameMode.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
     "chat" -> MonitorChatStyle.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
-    "label" -> "auto/off/<label>"
+    "label" -> "auto/off/all/<label>"
     else -> "on/off"
   }

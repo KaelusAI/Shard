@@ -71,7 +71,8 @@ behavior:
   ping-bucket-ms: 10     # round ping to N ms so jitter does not force a redraw
   trend-decay-ticks: 100 # reset trend to zero after N ticks without a probability change
   # One-line outputs show one detection at a time and take turns between them this often.
-  # 0 pins them to the strongest.
+  # 0 pins them to the strongest. A player overrides this with "/shard monitor label" and one of
+  # auto, off, all or a label key: "all" lists every detection at once instead of taking turns.
   label-rotate-ticks: 40
   neutral:
     ping: "<gray>Ping --</gray>"
@@ -181,11 +182,16 @@ outputs:
       label-hover: "<hover:show_text:'<gray>Buffer by detection:</gray> <white>{labels}</white>'>{label!}</hover>"
       template: "<prefix> <white>{name}</white> <gray>\u00bb</gray> {prob!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {buffer!}"
       flagged-template: "<prefix> <red>\u26a0</red> <white>{name}</white> <gray>\u00bb</gray> {prob!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {buffer!} <gray>\u2022</gray> {dmg!}"
+      # Used instead of the two above by a player who ran "/shard monitor label all": every
+      # detection with its own probability and buffer in one line, so nothing waits for a turn.
+      all-labels-template: "<prefix> <white>{name}</white> <gray>\u00bb</gray> {labels!} <gray>\u2022</gray> {trend!}"
+      flagged-all-labels-template: "<prefix> <red>\u26a0</red> <white>{name}</white> <gray>\u00bb</gray> {labels!} <gray>\u2022</gray> {trend!} <gray>\u2022</gray> {dmg!}"
 
   tablist:
     enabled: true
     header: "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"
-    # A line that renders empty is dropped, so an unlabelled model leaves no blank row.
+    # A line that renders empty is dropped, so an unlabelled model leaves no blank row. So is a
+    # line that only repeats a row above it, which is where the list ends up under "label all".
     footer:
       - "{headline}"
       - "{labels!}"

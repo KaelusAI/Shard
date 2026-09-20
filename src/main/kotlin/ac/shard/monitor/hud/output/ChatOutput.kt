@@ -91,7 +91,7 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
     }
     state.lastLineAt[signal.frame.targetId] = signal.nowMillis
     val config = context.config.chat
-    val template = if (signal.flagged) config.flaggedTemplate else config.liveTemplate
+    val template = config.templateFor(signal.flagged, signal.frame.allLabels)
     sink.send(context.viewer, fillLive(template, config, signal.frame))
     return true
   }

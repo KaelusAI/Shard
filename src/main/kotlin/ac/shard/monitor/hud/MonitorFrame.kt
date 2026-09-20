@@ -36,6 +36,7 @@ data class MonitorFrame(
   val dataPresent: Boolean,
   val aiActive: Boolean,
   val labels: List<MonitorFrameLabel> = emptyList(),
+  val allLabels: Boolean = false,
 )
 
 data class MonitorFrameLabel(

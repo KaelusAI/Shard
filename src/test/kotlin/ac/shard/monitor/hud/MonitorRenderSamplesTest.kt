@@ -27,6 +27,7 @@ import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.core.MonitorTheme
 import ac.shard.monitor.hud.output.buildSidebarLines
+import ac.shard.monitor.hud.output.buildTabListFooter
 import java.io.File
 import java.util.UUID
 import java.util.logging.Logger
@@ -208,6 +209,36 @@ class MonitorRenderSamplesTest {
   }
 
   @Test
+  fun `all shows every detection at once, each beside its own numbers`() {
+    val buffers = mapOf("aim" to 70.0, "trigger" to 5.0)
+    val probabilities = mapOf("aim" to 0.30, "trigger" to 0.99)
+
+    val rendered =
+      (0..3).map {
+        actionBar(frame(buffers, probabilities, atMillis = it * 2_000L, focus = LabelFocus.ALL))
+      }
+
+    assertEquals(1, rendered.distinct().size, "nothing is left to take turns")
+    val line = rendered[0]
+    assertTrue("Aim Assist 30% ◆70.00 · Auto Clicker 99% ◆5.00" in line, line)
+    assertEquals(2, line.split("◆").size - 1, "the lone buffer token must not repeat a number")
+    assertFalse(EMPTY_TAG.containsMatchIn(line), line)
+    assertTrue(frame(buffers, probabilities, focus = LabelFocus.ALL).allLabels)
+
+    val footer = tabList(frame(buffers, probabilities, focus = LabelFocus.ALL))
+    assertEquals(1, footer.split("<newline>").size, "the headline already lists them: $footer")
+    assertEquals(2, tabList(frame(buffers, probabilities)).split("<newline>").size)
+  }
+
+  @Test
+  fun `all with nothing to list falls back to the plain line`() {
+    val frame = frame(mapOf("_unattributed" to 41.2), focus = LabelFocus.ALL)
+
+    assertFalse(frame.allLabels, "an unsplit model has one number, so there is no list to show")
+    assertEquals(actionBar(frame(mapOf("_unattributed" to 41.2))), actionBar(frame))
+  }
+
+  @Test
   fun `pinning the rotation keeps the strongest detection on screen`() {
     val buffers = mapOf("aim" to 70.0, "trigger" to 5.0)
     val pinned = MonitorHudRuntimeConfig.from(pinnedRotation(), 2, Logger.getLogger("pinned"))
@@ -285,11 +316,7 @@ class MonitorRenderSamplesTest {
 
   private fun bossBar(frame: MonitorFrame) = fillFrameTemplate(shipped.bossBar.title, frame)
 
-  private fun tabList(frame: MonitorFrame) =
-    shipped.tabList.footerLines
-      .map { fillFrameTemplate(it, frame) }
-      .filter { it.isNotBlank() }
-      .joinToString("<newline>")
+  private fun tabList(frame: MonitorFrame) = buildTabListFooter(shipped.tabList, frame)
 
   private fun live(frame: MonitorFrame, config: MonitorHudRuntimeConfig = shipped): String {
     val hover =

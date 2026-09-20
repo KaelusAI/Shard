@@ -55,6 +55,8 @@ class ChatOutputTest {
           cooldown-ticks: 20
           template: "V{prob}"
           flagged-template: "F{prob}"
+          all-labels-template: "A{labels}"
+          flagged-all-labels-template: "FA{labels}"
     """
       .trimIndent()
 
@@ -77,22 +79,25 @@ class ChatOutputTest {
     return MonitorRenderContext(viewer, viewerId, 1L, style, config)
   }
 
+  @Suppress("LongParameterList")
   private fun frame(
     targetId: UUID = UUID.randomUUID(),
     name: String = "Steve",
     prob: String = "43",
     dataPresent: Boolean = true,
     aiActive: Boolean = true,
+    allLabels: Boolean = false,
   ) =
     MonitorFrame(
       targetId = targetId,
       targetName = name,
       headline = "$name:$prob",
-      placeholders = mapOf("name" to name, "prob" to prob),
+      placeholders = mapOf("name" to name, "prob" to prob, "labels" to "aim $prob% · trigger 7%"),
       progress = 0.43f,
       severity = MonitorSeverity.CALM,
       dataPresent = dataPresent,
       aiActive = aiActive,
+      allLabels = allLabels,
     )
 
   private fun payload(vararg frames: MonitorFrame) =
@@ -172,6 +177,29 @@ class ChatOutputTest {
 
     assertTrue(delivered)
     assertEquals(listOf("F43"), sent)
+  }
+
+  @Test
+  fun `a viewer on all gets the line that lists every detection`() {
+    val context = context(MonitorChatStyle.LIVE)
+    output.attach(context)
+
+    output.deliverLive(context, LiveSignal(frame(allLabels = true), flagged = false, 0.9, 1_000L))
+    output.deliverLive(context, LiveSignal(frame(allLabels = true), flagged = true, 0.9, 2_000L))
+    output.deliverLive(context, LiveSignal(frame(), flagged = false, 0.9, 3_000L))
+
+    assertEquals(listOf("Aaim 43% · trigger 7%", "FAaim 43% · trigger 7%", "V43"), sent)
+  }
+
+  @Test
+  fun `the flagged all-labels line falls back to the plain all-labels one`() {
+    val config = runtimeConfig(yaml.replace("""flagged-all-labels-template: "FA{labels}"""", ""))
+    val context = context(MonitorChatStyle.LIVE, config)
+    output.attach(context)
+
+    output.deliverLive(context, LiveSignal(frame(allLabels = true), flagged = true, 0.9, 1_000L))
+
+    assertEquals(listOf("Aaim 43% · trigger 7%"), sent)
   }
 
   @Test

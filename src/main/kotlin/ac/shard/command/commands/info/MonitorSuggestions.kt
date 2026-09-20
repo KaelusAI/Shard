@@ -56,7 +56,7 @@ internal object MonitorSuggestions {
 
   fun labelFocus(configManager: ConfigManager): SuggestionProvider<Sender> =
     SuggestionProvider.blocking { _, _ ->
-      (listOf("auto", "off") + configManager.aiLabels).map(Suggestion::suggestion)
+      (listOf("auto", "off", "all") + configManager.aiLabels).map(Suggestion::suggestion)
     }
 
   fun watched(targets: MonitorTargetsService): SuggestionProvider<Sender> =
