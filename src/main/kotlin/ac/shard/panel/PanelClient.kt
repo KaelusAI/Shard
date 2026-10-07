@@ -17,46 +17,43 @@
  */
 package ac.shard.panel
 
-import ac.shard.Shard
 import ac.shard.config.ConfigManager
 import ac.shard.connect.CredentialsStore
-import ac.shard.connect.isSecurePanelUrl
-import ac.shard.connect.readCapped
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
+import ac.shard.http.HttpBodies
+import ac.shard.http.Json
+import ac.shard.http.ShardHttp
+import ac.shard.http.isSecureEndpoint
 import java.io.ByteArrayOutputStream
 import java.net.URI
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.logging.Logger
 import java.util.zip.GZIPOutputStream
+import tools.jackson.databind.JsonNode
 
 data class PanelReply(val status: Int, val node: JsonNode)
 
-private const val CONNECT_TIMEOUT_SECONDS = 10L
 private const val REQUEST_TIMEOUT_SECONDS = 15L
 private const val GZIP_ABOVE_BYTES = 4096
 
-private val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS)
 private val REQUEST_TIMEOUT: Duration = Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS)
 
 internal class PanelClient(
-  private val plugin: Shard,
+  private val logger: Logger,
+  private val http: ShardHttp,
   private val configManager: ConfigManager,
   private val credentialsStore: CredentialsStore,
 ) {
-  private val mapper = ObjectMapper()
-  private val client: HttpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build()
+  private val mapper = Json.mapper
 
   fun post(path: String, body: Map<String, Any?>): PanelReply? {
-    val base = configManager.connectPanelUrl.trim().trimEnd('/')
+    val base = configManager.settings.panelUrl.trim().trimEnd('/')
     val key = credentialsStore.read()?.secretKey
     return if (!usable(base) || key.isNullOrBlank()) null else send(base, path, body, key)
   }
 
-  fun verifiedPayload(node: JsonNode): String? {
-    val payload = node.path("payload").asText("")
+  fun payloadOf(node: JsonNode): String? {
+    val payload = node.path("payload").asString("")
     return payload.ifBlank { null }
   }
 
@@ -65,11 +62,10 @@ internal class PanelClient(
         val raw = mapper.writeValueAsString(body).toByteArray(Charsets.UTF_8)
         val compress = raw.size > GZIP_ABOVE_BYTES
         val builder =
-          HttpRequest.newBuilder(URI.create("$base$path"))
+          http
+            .keyed(URI.create("$base$path"), key)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
-            .header("User-Agent", "Shard/" + plugin.description.version)
-            .header("X-API-Key", key)
             .timeout(REQUEST_TIMEOUT)
         if (compress) {
           builder.header("Content-Encoding", "gzip")
@@ -78,14 +74,14 @@ internal class PanelClient(
           builder
             .POST(HttpRequest.BodyPublishers.ofByteArray(if (compress) gzip(raw) else raw))
             .build()
-        val response = client.send(request, HttpResponse.BodyHandlers.ofInputStream())
-        val text = response.body().use(::readCapped)
+        val response = http.client.send(request, HttpBodies.text(HttpBodies.PANEL_LIMIT))
+        val text = response.body()
         val node =
           if (text.isBlank()) mapper.createObjectNode()
           else runCatching { mapper.readTree(text) }.getOrElse { mapper.createObjectNode() }
         PanelReply(response.statusCode(), node)
       }
-      .onFailure { plugin.logger.fine("[Panel] $path failed: ${it.message}") }
+      .onFailure { logger.fine("[Panel] $path failed: ${it.message}") }
       .getOrNull()
 
   private fun gzip(raw: ByteArray): ByteArray {
@@ -97,8 +93,8 @@ internal class PanelClient(
   private fun usable(base: String): Boolean =
     when {
       base.isBlank() -> false
-      !isSecurePanelUrl(base) -> {
-        plugin.logger.warning("[Panel] Refusing to contact the panel over an insecure URL: $base")
+      !isSecureEndpoint(base) -> {
+        logger.warning("[Panel] Refusing to contact the panel over an insecure URL: $base")
         false
       }
       else -> true

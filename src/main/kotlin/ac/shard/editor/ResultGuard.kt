@@ -29,14 +29,20 @@ internal class ResultGuard(
   private val seen = mutableSetOf<String>()
 
   @Synchronized
-  fun accept(resultId: String, issuedAt: Instant): Verdict {
+  fun check(resultId: String, issuedAt: Instant): Verdict {
     val age = Duration.between(issuedAt, now())
     return when {
       resultId.isBlank() -> Verdict.Refused("the result carries no id")
       age > window -> Verdict.Refused("the result is ${age.toMinutes()} minutes old")
       age < window.negated() -> Verdict.Refused("the result is dated in the future")
-      !seen.add(resultId) -> Verdict.Refused("result $resultId was already applied")
+      resultId in seen -> Verdict.Refused("result $resultId was already applied")
       else -> Verdict.Allowed
     }
   }
+
+  @Synchronized
+  fun accept(resultId: String, issuedAt: Instant): Verdict =
+    check(resultId, issuedAt).also { if (it is Verdict.Allowed) seen.add(resultId) }
+
+  @Synchronized fun claim(resultId: String): Boolean = seen.add(resultId)
 }

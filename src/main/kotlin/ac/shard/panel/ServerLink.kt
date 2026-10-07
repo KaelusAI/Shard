@@ -17,165 +17,192 @@
  */
 package ac.shard.panel
 
-import ac.shard.config.ConfigManager
+import ac.shard.ShardReloader
 import ac.shard.connect.ConnectService
 import ac.shard.connect.Credentials
 import ac.shard.connect.CredentialsStore
+import ac.shard.connect.DeviceFlowEnd
+import ac.shard.connect.DeviceFlowPoller
 import ac.shard.connect.LinkIntent
-import ac.shard.connect.PollResult
+import ac.shard.connect.LinkResult
+import ac.shard.connect.RevokeResult
 import ac.shard.connect.StartResult
-import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
-import ac.shard.server.AIServerProvider
+import java.net.InetAddress
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicLong
 
 sealed interface LinkStep {
   data class NeedsApproval(val url: String, val plainUrl: String, val userCode: String) : LinkStep
 
   data class Linked(val serverName: String) : LinkStep
 
+  data object Denied : LinkStep
+
+  data object Expired : LinkStep
+
   data class Failed(val message: String) : LinkStep
 }
 
-private const val MILLIS_PER_SECOND = 1000L
-
-@Suppress("LongParameterList")
+@Suppress("TooManyFunctions")
 internal class ServerLink(
   private val connectService: ConnectService,
   private val credentialsStore: CredentialsStore,
-  private val configManager: ConfigManager,
-  private val aiServerProvider: AIServerProvider,
-  private val playerDataManager: PlayerDataManager,
+  private val reloader: ShardReloader,
   private val scheduler: SchedulerService,
   private val pending: PendingLinkStore,
+  private val poller: DeviceFlowPoller,
 ) {
-
-  private val generation = AtomicLong()
-
-  fun isLinked(): Boolean = credentialsStore.read() != null
-
-  fun waiting(): Boolean {
-    val saved = pending.read() ?: return false
-    return saved.deadlineEpochSec > Instant.now().epochSecond
+  private class Flow(val intent: LinkIntent?) {
+    @Volatile var deviceCode: String? = null
   }
 
-  fun begin(report: (LinkStep) -> Unit) {
-    val mine = generation.incrementAndGet()
-    when (val started = connectService.start(credentialsStore.instanceId(), LinkIntent.SETUP)) {
-      is StartResult.Error -> report(LinkStep.Failed(started.message))
-      is StartResult.Started -> {
-        val deadline = Instant.now().epochSecond + started.expiresInSeconds
-        pending.write(
-          PendingLink(
-            deviceCode = started.deviceCode,
-            userCode = started.userCode,
-            url = started.verificationUriComplete,
-            deadlineEpochSec = deadline,
-            intervalSeconds = started.intervalSeconds,
-          )
-        )
-        report(
-          LinkStep.NeedsApproval(
-            started.verificationUriComplete,
-            started.verificationUri.ifBlank { started.verificationUriComplete },
-            started.userCode,
-          )
-        )
-        waitFor(started, deadline, mine, report)
+  private val lock = Any()
+  @Volatile private var current: Flow? = null
+
+  fun credentials(): Credentials? = credentialsStore.read()
+
+  fun isLinked(): Boolean = credentials() != null
+
+  fun pendingIntent(): LinkIntent? = current?.intent
+
+  fun begin(intent: LinkIntent, report: (LinkStep) -> Unit): Boolean {
+    val flow = Flow(intent)
+    val replaced = claim(flow)
+    scheduler.runAsync {
+      when (val started = connectService.start(credentialsStore.instanceId(), intent)) {
+        is StartResult.Error -> if (complete(flow, null)) report(LinkStep.Failed(started.message))
+        is StartResult.Started -> {
+          val deadline = Instant.now().epochSecond + started.expiresInSeconds
+          if (adopt(flow, started, deadline)) {
+            report(
+              LinkStep.NeedsApproval(
+                started.verificationUriComplete,
+                started.verificationUri.ifBlank { started.verificationUriComplete },
+                started.userCode,
+              )
+            )
+            waitFor(flow, started.deviceCode, started.intervalSeconds, deadline, report)
+          } else {
+            connectService.cancel(started.deviceCode)
+          }
+        }
       }
     }
-  }
-
-  fun forget() {
-    generation.incrementAndGet()
-    pending.read()?.let { connectService.cancel(it.deviceCode) }
-    pending.clear()
+    return replaced
   }
 
   fun resume(report: (LinkStep) -> Unit): Boolean {
     val saved = pending.read()
-    val left = saved?.let { it.deadlineEpochSec - Instant.now().epochSecond } ?: 0L
-    if (saved == null || left <= 0L) {
-      if (saved != null) pending.clear()
-      return false
+    val now = Instant.now().epochSecond
+    if (saved != null && saved.deadlineEpochSec <= now) pending.clear()
+    val live = saved?.takeIf { it.deadlineEpochSec > now } ?: return false
+    val flow = Flow(LinkIntent.SETUP).apply { deviceCode = live.deviceCode }
+    val adopted = synchronized(lock) { (current == null).also { free -> if (free) current = flow } }
+    if (adopted) {
+      waitFor(flow, live.deviceCode, live.intervalSeconds, live.deadlineEpochSec, report)
     }
-    waitFor(
-      StartResult.Started(
-        deviceCode = saved.deviceCode,
-        userCode = saved.userCode,
-        verificationUri = saved.url,
-        verificationUriComplete = saved.url,
-        expiresInSeconds = left,
-        intervalSeconds = saved.intervalSeconds,
-      ),
-      saved.deadlineEpochSec,
-      generation.incrementAndGet(),
-      report,
-    )
-    return true
+    return adopted
   }
+
+  fun redeem(userCode: String, done: (LinkResult) -> Unit) {
+    val flow = Flow(null)
+    claim(flow)
+    scheduler.runAsync {
+      val hostname = runCatching { InetAddress.getLocalHost().hostName }.getOrNull()
+      val result = connectService.redeem(userCode, credentialsStore.instanceId(), hostname)
+      val linked = (result as? LinkResult.Linked)?.credentials
+      if (complete(flow, linked)) {
+        if (linked != null) scheduler.runSync(reloader::reloadConnection)
+        done(result)
+      }
+    }
+  }
+
+  fun unlink(canRevoke: Boolean, done: (revoked: Boolean) -> Unit): Boolean {
+    val credentials =
+      synchronized(lock) {
+        claim(null)
+        credentialsStore.read()?.also { credentialsStore.clear() }
+      }
+    if (credentials != null) {
+      scheduler.runAsync {
+        val revoked =
+          canRevoke && connectService.revoke(credentials.secretKey) !is RevokeResult.Error
+        scheduler.runSync(reloader::reloadConnection)
+        done(revoked)
+      }
+    }
+    return credentials != null
+  }
+
+  fun cancel(intent: LinkIntent): Boolean =
+    synchronized(lock) {
+      val ours = current?.intent == intent
+      if (ours) claim(null)
+      ours
+    }
+
+  private fun claim(flow: Flow?): Boolean =
+    synchronized(lock) {
+      val previous = current
+      current = flow
+      val stale = previous?.deviceCode ?: pending.read()?.deviceCode
+      pending.clear()
+      stale?.let { code -> scheduler.runAsync { connectService.cancel(code) } }
+      previous != null
+    }
+
+  private fun adopt(flow: Flow, started: StartResult.Started, deadline: Long): Boolean =
+    synchronized(lock) {
+      val ours = current === flow
+      if (ours) {
+        flow.deviceCode = started.deviceCode
+        if (flow.intent == LinkIntent.SETUP) {
+          pending.write(
+            PendingLink(
+              deviceCode = started.deviceCode,
+              userCode = started.userCode,
+              url = started.verificationUriComplete,
+              deadlineEpochSec = deadline,
+              intervalSeconds = started.intervalSeconds,
+            )
+          )
+        }
+      }
+      ours
+    }
+
+  private fun complete(flow: Flow, linked: Credentials?): Boolean =
+    synchronized(lock) {
+      val ours = current === flow
+      if (ours) {
+        current = null
+        pending.clear()
+        linked?.let(credentialsStore::write)
+      }
+      ours
+    }
 
   private fun waitFor(
-    started: StartResult.Started,
+    flow: Flow,
+    deviceCode: String,
+    intervalSeconds: Long,
     deadlineEpochSec: Long,
-    mine: Long,
     report: (LinkStep) -> Unit,
   ) {
-    scheduler.runLaterAsync(
-      { pollOnce(started, deadlineEpochSec, mine, report) },
-      started.intervalSeconds.coerceAtLeast(1) * MILLIS_PER_SECOND,
-    )
-  }
-
-  private fun pollOnce(
-    started: StartResult.Started,
-    deadlineEpochSec: Long,
-    mine: Long,
-    report: (LinkStep) -> Unit,
-  ) {
-    if (generation.get() != mine) {
-      return
-    }
-    if (Instant.now().epochSecond >= deadlineEpochSec) {
-      pending.clear()
-      report(LinkStep.Failed("The link was not approved in time."))
-      return
-    }
-    when (val result = connectService.poll(started.deviceCode)) {
-      PollResult.Pending -> waitFor(started, deadlineEpochSec, mine, report)
-      is PollResult.SlowDown -> waitFor(started, deadlineEpochSec, mine, report)
-      is PollResult.Approved -> {
-        pending.clear()
-        report(LinkStep.Linked(store(result)))
+    poller.await(deviceCode, intervalSeconds, deadlineEpochSec, { current === flow }) { end ->
+      val approved = (end as? DeviceFlowEnd.Approved)?.result?.credentials
+      if (complete(flow, approved)) {
+        if (approved != null) scheduler.runSync(reloader::reloadConnection)
+        report(
+          when (end) {
+            is DeviceFlowEnd.Approved -> LinkStep.Linked(approved?.serverName ?: "your server")
+            DeviceFlowEnd.Denied -> LinkStep.Denied
+            DeviceFlowEnd.Expired,
+            DeviceFlowEnd.TimedOut -> LinkStep.Expired
+          }
+        )
       }
-      PollResult.Denied -> {
-        pending.clear()
-        report(LinkStep.Failed("The link was refused in the panel."))
-      }
-      PollResult.Expired -> {
-        pending.clear()
-        report(LinkStep.Failed("The link code expired."))
-      }
-      is PollResult.Error -> waitFor(started, deadlineEpochSec, mine, report)
     }
-  }
-
-  private fun store(approved: PollResult.Approved): String {
-    credentialsStore.write(
-      Credentials(
-        secretKey = approved.secretKey,
-        serverId = approved.serverId,
-        serverName = approved.serverName,
-        allowlistedIp = approved.allowlistedIp,
-        inferenceUrl = approved.inferenceUrl,
-      )
-    )
-    scheduler.runSync {
-      configManager.reloadConfig()
-      aiServerProvider.reload()
-      playerDataManager.reloadAllPlayers()
-    }
-    return approved.serverName ?: "your server"
   }
 }

@@ -17,10 +17,13 @@
  */
 package ac.shard.panel
 
-import ac.shard.Shard
 import ac.shard.connect.CredentialsStore
 import ac.shard.editor.EditorSnapshot
 import ac.shard.editor.SessionKind
+import ac.shard.http.HttpOutcome
+import ac.shard.http.PanelReplies
+import ac.shard.http.ShardHttp
+import java.util.logging.Logger
 
 sealed interface OpenResult {
   data class Opened(
@@ -45,10 +48,6 @@ sealed interface SessionPoll {
 }
 
 private const val BASE = "/api/v1/device/session"
-private const val HTTP_OK = 200
-private const val UNAUTHORIZED = 401
-private const val GONE = 410
-private const val TOO_MANY_REQUESTS = 429
 
 private val GONE_ERRORS = setOf("invalid_session_id", "session_not_found", "expired_session")
 private val GONE_STATUSES = setOf("expired", "cancelled", "canceled")
@@ -68,7 +67,8 @@ private const val DEFAULT_POLL_SECONDS = 5L
 
 @Suppress("TooManyFunctions", "LongParameterList")
 internal class PanelSessionService(
-  private val plugin: Shard,
+  private val logger: Logger,
+  private val http: ShardHttp,
   private val client: PanelClient,
   private val credentialsStore: CredentialsStore,
 ) {
@@ -85,12 +85,11 @@ internal class PanelSessionService(
         mapOf(
           "kind" to kind.name.lowercase(),
           "instance_id" to credentialsStore.instanceId(),
-          "plugin_version" to plugin.description.version,
+          "plugin_version" to http.pluginVersion,
           "actor" to actor,
           "env" to environment,
           "snapshot" to snapshot.files.associate { file -> file.name to fields(file) },
           "disabled_regions" to snapshot.disabledRegions,
-          "punishments" to snapshot.punishments,
           "mitigations" to snapshot.mitigations,
           "baseline" to snapshot.files.associate { it.name to it.baseline },
         ),
@@ -127,9 +126,9 @@ internal class PanelSessionService(
         "reasons" to refusals.map { reason -> mapOf("code" to codeOf(reason), "text" to reason) },
       )
     val reply = client.post("$BASE/ack", body)
-    if (reply != null && reply.status != HTTP_OK) {
+    if (reply != null && HttpOutcome.of(reply.status) != HttpOutcome.OK) {
       val what = if (applied) "The change was applied" else "The change was refused"
-      plugin.logger.warning(
+      logger.warning(
         "[Panel] $what, but the panel did not accept the acknowledgement " +
           "(HTTP ${reply.status} ${reply.node.path("error").asText("")}). " +
           "The session will expire on its own."
@@ -159,13 +158,12 @@ internal class PanelSessionService(
   private fun read(kind: SessionKind, reply: PanelReply): OpenResult {
     val node = reply.node
     val sessionId = node.path("session_id").asText("")
+    val outcome = HttpOutcome.of(reply.status)
     return when {
       node.path("error").asText("") == UNKNOWN_ENDPOINT -> OpenResult.Error(OUT_OF_STEP)
-      reply.status == UNAUTHORIZED ->
-        OpenResult.Error("The panel did not accept this server's key. Run /shard connect again.")
-      reply.status == TOO_MANY_REQUESTS ->
-        OpenResult.Error("Too many attempts. Please wait a few minutes.")
-      reply.status != HTTP_OK -> OpenResult.Error("The panel returned HTTP ${reply.status}.")
+      outcome == HttpOutcome.REJECTED -> OpenResult.Error(PanelReplies.REJECTED)
+      outcome == HttpOutcome.RATE_LIMITED -> OpenResult.Error(PanelReplies.RATE_LIMITED)
+      outcome != HttpOutcome.OK -> OpenResult.Error(PanelReplies.failed(reply.status))
       sessionId.isBlank() -> OpenResult.Error("The panel returned no session.")
       else ->
         OpenResult.Opened(
@@ -201,17 +199,17 @@ internal class PanelSessionService(
     }
     val status = reply.node.path("status").asText("")
     val error = reply.node.path("error").asText("")
+    val outcome = HttpOutcome.of(reply.status)
     return when {
-      reply.status == GONE || status in GONE_STATUSES -> SessionPoll.Expired
+      outcome == HttpOutcome.GONE || status in GONE_STATUSES -> SessionPoll.Expired
       error in GONE_ERRORS -> SessionPoll.Expired
       error == UNKNOWN_ENDPOINT -> SessionPoll.Error(OUT_OF_STEP)
-      reply.status == UNAUTHORIZED ->
-        SessionPoll.Error("The panel did not accept this server's key. Run /shard connect again.")
-      reply.status != HTTP_OK -> SessionPoll.Error("The panel returned HTTP ${reply.status}.")
+      outcome == HttpOutcome.REJECTED -> SessionPoll.Error(PanelReplies.REJECTED)
+      outcome != HttpOutcome.OK -> SessionPoll.Error(PanelReplies.failed(reply.status))
       status == "pending" -> SessionPoll.Pending
       status == "saved" ->
-        client.verifiedPayload(reply.node)?.let(SessionPoll::Saved)
-          ?: SessionPoll.Error("The result did not carry a valid signature.")
+        client.payloadOf(reply.node)?.let(SessionPoll::Saved)
+          ?: SessionPoll.Error("The panel sent a result without a payload.")
       else -> SessionPoll.Error("The panel sent an answer Shard does not understand.")
     }
   }

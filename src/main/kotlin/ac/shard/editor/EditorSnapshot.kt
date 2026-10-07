@@ -33,14 +33,13 @@ data class FileSnapshot(val name: String, val baseline: String, val fields: List
 data class EditorSnapshot(
   val files: List<FileSnapshot>,
   val disabledRegions: Map<String, List<String>>,
-  val punishments: Map<String, Map<String, List<String>>>,
   val mitigations: Map<String, Any?>? = null,
 )
 
 internal class EditorSnapshotBuilder(private val dataFolder: File) {
 
   fun build(names: Collection<String> = EDITABLE_FILES): EditorSnapshot =
-    EditorSnapshot(names.mapNotNull(::snapshot), regions(), punishmentGroups(), mitigations())
+    EditorSnapshot(names.mapNotNull(::snapshot), regions(), mitigations())
 
   private fun mitigations(): Map<String, Any?>? {
     val file = File(dataFolder, MITIGATIONS)
@@ -61,13 +60,6 @@ internal class EditorSnapshotBuilder(private val dataFolder: File) {
       node.isList -> node.childrenList().map { plain(it) }
       else -> node.rawScalar()
     }
-
-  private fun punishmentGroups(): Map<String, Map<String, List<String>>> {
-    val tree = treeOf("punishments.yml") ?: return emptyMap()
-    return YamlPatcher.childKeys(tree, "Punishments").associateWith { group ->
-      YamlPatcher.readStringListMap(tree, "Punishments/$group/actions").orEmpty()
-    }
-  }
 
   private fun treeOf(name: String): CmtTree? {
     val file = File(dataFolder, name)

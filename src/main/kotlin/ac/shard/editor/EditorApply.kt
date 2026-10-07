@@ -29,8 +29,6 @@ import ru.vyarus.yaml.updater.parse.comments.model.CmtTree
 
 data class Change(val path: String, val was: String, val now: String)
 
-data class PunishmentEdit(val group: String, val actions: Map<String, List<String>>)
-
 data class MitigationEdit(val rules: List<Any?>?) {
   val empty: Boolean
     get() = rules == null
@@ -39,7 +37,6 @@ data class MitigationEdit(val rules: List<Any?>?) {
 data class Delta(
   val changes: Map<String, List<Change>> = emptyMap(),
   val disabledRegions: Map<String, List<String>>? = null,
-  val punishments: List<PunishmentEdit>? = null,
   val mitigations: MitigationEdit? = null,
 )
 
@@ -52,15 +49,10 @@ sealed interface ApplyResult {
 }
 
 private const val CONFIG = "config.yml"
-private const val PUNISHMENTS = "punishments.yml"
 private const val WORLDGUARD_PATH = "ai/worldguard"
 private const val REGIONS_KEY = "disabled-regions"
-private const val ACTIONS_KEY = "actions"
 private const val MITIGATIONS = "mitigations.yml"
 private const val MAX_RULES = 64
-private const val MAX_STEPS = 32
-private const val MAX_ACTIONS_PER_STEP = 16
-private val GROUP_NAME = Regex("[A-Za-z0-9_-]{1,32}")
 
 private fun changeRefusals(file: String, changes: List<Change>): List<String> =
   changes.mapNotNull { change ->
@@ -75,30 +67,6 @@ private fun regionRefusals(delta: Delta): List<String> {
     (EditorSchema.checkRegions(entries) as? Verdict.Refused)?.let { "$REGIONS_KEY - ${it.reason}" }
   )
 }
-
-private fun groupShape(edit: PunishmentEdit): List<String> =
-  when {
-    !GROUP_NAME.matches(edit.group) -> listOf("punishment group ${edit.group} is not a name")
-    edit.actions.size > MAX_STEPS -> listOf("${edit.group} has more than $MAX_STEPS steps")
-    edit.actions.keys.any { (it.toIntOrNull() ?: 0) < 1 } ->
-      listOf("${edit.group} has a step that is not a violation level")
-    edit.actions.values.any { it.size > MAX_ACTIONS_PER_STEP } ->
-      listOf("${edit.group} has a step with more than $MAX_ACTIONS_PER_STEP actions")
-    else -> emptyList()
-  }
-
-private fun punishmentRefusals(delta: Delta): List<String> =
-  delta.punishments.orEmpty().flatMap { edit ->
-    groupShape(edit).ifEmpty {
-      edit.actions.entries.flatMap { (level, actions) ->
-        actions.mapNotNull { action ->
-          (PunishmentActionRule.check(action) as? Verdict.Refused)?.let {
-            "${edit.group} step $level - ${it.reason}"
-          }
-        }
-      }
-    }
-  }
 
 private sealed interface Rewritten {
   data class Body(val text: String) : Rewritten
@@ -145,7 +113,6 @@ internal class EditorApply(private val dataFolder: File, private val store: Yaml
     val refusals =
       delta.changes.flatMap { (file, changes) -> changeRefusals(file, changes) } +
         regionRefusals(delta) +
-        punishmentRefusals(delta) +
         movedUnderneath(delta, baseline)
     return if (refusals.isNotEmpty()) ApplyResult.Refused(refusals)
     else patch(withExtraFiles(delta))
@@ -164,7 +131,6 @@ internal class EditorApply(private val dataFolder: File, private val store: Yaml
   private fun movedUnderneath(delta: Delta, baseline: Map<String, String>): List<String> =
     buildList {
         if (delta.disabledRegions != null) add(CONFIG)
-        if (delta.punishments != null) add(PUNISHMENTS)
         if (delta.mitigations != null) add(MITIGATIONS)
       }
       .distinct()
@@ -187,7 +153,6 @@ internal class EditorApply(private val dataFolder: File, private val store: Yaml
   private fun withExtraFiles(delta: Delta): Delta {
     val needed = buildList {
       if (delta.disabledRegions != null) add(CONFIG)
-      if (delta.punishments != null) add(PUNISHMENTS)
       if (delta.mitigations != null) add(MITIGATIONS)
     }
     val added = needed.filterNot { it in delta.changes }.associateWith { emptyList<Change>() }
@@ -268,18 +233,6 @@ internal class EditorApply(private val dataFolder: File, private val store: Yaml
         failures += "$CONFIG:$WORLDGUARD_PATH is not in the file"
       }
     }
-    delta.punishments.orEmpty().forEach { edit ->
-      val done =
-        YamlPatcher.setStringListMap(
-          trees.getValue(PUNISHMENTS)!!,
-          "Punishments/${edit.group}",
-          ACTIONS_KEY,
-          edit.actions,
-        )
-      if (done !is PatchResult.Applied) {
-        failures += "$PUNISHMENTS: there is no punishment group named ${edit.group}"
-      }
-    }
     return failures
   }
 
@@ -299,7 +252,6 @@ internal class EditorApply(private val dataFolder: File, private val store: Yaml
     val total =
       delta.changes.values.sumOf { it.size } +
         (delta.disabledRegions?.let { 1 } ?: 0) +
-        delta.punishments.orEmpty().size +
         (edit?.rules?.let { 1 } ?: 0)
     return when (val outcome = store.write(bodies)) {
       is WriteOutcome.Written -> ApplyResult.Applied(outcome.stamp, total)

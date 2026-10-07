@@ -17,9 +17,9 @@
  */
 package ac.shard.editor
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
+import ac.shard.http.Json
 import java.time.Instant
+import tools.jackson.databind.JsonNode
 
 data class EditorResult(
   val resultId: String,
@@ -35,7 +35,7 @@ sealed interface DecodeResult {
   data class Malformed(val reason: String) : DecodeResult
 }
 
-private val MAPPER = ObjectMapper()
+private val MAPPER = Json.mapper
 private const val MAX_CHANGES = 512
 
 internal object DeltaCodec {
@@ -44,14 +44,14 @@ internal object DeltaCodec {
     val root = runCatching { MAPPER.readTree(payload) }.getOrNull()
     return when {
       root == null || !root.isObject -> DecodeResult.Malformed("the payload is not an object")
-      root.path("result_id").asText("").isBlank() -> DecodeResult.Malformed("no result_id")
-      root.path("session_id").asText("").isBlank() -> DecodeResult.Malformed("no session_id")
+      root.path("result_id").asString("").isBlank() -> DecodeResult.Malformed("no result_id")
+      root.path("session_id").asString("").isBlank() -> DecodeResult.Malformed("no session_id")
       else -> withTime(root)
     }
   }
 
   private fun withTime(root: JsonNode): DecodeResult {
-    val issued = runCatching { Instant.parse(root.path("issued_at").asText("")) }.getOrNull()
+    val issued = runCatching { Instant.parse(root.path("issued_at").asString("")) }.getOrNull()
     return if (issued == null) {
       DecodeResult.Malformed("issued_at is not a time in UTC")
     } else {
@@ -67,15 +67,14 @@ internal object DeltaCodec {
     } else {
       DecodeResult.Decoded(
         EditorResult(
-          resultId = root.path("result_id").asText(""),
-          sessionId = root.path("session_id").asText(""),
+          resultId = root.path("result_id").asString(""),
+          sessionId = root.path("session_id").asString(""),
           issuedAt = issued,
           baseline = strings(root.path("baseline")),
           delta =
             Delta(
               changes = changes,
               disabledRegions = regions(root.path("disabled_regions")),
-              punishments = punishments(root.path("punishments")),
               mitigations = mitigations(root.path("mitigations")),
             ),
         )
@@ -103,7 +102,7 @@ internal object DeltaCodec {
 
   private fun mitigations(node: JsonNode): MitigationEdit? {
     if (!node.isObject) return null
-    val rules = node.path("rules").takeIf { it.isArray }?.map { plain(it) }
+    val rules = node.path("rules").takeIf { it.isArray }?.values()?.map { plain(it) }
     val edit = MitigationEdit(rules)
     return if (edit.empty) null else edit
   }
@@ -111,11 +110,11 @@ internal object DeltaCodec {
   private fun plain(node: JsonNode): Any? =
     when {
       node.isObject -> node.properties().associate { (key, child) -> key to plain(child) }
-      node.isArray -> node.map { plain(it) }
-      node.isBoolean -> node.asBoolean()
-      node.isNumber -> if (node.isIntegralNumber) node.asLong() else node.asDouble()
+      node.isArray -> node.values().map { plain(it) }
+      node.isBoolean -> node.asBoolean(false)
+      node.isNumber -> if (node.isIntegralNumber) node.asLong(0L) else node.asDouble(0.0)
       node.isNull -> null
-      else -> node.asText()
+      else -> node.asString("")
     }
 
   private fun regions(node: JsonNode): Map<String, List<String>>? =
@@ -124,36 +123,18 @@ internal object DeltaCodec {
       ?.properties()
       ?.associate { (world, list) -> world to list.mapNotNull { scalar(it) } }
 
-  private fun punishments(node: JsonNode): List<PunishmentEdit>? =
-    node
-      .takeIf { it.isArray }
-      ?.mapNotNull { entry ->
-        val group = entry.path("group").asText("")
-        val actions = entry.path("actions")
-        if (group.isBlank() || !actions.isObject) {
-          null
-        } else {
-          PunishmentEdit(
-            group,
-            actions.properties().associate { (level, list) ->
-              level to list.mapNotNull { scalar(it) }
-            },
-          )
-        }
-      }
-
   private fun strings(node: JsonNode): Map<String, String> =
     node
       .takeIf { it.isObject }
       ?.properties()
-      ?.associate { (key, value) -> key to value.asText("") }
+      ?.associate { (key, value) -> key to value.asString("") }
       .orEmpty()
 
   private fun scalar(node: JsonNode): String? =
     when {
       node.isMissingNode || node.isNull -> null
-      node.isTextual -> node.asText()
-      node.isNumber || node.isBoolean -> node.asText()
+      node.isTextual -> node.asString("")
+      node.isNumber || node.isBoolean -> node.asString("")
       else -> null
     }
 }

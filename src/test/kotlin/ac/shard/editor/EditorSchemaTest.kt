@@ -47,13 +47,15 @@ class EditorSchemaTest {
 
   @Test
   fun `a key nobody declared is refused rather than guessed at`() {
-    assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/buffer/made-up", "1"))
+    assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/made-up", "1"))
     assertIs<Verdict.Refused>(EditorSchema.check("secrets.yml", "ai/enabled", "true"))
   }
 
   @Test
   fun `an editable key takes a value of the right shape`() {
-    assertIs<Verdict.Allowed>(EditorSchema.check("config.yml", "ai/buffer/flag", "8.0"))
+    assertIs<Verdict.Allowed>(
+      EditorSchema.check("config.yml", "ai/persistent-buffer/cap-on-restore", "8.0")
+    )
     assertIs<Verdict.Allowed>(EditorSchema.check("config.yml", "ai/enabled", "false"))
     assertIs<Verdict.Allowed>(EditorSchema.check("config.yml", "locale", "\"ru\""))
     assertIs<Verdict.Allowed>(EditorSchema.check("monitor.yml", "auto/exit-ratio", "0.5"))
@@ -62,7 +64,9 @@ class EditorSchemaTest {
   @Test
   fun `a value of the wrong shape is refused`() {
     assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/enabled", "yes"))
-    assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/buffer/flag", "loads"))
+    assertIs<Verdict.Refused>(
+      EditorSchema.check("config.yml", "ai/persistent-buffer/cap-on-restore", "loads")
+    )
     assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "locale", "de"))
     assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/damage-reduction/prob", "1.5"))
     assertIs<Verdict.Refused>(EditorSchema.check("monitor.yml", "auto/exit-ratio", "-0.1"))
@@ -73,7 +77,7 @@ class EditorSchemaTest {
   fun `a number that is not a real number is refused`() {
     listOf("NaN", " NaN ", "+NaN", "-NaN", "Infinity", "-Infinity").forEach {
       assertIs<Verdict.Refused>(
-        EditorSchema.check("config.yml", "ai/buffer/flag", it),
+        EditorSchema.check("config.yml", "ai/persistent-buffer/cap-on-restore", it),
         "$it must not reach the file",
       )
     }
@@ -81,8 +85,7 @@ class EditorSchemaTest {
 
   @Test
   fun `a value that quietly switches the check off is refused`() {
-    assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/buffer/multiplier", "0"))
-    assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/buffer/flag", "0"))
+    assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/backoff/multiplier", "0"))
     assertIs<Verdict.Refused>(EditorSchema.check("config.yml", "ai/damage-reduction/prob", "0"))
     assertIs<Verdict.Refused>(
       EditorSchema.check("config.yml", "ai/backoff/initial-duration", "3600")
@@ -98,16 +101,10 @@ class EditorSchemaTest {
 
   @Test
   fun `a pair is judged on the state it lands in`() {
-    assertIs<Verdict.Refused>(
-      EditorSchema.checkTogether(
-        "config.yml",
-        mapOf("ai/buffer/flag" to "8.0", "ai/buffer/reset-on-flag" to "25.0"),
-      )
-    )
     assertIs<Verdict.Allowed>(
       EditorSchema.checkTogether(
         "config.yml",
-        mapOf("ai/buffer/flag" to "50.0", "ai/buffer/reset-on-flag" to "25.0"),
+        mapOf("ai/backoff/initial-duration" to "5", "ai/backoff/max-duration" to "60"),
       )
     )
     assertIs<Verdict.Refused>(

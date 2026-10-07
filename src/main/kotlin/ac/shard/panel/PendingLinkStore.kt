@@ -17,9 +17,9 @@
  */
 package ac.shard.panel
 
+import ac.shard.utils.AtomicFiles
 import java.io.File
 import java.nio.file.Files
-import java.nio.file.attribute.PosixFilePermissions
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
 data class PendingLink(
@@ -58,16 +58,16 @@ internal class PendingLinkStore(dataFolder: File) {
 
   fun write(pending: PendingLink) {
     runCatching {
-      file.parentFile?.mkdirs()
-      val loader = YamlConfigurationLoader.builder().path(file.toPath()).build()
-      val node = loader.createNode()
-      node.node("device-code").set(pending.deviceCode)
-      node.node("user-code").set(pending.userCode)
-      node.node("url").set(pending.url)
-      node.node("deadline").set(pending.deadlineEpochSec)
-      node.node("interval").set(pending.intervalSeconds)
-      loader.save(node)
-      Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-------"))
+      AtomicFiles.replace(file.toPath(), ownerOnly = true) { temp ->
+        val loader = YamlConfigurationLoader.builder().path(temp).build()
+        val node = loader.createNode()
+        node.node("device-code").set(pending.deviceCode)
+        node.node("user-code").set(pending.userCode)
+        node.node("url").set(pending.url)
+        node.node("deadline").set(pending.deadlineEpochSec)
+        node.node("interval").set(pending.intervalSeconds)
+        loader.save(node)
+      }
     }
   }
 

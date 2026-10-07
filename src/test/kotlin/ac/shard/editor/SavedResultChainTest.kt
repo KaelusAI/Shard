@@ -41,9 +41,8 @@ class SavedResultChainTest {
     {"result_id":"res_live_1","session_id":"d4ff5afa-e417-4949-8290-436249647365",
      "issued_at":"$issued",
      "baseline":{"config.yml":"sha256:aa"},
-     "changes":{"config.yml":{"ai/buffer/flag":{"was":50.0,"now":80.0}}},
-     "disabled_regions":{"world":["spawn"]},
-     "punishments":[{"group":"AI","actions":{"1":["[alert]","[log]"]}}]}
+     "changes":{"config.yml":{"ai/backoff/max-duration":{"was":60,"now":80}}},
+     "disabled_regions":{"world":["spawn"]}}
     """
       .trimIndent()
 
@@ -75,12 +74,11 @@ class SavedResultChainTest {
 
     assertIs<ApplyResult.Applied>(applied)
     val config = dir.resolve("config.yml").toFile()
-    assertContains(config.readText(), "flag: 80.0")
+    assertContains(config.readText(), "max-duration: 80")
     assertEquals(
       mapOf("world" to listOf("spawn")),
       YamlPatcher.readStringListMap(YamlPatcher.read(config), "ai/worldguard/disabled-regions"),
     )
-    assertContains(dir.resolve("punishments.yml").toFile().readText(), "- \"[log]\"")
   }
 
   @Test
@@ -89,16 +87,22 @@ class SavedResultChainTest {
     val decoded = DeltaCodec.decode(payload)
     assertIs<DecodeResult.Decoded>(decoded)
 
+    assertIs<Verdict.Allowed>(guard.check(decoded.result.resultId, decoded.result.issuedAt))
+    assertIs<Verdict.Allowed>(
+      guard.check(decoded.result.resultId, decoded.result.issuedAt),
+      "looking at a result does not use it up",
+    )
     assertIs<Verdict.Allowed>(guard.accept(decoded.result.resultId, decoded.result.issuedAt))
     assertIs<Verdict.Refused>(guard.accept(decoded.result.resultId, decoded.result.issuedAt))
+    assertIs<Verdict.Refused>(guard.check(decoded.result.resultId, decoded.result.issuedAt))
   }
 
   @Test
   fun `a pair broken by the panel is refused with a reason a person can read`(@TempDir dir: Path) {
     val loosening =
       payload.replace(
-        "\"ai/buffer/flag\":{\"was\":50.0,\"now\":80.0}",
-        "\"ai/buffer/flag\":{\"was\":50.0,\"now\":8.0}",
+        "\"ai/backoff/max-duration\":{\"was\":60,\"now\":80}",
+        "\"ai/backoff/max-duration\":{\"was\":60,\"now\":3}",
       )
     val decoded = DeltaCodec.decode(loosening)
     assertIs<DecodeResult.Decoded>(decoded)
@@ -107,9 +111,9 @@ class SavedResultChainTest {
 
     assertIs<ApplyResult.Refused>(result)
     assertTrue(
-      result.reasons.any { it.contains("reset-on-flag") },
+      result.reasons.any { it.contains("initial-duration") },
       "the refusal must name the key that made it impossible: ${result.reasons}",
     )
-    assertContains(dir.resolve("config.yml").toFile().readText(), "flag: 50.0")
+    assertContains(dir.resolve("config.yml").toFile().readText(), "max-duration: 60")
   }
 }

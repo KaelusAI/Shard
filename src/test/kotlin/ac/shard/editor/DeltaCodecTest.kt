@@ -59,10 +59,6 @@ class DeltaCodecTest {
       result.delta.changes.getValue("config.yml"),
     )
     assertEquals(mapOf("world" to listOf("spawn", "arena")), result.delta.disabledRegions)
-    assertEquals(
-      listOf(PunishmentEdit("AI", mapOf("1" to listOf("[alert]")))),
-      result.delta.punishments,
-    )
   }
 
   @ParameterizedTest

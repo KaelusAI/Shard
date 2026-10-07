@@ -19,6 +19,7 @@ package ac.shard.editor
 
 import ac.shard.config.ConfigMigrations
 import ac.shard.config.MitigationsFile
+import ac.shard.mitigation.EffectChannel
 import ac.shard.mitigation.MitigationTier
 import ac.shard.mitigation.RuleEffects
 import kotlin.test.assertContains
@@ -110,7 +111,10 @@ class RulesBlockTest {
 
     assertEquals(listOf("only"), settings.rules.map { it.id })
     assertEquals(MitigationTier.HIGH, settings.rules.first().level)
-    assertEquals(RuleEffects.Flat(mapOf("melee" to 0.5)), settings.rules.first().effects)
+    assertEquals(
+      RuleEffects.Flat(mapOf(EffectChannel.MELEE to 0.5)),
+      settings.rules.first().effects,
+    )
     assertEquals(
       1_000L to 2_000L,
       with(settings.rules.first().timing) {

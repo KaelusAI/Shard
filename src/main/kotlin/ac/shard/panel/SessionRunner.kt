@@ -18,9 +18,9 @@
 package ac.shard.panel
 
 import ac.shard.Shard
+import ac.shard.ShardReloader
 import ac.shard.editor.ApplyResult
 import ac.shard.editor.DecodeResult
-import ac.shard.editor.Delta
 import ac.shard.editor.DeltaCodec
 import ac.shard.editor.DiffRow
 import ac.shard.editor.EditorApply
@@ -28,7 +28,6 @@ import ac.shard.editor.EditorDiff
 import ac.shard.editor.EditorSession
 import ac.shard.editor.EditorSessionStore
 import ac.shard.editor.EditorSnapshotBuilder
-import ac.shard.editor.PunishmentActionRule
 import ac.shard.editor.ResultGuard
 import ac.shard.editor.SessionKind
 import ac.shard.editor.Verdict
@@ -62,7 +61,6 @@ data class PendingApply(
   val resultId: String,
   val payload: String,
   val needsConfirming: Boolean,
-  val carriesCommands: Boolean,
 )
 
 private const val NOT_CONFIRMED = "nobody on the server confirmed this in time"
@@ -70,6 +68,7 @@ private const val NOT_CONFIRMED = "nobody on the server confirmed this in time"
 @Suppress("TooManyFunctions", "LongParameterList")
 internal class SessionRunner(
   private val plugin: Shard,
+  private val reloader: ShardReloader,
   private val sessions: PanelSessionService,
   private val snapshots: EditorSnapshotBuilder,
   private val apply: EditorApply,
@@ -151,16 +150,18 @@ internal class SessionRunner(
   fun commit(kind: SessionKind, pending: PendingApply): ApplyResult {
     val decoded = DeltaCodec.decode(pending.payload)
     val result =
-      if (decoded is DecodeResult.Decoded) {
-        apply.apply(decoded.result.delta, decoded.result.baseline)
-      } else {
-        ApplyResult.Refused(listOf("the panel sent a result Shard could not read"))
+      when {
+        decoded !is DecodeResult.Decoded ->
+          ApplyResult.Refused(listOf("the panel sent a result Shard could not read"))
+        !guard.claim(pending.resultId) ->
+          ApplyResult.Refused(listOf("result ${pending.resultId} was already applied"))
+        else -> apply.apply(decoded.result.delta, decoded.result.baseline)
       }
     when (result) {
       is ApplyResult.Applied -> {
         sessions.ack(pending.sessionId, pending.resultId)
         stores.getValue(kind).clear()
-        scheduler.runSync { plugin.onReload() }
+        scheduler.runSync { reloader.reload() }
       }
       is ApplyResult.Refused -> {
         sessions.ack(pending.sessionId, pending.resultId, result.reasons)
@@ -176,7 +177,7 @@ internal class SessionRunner(
 
   fun restore(stamp: String): ApplyResult {
     val result = apply.restore(stamp)
-    if (result is ApplyResult.Applied) scheduler.runSync { plugin.onReload() }
+    if (result is ApplyResult.Applied) scheduler.runSync { reloader.reload() }
     return result
   }
 
@@ -193,7 +194,7 @@ internal class SessionRunner(
       return FetchOutcome.Error((decoded as DecodeResult.Malformed).reason)
     }
     val result = decoded.result
-    val fresh = guard.accept(result.resultId, result.issuedAt)
+    val fresh = guard.check(result.resultId, result.issuedAt)
     return when {
       fresh is Verdict.Refused -> FetchOutcome.Error(fresh.reason)
       expected != null && result.sessionId != expected ->
@@ -207,17 +208,11 @@ internal class SessionRunner(
             result.resultId,
             payload,
             EditorDiff.needsConfirming(rows),
-            carriesCommands(result.delta),
           ),
         )
       }
     }
   }
-
-  private fun carriesCommands(delta: Delta): Boolean =
-    delta.punishments.orEmpty().any { edit ->
-      edit.actions.values.flatten().any(PunishmentActionRule::needsConfirming)
-    }
 
   private fun environment(): Map<String, Any?> =
     mapOf(

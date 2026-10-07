@@ -38,7 +38,7 @@ internal object EditorDiff {
       .sortedBy { it.key }
       .flatMap { (file, changes) ->
         changes.map { DiffRow(file, named(file, it.path), it.was, it.now, weigh(file, it)) }
-      } + regionRows(delta) + punishmentRows(delta) + mitigationRows(delta)
+      } + regionRows(delta) + mitigationRows(delta)
 
   private fun named(file: String, path: String): String {
     val dotted = path.replace('/', '.')
@@ -108,38 +108,5 @@ internal object EditorDiff {
       off -> "$id (off)"
       else -> id
     }
-  }
-
-  private fun punishmentRows(delta: Delta): List<DiffRow> =
-    delta.punishments.orEmpty().flatMap { edit ->
-      val steps = edit.actions.entries.sortedBy { it.key.toIntOrNull() ?: 0 }
-      steps.mapIndexed { index, step ->
-        DiffRow(
-          "punishments.yml",
-          "${edit.group} ${span(step.key, steps.getOrNull(index + 1)?.key)}",
-          "",
-          step.value.joinToString(" | "),
-          if (step.value.any { terminal(it) || PunishmentActionRule.needsConfirming(it) }) {
-            DiffWeight.NOTABLE
-          } else {
-            DiffWeight.ORDINARY
-          },
-        )
-      }
-    }
-
-  private fun span(level: String, next: String?): String {
-    val from = level.toIntOrNull() ?: return level
-    val until = next?.toIntOrNull()
-    return when {
-      until == null -> "$from+"
-      until - 1 <= from -> "$from"
-      else -> "$from-${until - 1}"
-    }
-  }
-
-  private fun terminal(action: String): Boolean {
-    val verb = action.trim().substringBefore(' ').lowercase()
-    return verb == "ban" || verb == "tempban" || verb == "kick"
   }
 }

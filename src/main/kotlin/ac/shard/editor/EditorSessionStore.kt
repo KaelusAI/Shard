@@ -17,11 +17,8 @@
  */
 package ac.shard.editor
 
+import ac.shard.utils.AtomicFiles
 import java.io.File
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.nio.file.attribute.PosixFilePermissions
 import java.time.Instant
 import java.util.UUID
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
@@ -77,11 +74,8 @@ internal class EditorSessionStore(private val dataFolder: File, private val kind
   }
 
   fun write(session: EditorSession) {
-    val tmp = File(dataFolder, "${file.name}.tmp")
-    try {
-      dataFolder.mkdirs()
-      Files.deleteIfExists(tmp.toPath())
-      val loader = YamlConfigurationLoader.builder().path(tmp.toPath()).build()
+    AtomicFiles.replace(file.toPath(), ownerOnly = true) { tmp ->
+      val loader = YamlConfigurationLoader.builder().path(tmp).build()
       val node = loader.createNode()
       node.node("session-id").set(session.sessionId)
       node.node("opened-by").set(session.openedBy?.toString().orEmpty())
@@ -91,31 +85,8 @@ internal class EditorSessionStore(private val dataFolder: File, private val kind
       node.node("apply-in-progress").set(session.applyInProgress)
       session.baseline.forEach { (name, hash) -> node.node("baseline", name).set(hash) }
       loader.save(node)
-      restrict(tmp)
-      moveIntoPlace(tmp)
-    } finally {
-      tmp.delete()
     }
   }
 
   fun clear(): Boolean = !file.exists() || file.delete()
-
-  private fun moveIntoPlace(tmp: File) {
-    try {
-      Files.move(
-        tmp.toPath(),
-        file.toPath(),
-        StandardCopyOption.ATOMIC_MOVE,
-        StandardCopyOption.REPLACE_EXISTING,
-      )
-    } catch (_: AtomicMoveNotSupportedException) {
-      Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
-    }
-  }
-
-  private fun restrict(target: File) {
-    runCatching {
-      Files.setPosixFilePermissions(target.toPath(), PosixFilePermissions.fromString("rw-------"))
-    }
-  }
 }

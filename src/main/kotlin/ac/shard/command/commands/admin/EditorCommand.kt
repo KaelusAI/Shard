@@ -18,10 +18,9 @@
 package ac.shard.command.commands.admin
 
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
+import ac.shard.config.ConfigManager
 import ac.shard.editor.ApplyResult
-import ac.shard.editor.DiffRow
-import ac.shard.editor.DiffWeight
-import ac.shard.editor.EditorDiff
 import ac.shard.editor.SessionKind
 import ac.shard.panel.FetchOutcome
 import ac.shard.panel.PendingApply
@@ -30,71 +29,72 @@ import ac.shard.panel.StartOutcome
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.MiniText
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import org.bukkit.command.CommandSender
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.StringParser
 
 private const val PERMISSION = "shard.editor"
 private const val APPLY_PERMISSION = "shard.editor.apply"
-private const val CONFIRM_WINDOW_SECONDS = 600L
-private const val MAX_DIFF_ROWS = 20
 private const val WATCH_MINUTES = 15L
 private const val POLL_SECONDS = 5L
-private const val MILLIS_PER_SECOND = 1000L
 private const val SECONDS_PER_MINUTE = 60L
 private const val MAX_BACKUPS_SHOWN = 8
 
 @Suppress("TooManyFunctions")
 internal class EditorCommand(
+  private val messages: Messages,
   private val runner: SessionRunner,
   private val scheduler: SchedulerService,
-  private val configManager: ac.shard.config.ConfigManager,
+  private val configManager: ConfigManager,
 ) : ShardCommand {
 
-  private val pending = ConcurrentHashMap<UUID, Confirmable>()
-  private val watching = AtomicBoolean(false)
+  private val pending = ConcurrentHashMap<UUID, PanelSessionFlow.Held>()
+  private val flow =
+    PanelSessionFlow(
+      SessionKind.EDITOR,
+      runner,
+      messages,
+      scheduler,
+      PanelSessionFlow.Replies(
+        applied = Message.EDITOR_APPLIED,
+        rejected = Message.EDITOR_REJECTED,
+        rolledBack = Message.EDITOR_ROLLED_BACK,
+        nothingToConfirm = Message.EDITOR_NOTHING_TO_CONFIRM,
+      ),
+    )
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("editor").permission(PERMISSION).handler(this@EditorCommand::open)
+    manager.shardCommand {
+      literal("editor").permission(PERMISSION).handler { open(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("editor")
-        .literal("apply")
-        .permission(APPLY_PERMISSION)
-        .handler(this@EditorCommand::apply)
+    manager.shardCommand {
+      literal("editor").literal("apply").permission(APPLY_PERMISSION).handler { apply(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("editor")
-        .literal("apply")
-        .literal("confirm")
-        .permission(APPLY_PERMISSION)
-        .handler(this@EditorCommand::confirm)
+    manager.shardCommand {
+      literal("editor").literal("apply").literal("confirm").permission(APPLY_PERMISSION).handler {
+        confirm(it)
+      }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("editor").literal("cancel").permission(PERMISSION).handler(this@EditorCommand::cancel)
+    manager.shardCommand {
+      literal("editor").literal("cancel").permission(PERMISSION).handler { cancel(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("editor")
-        .literal("backups")
-        .permission(APPLY_PERMISSION)
-        .handler(this@EditorCommand::backups)
+    manager.shardCommand {
+      literal("editor").literal("backups").permission(APPLY_PERMISSION).handler { backups(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("editor").literal("undo").permission(APPLY_PERMISSION).handler { context ->
         undo(context, null)
       }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("editor")
         .literal("undo")
         .required("stamp", StringParser.stringParser())
@@ -105,16 +105,16 @@ internal class EditorCommand(
 
   private fun backups(context: CommandContext<Sender>) {
     val native = context.sender().nativeSender
-    if (!context.sender().isConsole) {
-      MessageUtil.sendMessage(native, Message.EDITOR_CONSOLE_ONLY)
+    if (!context.sender().isTrustedConsole) {
+      messages.sendMessage(native, Message.EDITOR_CONSOLE_ONLY)
       return
     }
     scheduler.runAsync {
       val stamps = runner.backups()
       if (stamps.isEmpty()) {
-        MessageUtil.sendMessage(native, Message.EDITOR_NO_BACKUPS)
+        messages.sendMessage(native, Message.EDITOR_NO_BACKUPS)
       } else {
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           native,
           Message.EDITOR_BACKUPS,
           "stamps",
@@ -127,24 +127,24 @@ internal class EditorCommand(
   private fun undo(context: CommandContext<Sender>, stamp: String?) {
     val sender = context.sender()
     val native = sender.nativeSender
-    val needsConsole = stamp != null || configManager.editorConsoleOnly
-    if (needsConsole && !sender.isConsole) {
-      MessageUtil.sendMessage(native, Message.EDITOR_CONSOLE_ONLY)
+    val needsConsole = stamp != null || configManager.settings.editorConsoleOnly
+    if (needsConsole && !sender.isTrustedConsole) {
+      messages.sendMessage(native, Message.EDITOR_CONSOLE_ONLY)
       return
     }
     scheduler.runAsync {
       val target = stamp ?: runner.backups().firstOrNull()
       if (target == null) {
-        MessageUtil.sendMessage(native, Message.EDITOR_NO_BACKUPS)
+        messages.sendMessage(native, Message.EDITOR_NO_BACKUPS)
         return@runAsync
       }
       when (val result = runner.restore(target)) {
         is ApplyResult.Applied ->
-          MessageUtil.sendMessage(native, Message.EDITOR_UNDONE, "stamp", target)
+          messages.sendMessage(native, Message.EDITOR_UNDONE, "stamp", target)
         is ApplyResult.Refused ->
-          MessageUtil.sendMessage(native, Message.EDITOR_REJECTED, "reason", result.reasons.first())
+          messages.sendMessage(native, Message.EDITOR_REJECTED, "reason", result.reasons.first())
         is ApplyResult.RolledBack ->
-          MessageUtil.sendMessage(native, Message.EDITOR_ROLLED_BACK, "reason", result.reason)
+          messages.sendMessage(native, Message.EDITOR_ROLLED_BACK, "reason", result.reason)
       }
     }
   }
@@ -152,54 +152,37 @@ internal class EditorCommand(
   private fun open(context: CommandContext<Sender>) {
     val sender = context.sender()
     val native = sender.nativeSender
-    val actor = if (sender.isConsole) null else sender.uniqueId
+    val actor = if (sender.isTrustedConsole) null else sender.uniqueId
     scheduler.runAsync {
       when (val outcome = runner.start(SessionKind.EDITOR, actor, sender.name)) {
         is StartOutcome.Started -> {
-          MessageUtil.sendMessage(
+          messages.sendMessage(
             native,
-            MessageUtil.getMessage(
+            messages.getMessage(
               Message.EDITOR_OPENED,
               TagResolver.resolver(
-                MessageUtil.clickUrlTag("link", outcome.url),
+                MiniText.clickUrlTag("link", outcome.url),
                 Placeholder.unparsed("code", outcome.userCode),
               ),
             ),
           )
-          MessageUtil.sendMessage(native, Message.EDITOR_URL, "url", outcome.url)
+          messages.sendMessage(native, Message.EDITOR_URL, "url", outcome.url)
           startWatching(sender, native)
         }
-        is StartOutcome.Busy -> MessageUtil.sendMessage(native, Message.EDITOR_BUSY)
+        is StartOutcome.Busy -> messages.sendMessage(native, Message.EDITOR_BUSY)
         is StartOutcome.Error ->
-          MessageUtil.sendMessage(native, Message.EDITOR_ERROR, "reason", outcome.message)
+          messages.sendMessage(native, Message.EDITOR_ERROR, "reason", outcome.message)
       }
     }
   }
 
   private fun startWatching(sender: Sender, native: CommandSender) {
-    if (!watching.compareAndSet(false, true)) return
     val stopAt = Instant.now().plusSeconds(WATCH_MINUTES * SECONDS_PER_MINUTE)
-    scheduleWatch(sender, native, stopAt)
-  }
-
-  private fun scheduleWatch(sender: Sender, native: CommandSender, stopAt: Instant) {
-    scheduler.runLaterAsync({ watchOnce(sender, native, stopAt) }, POLL_SECONDS * MILLIS_PER_SECOND)
-  }
-
-  private fun watchOnce(sender: Sender, native: CommandSender, stopAt: Instant) {
-    if (Instant.now().isAfter(stopAt)) {
-      watching.set(false)
-      MessageUtil.sendMessage(native, Message.EDITOR_WATCH_ENDED)
-      return
-    }
-    when (val outcome = runner.fetch(SessionKind.EDITOR)) {
-      is FetchOutcome.Waiting -> scheduleWatch(sender, native, stopAt)
-      is FetchOutcome.Error -> scheduleWatch(sender, native, stopAt)
-      FetchOutcome.NoSession,
-      FetchOutcome.Gone -> watching.set(false)
-      is FetchOutcome.Ready -> {
-        watching.set(false)
-        offer(sender, native, outcome, unattended = true)
+    flow.watch(stopAt, { POLL_SECONDS }) { outcome ->
+      when (outcome) {
+        null -> messages.sendMessage(native, Message.EDITOR_WATCH_ENDED)
+        is FetchOutcome.Ready -> offer(sender, native, outcome, unattended = true)
+        else -> Unit
       }
     }
   }
@@ -209,28 +192,30 @@ internal class EditorCommand(
     val native = sender.nativeSender
     scheduler.runAsync {
       when (val outcome = runner.fetch(SessionKind.EDITOR)) {
-        FetchOutcome.NoSession -> MessageUtil.sendMessage(native, Message.EDITOR_NO_SESSION)
-        is FetchOutcome.Waiting -> MessageUtil.sendMessage(native, Message.EDITOR_WAITING)
-        FetchOutcome.Gone -> MessageUtil.sendMessage(native, Message.EDITOR_EXPIRED)
+        FetchOutcome.NoSession -> messages.sendMessage(native, Message.EDITOR_NO_SESSION)
+        is FetchOutcome.Waiting -> messages.sendMessage(native, Message.EDITOR_WAITING)
+        FetchOutcome.Gone -> messages.sendMessage(native, Message.EDITOR_EXPIRED)
         is FetchOutcome.Error ->
-          MessageUtil.sendMessage(native, Message.EDITOR_ERROR, "reason", outcome.message)
+          messages.sendMessage(native, Message.EDITOR_ERROR, "reason", outcome.message)
         is FetchOutcome.Ready -> offer(sender, native, outcome)
       }
     }
   }
 
+  @Suppress("ReturnCount")
   private fun offer(
     sender: Sender,
     native: CommandSender,
     outcome: FetchOutcome.Ready,
     unattended: Boolean = false,
   ) {
-    showDiff(native, outcome.rows)
-    val needsConsole =
-      configManager.editorConsoleOnly ||
-        (outcome.token.carriesCommands && configManager.editorConsoleForCommands)
-    if (needsConsole && !sender.isConsole) {
-      MessageUtil.sendMessage(native, Message.EDITOR_CONSOLE_ONLY)
+    flow.showDiff(native, outcome.rows)
+    if (configManager.settings.editorConsoleOnly && !sender.isTrustedConsole) {
+      messages.sendMessage(native, Message.EDITOR_CONSOLE_ONLY)
+      return
+    }
+    if (!sender.hasPermission(APPLY_PERMISSION)) {
+      messages.sendMessage(native, Message.EDITOR_NEEDS_APPLY)
       return
     }
     if (unattended && !outcome.token.needsConfirming) {
@@ -238,10 +223,8 @@ internal class EditorCommand(
       return
     }
     if (outcome.token.needsConfirming) {
-      pending[sender.uniqueId] =
-        Confirmable(outcome.token, Instant.now().plusSeconds(CONFIRM_WINDOW_SECONDS))
-      runner.holding(outcome.token, CONFIRM_WINDOW_SECONDS)
-      MessageUtil.sendMessage(native, Message.EDITOR_CONFIRM)
+      pending[sender.uniqueId] = flow.hold(outcome.token)
+      messages.sendMessage(native, Message.EDITOR_CONFIRM)
     } else {
       land(native, outcome.token)
     }
@@ -250,65 +233,11 @@ internal class EditorCommand(
   private fun confirm(context: CommandContext<Sender>) {
     val sender = context.sender()
     val native = sender.nativeSender
-    val held = pending.remove(sender.uniqueId)
-    when {
-      held == null -> MessageUtil.sendMessage(native, Message.EDITOR_NOTHING_TO_CONFIRM)
-      Instant.now().isAfter(held.until) -> {
-        MessageUtil.sendMessage(native, Message.EDITOR_NOTHING_TO_CONFIRM)
-        scheduler.runAsync { runner.abandon(SessionKind.EDITOR, held.token) }
-      }
-      else -> scheduler.runAsync { land(native, held.token) }
-    }
+    flow.confirm(native, pending.remove(sender.uniqueId)) { land(native, it) }
   }
 
   private fun land(native: CommandSender, token: PendingApply) {
-    when (val result = runner.commit(SessionKind.EDITOR, token)) {
-      is ApplyResult.Applied ->
-        MessageUtil.sendMessage(
-          native,
-          Message.EDITOR_APPLIED,
-          "changed",
-          result.count.toString(),
-          "stamp",
-          result.stamp,
-        )
-      is ApplyResult.Refused ->
-        MessageUtil.sendMessage(
-          native,
-          Message.EDITOR_REJECTED,
-          "reason",
-          result.reasons.first(),
-        )
-      is ApplyResult.RolledBack ->
-        MessageUtil.sendMessage(native, Message.EDITOR_ROLLED_BACK, "reason", result.reason)
-    }
-  }
-
-  private fun showDiff(native: CommandSender, rows: List<DiffRow>) {
-    MessageUtil.sendMessage(native, Message.EDITOR_DIFF_HEADER, "count", rows.size.toString())
-    val shown = EditorDiff.visible(rows, MAX_DIFF_ROWS)
-    shown.forEach { row ->
-      MessageUtil.sendMessage(
-        native,
-        Message.EDITOR_DIFF_LINE,
-        "sign",
-        if (row.weight == DiffWeight.NOTABLE) "!" else "•",
-        "key",
-        row.key,
-        "old",
-        row.before.ifBlank { "-" },
-        "new",
-        row.after,
-      )
-    }
-    if (rows.size > shown.size) {
-      MessageUtil.sendMessage(
-        native,
-        Message.EDITOR_DIFF_MORE,
-        "count",
-        (rows.size - shown.size).toString(),
-      )
-    }
+    flow.commit(token) { send -> send(native) }
   }
 
   private fun cancel(context: CommandContext<Sender>) {
@@ -316,9 +245,7 @@ internal class EditorCommand(
     pending.remove(context.sender().uniqueId)
     scheduler.runAsync {
       runner.cancel(SessionKind.EDITOR)
-      MessageUtil.sendMessage(native, Message.EDITOR_CANCELLED)
+      messages.sendMessage(native, Message.EDITOR_CANCELLED)
     }
   }
-
-  private class Confirmable(val token: PendingApply, val until: Instant)
 }

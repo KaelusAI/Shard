@@ -53,33 +53,6 @@ class HostilePayloadTest {
   }
 
   @Test
-  fun `a punishment step at zero or below is refused`(@TempDir dir: Path) {
-    val apply = world(dir)
-
-    listOf("0", "-1", "-999").forEach { level ->
-      assertIs<ApplyResult.Refused>(
-        apply.apply(
-          Delta(punishments = listOf(PunishmentEdit("AI", mapOf(level to listOf("[alert]")))))
-        ),
-        "step $level should have been refused",
-      )
-    }
-    untouched(dir)
-  }
-
-  @Test
-  fun `a punishment group of a hundred steps is refused`(@TempDir dir: Path) {
-    val apply = world(dir)
-
-    val huge = (1..120).associate { "$it" to listOf("[alert]") }
-
-    assertIs<ApplyResult.Refused>(
-      apply.apply(Delta(punishments = listOf(PunishmentEdit("AI", huge))))
-    )
-    untouched(dir)
-  }
-
-  @Test
   fun `an empty world name or an empty region is refused`(@TempDir dir: Path) {
     val apply = world(dir)
 
@@ -127,15 +100,27 @@ class HostilePayloadTest {
     val apply = world(dir)
 
     val first =
-      apply.apply(Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "50.0", "80.0")))))
+      apply.apply(
+        Delta(
+          mapOf(
+            "config.yml" to listOf(Change("ai/persistent-buffer/cap-on-restore", "40.0", "80.0"))
+          )
+        )
+      )
     assertIs<ApplyResult.Applied>(first)
 
     val stale =
-      apply.apply(Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "50.0", "90.0")))))
+      apply.apply(
+        Delta(
+          mapOf(
+            "config.yml" to listOf(Change("ai/persistent-buffer/cap-on-restore", "40.0", "90.0"))
+          )
+        )
+      )
 
     assertIs<ApplyResult.Refused>(stale, "the second result was built on the old reading")
     assertEquals(
-      bundled("config.yml").replace("flag: 50.0", "flag: 80.0"),
+      bundled("config.yml").replace("cap-on-restore: 40.0", "cap-on-restore: 80.0"),
       dir.resolve("config.yml").toFile().readText(),
     )
   }

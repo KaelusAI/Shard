@@ -17,168 +17,117 @@
  */
 package ac.shard.command.commands.admin
 
-import ac.shard.Shard
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.config.ConfigManager
-import ac.shard.connect.ConnectService
-import ac.shard.connect.Credentials
-import ac.shard.connect.CredentialsStore
+import ac.shard.connect.LinkIntent
 import ac.shard.connect.LinkResult
-import ac.shard.connect.PollResult
-import ac.shard.connect.RevokeResult
-import ac.shard.connect.StartResult
-import ac.shard.connect.isSecurePanelUrl
-import ac.shard.player.PlayerDataManager
+import ac.shard.http.isSecureEndpoint
+import ac.shard.panel.LinkStep
+import ac.shard.panel.ServerLink
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
-import ac.shard.server.AIServerProvider
 import ac.shard.telemetry.TelemetryService
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.MiniText
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
+import java.util.logging.Logger
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
-import org.bukkit.Bukkit
 import org.bukkit.command.CommandSender
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.StringParser
 
 @Suppress("TooManyFunctions", "ReturnCount", "LongParameterList")
-class ConnectCommand(
-  private val plugin: Shard,
-  private val connectService: ConnectService,
-  private val credentialsStore: CredentialsStore,
+internal class ConnectCommand(
+  private val messages: Messages,
+  private val logger: Logger,
   private val configManager: ConfigManager,
-  private val aiServerProvider: AIServerProvider,
   private val scheduler: SchedulerService,
   private val telemetryService: TelemetryService,
-  private val playerDataManager: PlayerDataManager,
+  private val link: ServerLink,
+  private val server: org.bukkit.Server,
 ) : ShardCommand {
 
-  private val active = AtomicReference<ConnectSession?>(null)
   private val pendingDisconnect = ConcurrentHashMap<UUID, Long>()
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("connect")
         .optional("code", StringParser.stringParser())
         .permission(PERMISSION)
-        .handler(this@ConnectCommand::connect)
+        .handler { connect(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("disconnect").permission(PERMISSION).handler(this@ConnectCommand::disconnect)
+    manager.shardCommand {
+      literal("disconnect").permission(PERMISSION).handler { disconnect(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("disconnect")
-        .literal("confirm")
-        .permission(PERMISSION)
-        .handler(this@ConnectCommand::disconnectConfirm)
-    }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("connect")
-        .literal("status")
-        .permission(PERMISSION)
-        .handler(this@ConnectCommand::status)
-    }
-  }
-
-  private fun redeem(context: CommandContext<Sender>, code: String) {
-    val sender = context.sender()
-    val native = sender.nativeSender
-    if (!sender.isTrustedConsole && credentialsStore.isLinked()) {
-      MessageUtil.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
-      return
-    }
-    if (!checkPanelUrl(native)) {
-      return
-    }
-    val uuid = sender.uniqueId
-    val isConsole = sender.isConsole
-    // pluginMeta is newer than the Paper versions Shard supports.
-    @Suppress("DEPRECATION") val pluginVersion = plugin.description.version
-    scheduler.runAsync {
-      val instanceId = credentialsStore.instanceId()
-      val hostname = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()
-      when (val result = connectService.redeem(code, instanceId, hostname, pluginVersion)) {
-        is LinkResult.Linked -> {
-          credentialsStore.write(
-            Credentials(
-              secretKey = result.secretKey,
-              serverId = result.serverId,
-              serverName = result.serverName,
-              allowlistedIp = result.allowlistedIp,
-              inferenceUrl = result.inferenceUrl,
-            )
-          )
-          applyConfigReload()
-          notify(uuid, isConsole) {
-            MessageUtil.sendMessage(
-              it,
-              Message.CONNECT_LINK_SUCCESS,
-              "server",
-              result.serverName ?: "your server",
-            )
-          }
-        }
-        LinkResult.InvalidOrExpired ->
-          notify(uuid, isConsole) { MessageUtil.sendMessage(it, Message.CONNECT_LINK_INVALID) }
-        is LinkResult.Error ->
-          notify(uuid, isConsole) {
-            MessageUtil.sendMessage(it, Message.CONNECT_ERROR, "reason", result.message)
-          }
+    manager.shardCommand {
+      literal("disconnect").literal("confirm").permission(PERMISSION).handler {
+        disconnectConfirm(it)
       }
+    }
+    manager.shardCommand {
+      literal("connect").literal("status").permission(PERMISSION).handler { status(it) }
     }
   }
 
   private fun connect(context: CommandContext<Sender>) {
-    val code = context.getOrDefault("code", "")
-    if (code.isNotBlank()) {
-      redeem(context, code)
-      return
-    }
     val sender = context.sender()
     val native = sender.nativeSender
-    if (!sender.isTrustedConsole && credentialsStore.isLinked()) {
-      MessageUtil.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
+    if (!sender.isTrustedConsole && link.isLinked()) {
+      messages.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
       return
     }
     if (!checkPanelUrl(native)) {
       return
     }
+    val recipient = Recipient(sender.uniqueId, sender.isConsole)
+    val code = context.getOrDefault("code", "")
+    if (code.isNotBlank()) {
+      link.redeem(code) { onRedeemed(recipient, it) }
+      return
+    }
+    if (link.begin(LinkIntent.CONNECT) { onStep(recipient, it) }) {
+      messages.sendMessage(native, Message.CONNECT_RESTARTED)
+    }
+  }
 
-    supersedeActive()?.let { MessageUtil.sendMessage(native, Message.CONNECT_RESTARTED) }
+  private fun onStep(recipient: Recipient, step: LinkStep) {
+    notify(recipient) {
+      when (step) {
+        is LinkStep.NeedsApproval -> sendStartMessages(it, step.userCode)
+        is LinkStep.Linked ->
+          messages.sendMessage(
+            it,
+            Message.CONNECT_SUCCESS,
+            "server",
+            MiniText.escape(step.serverName),
+          )
+        LinkStep.Denied -> messages.sendMessage(it, Message.CONNECT_DENIED)
+        LinkStep.Expired -> messages.sendMessage(it, Message.CONNECT_EXPIRED)
+        is LinkStep.Failed ->
+          messages.sendMessage(it, Message.CONNECT_ERROR, "reason", step.message)
+      }
+    }
+  }
 
-    val uuid = sender.uniqueId
-    val isConsole = sender.isConsole
-    scheduler.runAsync {
-      when (val result = connectService.start(credentialsStore.instanceId())) {
-        is StartResult.Started -> {
-          val session =
-            ConnectSession(
-              deviceCode = result.deviceCode,
-              intervalSeconds = AtomicLong(result.intervalSeconds.coerceAtLeast(1)),
-              deadlineEpochSec = Instant.now().epochSecond + result.expiresInSeconds,
-              senderUuid = uuid,
-              isConsole = isConsole,
-            )
-          if (!active.compareAndSet(null, session)) {
-            scheduler.runAsync { connectService.cancel(session.deviceCode) }
-            return@runAsync
-          }
-          notify(session) { sendStartMessages(it, result) }
-          scheduleNextPoll(session)
-        }
-        is StartResult.Error ->
-          notify(uuid, isConsole) {
-            MessageUtil.sendMessage(it, Message.CONNECT_ERROR, "reason", result.message)
-          }
+  private fun onRedeemed(recipient: Recipient, result: LinkResult) {
+    notify(recipient) {
+      when (result) {
+        is LinkResult.Linked ->
+          messages.sendMessage(
+            it,
+            Message.CONNECT_LINK_SUCCESS,
+            "server",
+            MiniText.escape(result.credentials.serverName ?: "your server"),
+          )
+        LinkResult.InvalidOrExpired -> messages.sendMessage(it, Message.CONNECT_LINK_INVALID)
+        is LinkResult.Error ->
+          messages.sendMessage(it, Message.CONNECT_ERROR, "reason", result.message)
       }
     }
   }
@@ -187,89 +136,74 @@ class ConnectCommand(
     val sender = context.sender()
     val native = sender.nativeSender
     if (!sender.isTrustedConsole) {
-      MessageUtil.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
+      messages.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
       return
     }
-    if (credentialsStore.read() == null) {
-      MessageUtil.sendMessage(native, Message.CONNECT_DISCONNECT_NOTHING)
+    if (!link.isLinked()) {
+      messages.sendMessage(native, Message.CONNECT_DISCONNECT_NOTHING)
       return
     }
     pendingDisconnect[sender.uniqueId] = Instant.now().epochSecond + CONFIRM_WINDOW_SECONDS
-    MessageUtil.sendMessage(native, Message.CONNECT_DISCONNECT_CONFIRM)
+    messages.sendMessage(native, Message.CONNECT_DISCONNECT_CONFIRM)
   }
 
   private fun disconnectConfirm(context: CommandContext<Sender>) {
     val sender = context.sender()
     val native = sender.nativeSender
     if (!sender.isTrustedConsole) {
-      MessageUtil.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
+      messages.sendMessage(native, Message.CONNECT_CONSOLE_ONLY)
       return
     }
     val deadline = pendingDisconnect.remove(sender.uniqueId)
     if (deadline == null || Instant.now().epochSecond > deadline) {
-      MessageUtil.sendMessage(native, Message.CONNECT_DISCONNECT_NO_PENDING)
+      messages.sendMessage(native, Message.CONNECT_DISCONNECT_NO_PENDING)
       return
     }
-    performDisconnect(sender)
-  }
-
-  private fun performDisconnect(sender: Sender) {
-    val native = sender.nativeSender
-    supersedeActive()
-
-    val credentials = credentialsStore.read()
-    if (credentials == null) {
-      MessageUtil.sendMessage(native, Message.CONNECT_DISCONNECT_NOTHING)
-      return
-    }
-
-    val canRevoke = configManager.connectPanelUrl.let { it.isNotBlank() && isSecurePanelUrl(it) }
-    val uuid = sender.uniqueId
-    val isConsole = sender.isConsole
-    scheduler.runAsync {
-      val revoked = canRevoke && connectService.revoke(credentials.secretKey) !is RevokeResult.Error
-      if (!revoked) {
-        plugin.logger.warning(
-          "[Connect] Panel revoke not confirmed; clearing local credentials anyway. " +
-            "Revoke this server in the panel manually."
-        )
+    val recipient = Recipient(sender.uniqueId, sender.isConsole)
+    val canRevoke = configManager.settings.panelUrl.let { it.isNotBlank() && isSecureEndpoint(it) }
+    val unlinking =
+      link.unlink(canRevoke) { revoked ->
+        if (!revoked) {
+          logger.warning(
+            "[Connect] Panel revoke not confirmed; local credentials were cleared anyway. " +
+              "Revoke this server in the panel manually."
+          )
+        }
+        val message =
+          if (revoked) Message.CONNECT_DISCONNECT_SUCCESS else Message.CONNECT_DISCONNECT_LOCAL_ONLY
+        notify(recipient) { messages.sendMessage(it, message) }
       }
-      credentialsStore.clear()
-      applyConfigReload()
-      val message =
-        if (revoked) Message.CONNECT_DISCONNECT_SUCCESS else Message.CONNECT_DISCONNECT_LOCAL_ONLY
-      notify(uuid, isConsole) { MessageUtil.sendMessage(it, message) }
-    }
+    if (!unlinking) messages.sendMessage(native, Message.CONNECT_DISCONNECT_NOTHING)
   }
 
   private fun status(context: CommandContext<Sender>) {
     val native = context.sender().nativeSender
-    val credentials = credentialsStore.read()
+    val credentials = link.credentials()
     if (credentials == null) {
-      MessageUtil.sendMessage(native, Message.CONNECT_STATUS_NOT_LINKED)
+      messages.sendMessage(native, Message.CONNECT_STATUS_NOT_LINKED)
       return
     }
-    MessageUtil.sendMessage(native, Message.CONNECT_STATUS_HEADER)
-    MessageUtil.sendMessage(
+    messages.sendMessage(native, Message.CONNECT_STATUS_HEADER)
+    messages.sendMessage(
       native,
       Message.CONNECT_STATUS_LINKED,
       "server",
-      credentials.serverName ?: credentials.serverId ?: "unknown",
+      MiniText.escape(credentials.serverName ?: credentials.serverId ?: "unknown"),
     )
-    MessageUtil.sendMessage(
+    messages.sendMessage(
       native,
       Message.CONNECT_STATUS_KEY,
       "key",
       maskKey(credentials.secretKey),
     )
-    MessageUtil.sendMessage(
+    messages.sendMessage(
       native,
       Message.CONNECT_STATUS_SERVER_URL,
       "url",
-      configManager.aiServerUrl,
+      configManager.settings.ai.url,
     )
-    if (configManager.aiModel != null) {
-      MessageUtil.sendMessage(
+    if (configManager.streamProfile != null) {
+      messages.sendMessage(
         native,
         Message.CONNECT_STATUS_MODEL,
         "model",
@@ -278,7 +212,7 @@ class ConnectCommand(
     }
     val cached = telemetryService.quotaSnapshot
     if (cached != null) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         native,
         Message.CONNECT_STATUS_QUOTA,
         "used",
@@ -286,143 +220,54 @@ class ConnectCommand(
       )
     } else {
       val sender = context.sender()
-      val uuid = sender.uniqueId
-      val isConsole = sender.isConsole
+      val recipient = Recipient(sender.uniqueId, sender.isConsole)
       scheduler.runAsync {
         val pct = telemetryService.fetchQuota()
-        notify(uuid, isConsole) {
+        notify(recipient) {
           if (pct != null) {
-            MessageUtil.sendMessage(it, Message.CONNECT_STATUS_QUOTA, "used", pct.toString())
+            messages.sendMessage(it, Message.CONNECT_STATUS_QUOTA, "used", pct.toString())
           } else {
-            MessageUtil.sendMessage(it, Message.CONNECT_STATUS_QUOTA_UNAVAILABLE)
+            messages.sendMessage(it, Message.CONNECT_STATUS_QUOTA_UNAVAILABLE)
           }
         }
       }
     }
   }
 
-  private fun scheduleNextPoll(session: ConnectSession) {
-    val delayMs = session.intervalSeconds.get() * MILLIS_PER_SECOND
-    scheduler.runLaterAsync({ pollOnce(session) }, delayMs)
-  }
-
-  private fun pollOnce(session: ConnectSession) {
-    if (isStale(session)) {
-      return
-    }
-    if (Instant.now().epochSecond >= session.deadlineEpochSec) {
-      finish(session)
-      notify(session) { MessageUtil.sendMessage(it, Message.CONNECT_EXPIRED) }
-      return
-    }
-    val result = connectService.poll(session.deviceCode)
-    if (isStale(session)) {
-      return
-    }
-    when (result) {
-      PollResult.Pending -> scheduleNextPoll(session)
-      is PollResult.SlowDown -> {
-        val next = result.intervalSeconds.coerceAtLeast(session.intervalSeconds.get())
-        session.intervalSeconds.set(next)
-        scheduleNextPoll(session)
-      }
-      is PollResult.Approved -> {
-        if (finish(session)) applyApproved(session, result)
-      }
-      PollResult.Denied -> {
-        finish(session)
-        notify(session) { MessageUtil.sendMessage(it, Message.CONNECT_DENIED) }
-      }
-      PollResult.Expired -> {
-        finish(session)
-        notify(session) { MessageUtil.sendMessage(it, Message.CONNECT_EXPIRED) }
-      }
-      is PollResult.Error -> {
-        plugin.logger.fine("[Connect] poll error: ${result.message}")
-        scheduleNextPoll(session)
-      }
-    }
-  }
-
-  private fun applyApproved(session: ConnectSession, approved: PollResult.Approved) {
-    credentialsStore.write(
-      Credentials(
-        secretKey = approved.secretKey,
-        serverId = approved.serverId,
-        serverName = approved.serverName,
-        allowlistedIp = approved.allowlistedIp,
-        inferenceUrl = approved.inferenceUrl,
-      )
-    )
-    applyConfigReload()
-    notify(session) {
-      MessageUtil.sendMessage(
-        it,
-        Message.CONNECT_SUCCESS,
-        "server",
-        approved.serverName ?: "your server",
-      )
-    }
-  }
-
-  private fun applyConfigReload() {
-    scheduler.runSync {
-      configManager.reloadConfig()
-      aiServerProvider.reload()
-      playerDataManager.reloadAllPlayers()
-    }
-  }
-
-  private fun supersedeActive(): ConnectSession? {
-    val previous = active.getAndSet(null) ?: return null
-    previous.cancelled.set(true)
-    val deviceCode = previous.deviceCode
-    scheduler.runAsync { connectService.cancel(deviceCode) }
-    return previous
-  }
-
-  private fun finish(session: ConnectSession): Boolean = active.compareAndSet(session, null)
-
-  private fun isStale(session: ConnectSession): Boolean =
-    session.cancelled.get() || active.get() !== session
-
   private fun checkPanelUrl(sender: CommandSender): Boolean {
-    val url = configManager.connectPanelUrl
+    val url = configManager.settings.panelUrl
     if (url.isBlank()) {
-      MessageUtil.sendMessage(sender, Message.CONNECT_DISABLED)
+      messages.sendMessage(sender, Message.CONNECT_DISABLED)
       return false
     }
-    if (!isSecurePanelUrl(url)) {
-      MessageUtil.sendMessage(sender, Message.CONNECT_INSECURE_URL)
+    if (!isSecureEndpoint(url)) {
+      messages.sendMessage(sender, Message.CONNECT_INSECURE_URL)
       return false
     }
     return true
   }
 
-  private fun sendStartMessages(sender: CommandSender, result: StartResult.Started) {
-    val base = configManager.connectPanelUrl.trim().trimEnd('/')
+  private fun sendStartMessages(sender: CommandSender, userCode: String) {
+    val base = configManager.settings.panelUrl.trim().trimEnd('/')
     val verifyUrl = "$base/connect"
     val resolver =
       TagResolver.resolver(
-        MessageUtil.clickUrlTag("link", "$verifyUrl?code=${result.userCode}"),
-        Placeholder.unparsed("code", result.userCode),
+        MiniText.clickUrlTag("link", "$verifyUrl?code=$userCode"),
+        Placeholder.unparsed("code", userCode),
       )
-    MessageUtil.sendMessage(sender, MessageUtil.getMessage(Message.CONNECT_START, resolver))
-    MessageUtil.sendMessage(sender, Message.CONNECT_URL, "url", verifyUrl, "code", result.userCode)
-    MessageUtil.sendMessage(sender, Message.CONNECT_WAITING)
+    messages.sendMessage(sender, messages.getMessage(Message.CONNECT_START, resolver))
+    messages.sendMessage(sender, Message.CONNECT_URL, "url", verifyUrl, "code", userCode)
+    messages.sendMessage(sender, Message.CONNECT_WAITING)
   }
 
-  private fun notify(session: ConnectSession, action: (CommandSender) -> Unit) =
-    notify(session.senderUuid, session.isConsole, action)
-
-  private fun notify(uuid: UUID, isConsole: Boolean, action: (CommandSender) -> Unit) {
+  private fun notify(recipient: Recipient, action: (CommandSender) -> Unit) {
     scheduler.runSync {
       val target: CommandSender? =
-        if (isConsole) Bukkit.getConsoleSender() else Bukkit.getPlayer(uuid)
+        if (recipient.isConsole) server.consoleSender else server.getPlayer(recipient.uuid)
       if (target != null) {
         action(target)
       } else {
-        plugin.logger.info("[Connect] Recipient offline; a connect message was not delivered.")
+        logger.info("[Connect] Recipient offline; a connect message was not delivered.")
       }
     }
   }
@@ -431,18 +276,10 @@ class ConnectCommand(
     if (key.length <= MASK_VISIBLE) "•".repeat(key.length)
     else "••••••••" + key.takeLast(MASK_VISIBLE)
 
-  private class ConnectSession(
-    val deviceCode: String,
-    val intervalSeconds: AtomicLong,
-    val deadlineEpochSec: Long,
-    val senderUuid: UUID,
-    val isConsole: Boolean,
-    val cancelled: AtomicBoolean = AtomicBoolean(false),
-  )
+  private data class Recipient(val uuid: UUID, val isConsole: Boolean)
 
   private companion object {
     const val PERMISSION = "shard.connect"
-    const val MILLIS_PER_SECOND = 1000L
     const val MASK_VISIBLE = 4
     const val CONFIRM_WINDOW_SECONDS = 30L
   }

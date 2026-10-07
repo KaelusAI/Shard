@@ -68,12 +68,18 @@ class EditorApplyTest {
     val apply = world(dir)
 
     val result =
-      apply.apply(Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "50.0", "80.0")))))
+      apply.apply(
+        Delta(
+          mapOf(
+            "config.yml" to listOf(Change("ai/persistent-buffer/cap-on-restore", "40.0", "80.0"))
+          )
+        )
+      )
 
     assertIs<ApplyResult.Applied>(result)
     assertEquals(1, result.count)
     val after = dir.resolve("config.yml").toFile().readText()
-    assertEquals(before.replace("flag: 50.0", "flag: 80.0"), after)
+    assertEquals(before.replace("cap-on-restore: 40.0", "cap-on-restore: 80.0"), after)
   }
 
   @Test
@@ -207,7 +213,7 @@ class EditorApplyTest {
       apply.apply(
         Delta(
           mapOf(
-            "config.yml" to listOf(Change("ai/buffer/flag", "50.0", "40.0")),
+            "config.yml" to listOf(Change("ai/persistent-buffer/cap-on-restore", "40.0", "30.0")),
             "monitor.yml" to listOf(Change("auto/exit-ratio", "0.8", "0.5")),
           )
         )
@@ -215,7 +221,7 @@ class EditorApplyTest {
 
     assertIs<ApplyResult.Applied>(result)
     assertEquals(2, result.count)
-    assertContains(dir.resolve("config.yml").toFile().readText(), "flag: 40.0")
+    assertContains(dir.resolve("config.yml").toFile().readText(), "cap-on-restore: 30.0")
     assertContains(dir.resolve("monitor.yml").toFile().readText(), "exit-ratio: 0.5")
   }
 
@@ -230,7 +236,7 @@ class EditorApplyTest {
           mapOf(
             "config.yml" to
               listOf(
-                Change("ai/buffer/flag", "50.0", "8.0"),
+                Change("ai/persistent-buffer/cap-on-restore", "40.0", "8.0"),
                 Change("ai/api-key", "", "\"stolen\""),
               )
           )
@@ -260,11 +266,17 @@ class EditorApplyTest {
     val apply = world(dir)
 
     val result =
-      apply.apply(Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "12.0", "80.0")))))
+      apply.apply(
+        Delta(
+          mapOf(
+            "config.yml" to listOf(Change("ai/persistent-buffer/cap-on-restore", "12.0", "80.0"))
+          )
+        )
+      )
 
     assertIs<ApplyResult.Refused>(result)
     assertTrue(result.reasons.single().contains("reopen the editor"))
-    assertContains(dir.resolve("config.yml").toFile().readText(), "flag: 50.0")
+    assertContains(dir.resolve("config.yml").toFile().readText(), "cap-on-restore: 40.0")
   }
 
   @Test
@@ -273,12 +285,14 @@ class EditorApplyTest {
     val apply = world(dir)
 
     val single =
-      apply.apply(Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "50.0", "8.0")))))
+      apply.apply(
+        Delta(mapOf("config.yml" to listOf(Change("ai/backoff/max-duration", "60", "3"))))
+      )
 
     assertIs<ApplyResult.Refused>(single)
     assertTrue(
-      single.reasons.single().contains("reset-on-flag"),
-      "flag 8.0 sits under the untouched reset-on-flag 25.0, which flags on every answer",
+      single.reasons.single().contains("initial-duration"),
+      "a max of 3 sits under the untouched initial 5",
     )
     assertEquals(before, dir.resolve("config.yml").toFile().readText())
 
@@ -288,8 +302,8 @@ class EditorApplyTest {
           mapOf(
             "config.yml" to
               listOf(
-                Change("ai/buffer/flag", "50.0", "8.0"),
-                Change("ai/buffer/reset-on-flag", "25.0", "4.0"),
+                Change("ai/backoff/max-duration", "60", "3"),
+                Change("ai/backoff/initial-duration", "5", "2"),
               )
           )
         )
@@ -320,7 +334,8 @@ class EditorApplyTest {
         Delta(
           mapOf(
             "monitor.yml" to listOf(Change("auto/exit-ratio", "0.8", "0.5")),
-            "config.yml" to listOf(Change("ai/buffer/flag", "50.0", "nonsense")),
+            "config.yml" to
+              listOf(Change("ai/persistent-buffer/cap-on-restore", "40.0", "nonsense")),
           )
         )
       )

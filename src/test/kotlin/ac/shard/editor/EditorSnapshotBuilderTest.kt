@@ -93,27 +93,6 @@ class EditorSnapshotBuilderTest {
   }
 
   @Test
-  fun `the punishment groups already on the server are offered`(@TempDir dir: Path) {
-    val builder = seed(dir)
-    dir.resolve("punishments.yml").toFile().writeText(bundled("punishments.yml"))
-
-    val groups = builder.build().punishments
-
-    assertEquals(setOf("AI"), groups.keys)
-    assertEquals(
-      listOf("[alert]", "[log]"),
-      groups.getValue("AI").getValue("1").take(2),
-      "the panel must see what is already configured, or saving would wipe it",
-    )
-    assertTrue(groups.getValue("AI").keys.containsAll(setOf("1", "3", "30")))
-  }
-
-  @Test
-  fun `no punishments file means an empty map rather than a guess`(@TempDir dir: Path) {
-    assertEquals(emptyMap(), seed(dir).build().punishments)
-  }
-
-  @Test
   fun `only paths the schema allows are offered`(@TempDir dir: Path) {
     val snapshot = seed(dir).build()
 
@@ -149,7 +128,10 @@ class EditorSnapshotBuilderTest {
     val snapshot = seed(dir).build()
     val config = snapshot.files.single { it.name == "config.yml" }
 
-    assertEquals("50.0", config.fields.single { it.path == "ai/buffer/flag" }.value)
+    assertEquals(
+      "40.0",
+      config.fields.single { it.path == "ai/persistent-buffer/cap-on-restore" }.value,
+    )
     assertEquals("skip-detection", config.fields.single { it.path == "ai/worldguard/mode" }.value)
     assertEquals("\"en\"", config.fields.single { it.path == "locale" }.value)
   }

@@ -105,24 +105,14 @@ private val CONFIG_RULES: Map<String, FieldRule> =
     "locale" to EnumRule(setOf("en", "ru")),
     "ai/enabled" to BoolRule,
     "ai/continuous" to BoolRule,
-    "ai/buffer/flag" to NumberRule(1.0, 100_000.0),
-    "ai/buffer/reset-on-flag" to BUFFER,
-    "ai/buffer/multiplier" to NumberRule(1.0, 10_000.0),
-    "ai/buffer/decrease" to NumberRule(0.0, 1_000.0),
     "ai/worldguard/enabled" to BoolRule,
     "ai/worldguard/mode" to EnumRule(setOf("skip-detection", "skip-punishment")),
     "ai/worldguard/flag-overrides-list" to BoolRule,
     "ai/backoff/initial-duration" to IntRule(1, 60),
     "ai/backoff/max-duration" to IntRule(1, 3_600),
     "ai/backoff/multiplier" to NumberRule(1.0, 100.0),
-    "ai/batch/enabled" to BoolRule,
     "ai/batch/max-size" to IntRule(1, 256),
     "ai/batch/max-delay-ms" to IntRule(0, 10_000),
-    "ai/retry/max-attempts" to IntRule(1, 10),
-    "ai/retry/initial-delay-ms" to IntRule(0, 60_000),
-    "ai/retry/max-delay-ms" to IntRule(0, 600_000),
-    "ai/retry/multiplier" to NumberRule(1.0, 100.0),
-    "ai/retry/jitter" to SHARE,
     "ai/persistent-buffer/enabled" to BoolRule,
     "ai/persistent-buffer/ttl-hours" to IntRule(0, 8_760),
     "ai/persistent-buffer/cap-on-restore" to BUFFER,
@@ -142,7 +132,6 @@ private val CONFIG_RULES: Map<String, FieldRule> =
     "network/share/suspicious" to BoolRule,
     "network/suspicious-sync/ttl-seconds" to IntRule(1, 86_400),
     "network/suspicious-sync/refresh-seconds" to IntRule(1, 86_400),
-    "suspicious/alerts/buffer" to BUFFER,
     "cancel-duplicate-packet" to BoolRule,
     "force-cancel-duplicate-packet" to BoolRule,
     "ignore-duplicate-packet-rotation" to BoolRule,
@@ -212,20 +201,12 @@ private val PAIRED =
   listOf(
     PairedRule(
       "config.yml",
-      "ai/buffer/reset-on-flag",
-      "ai/buffer/flag",
-      "ai/buffer/reset-on-flag must stay below ai/buffer/flag, or every answer flags again",
-    ) { low, high ->
-      low < high
-    },
-    PairedRule(
-      "config.yml",
       "ai/backoff/initial-duration",
       "ai/backoff/max-duration",
       "ai/backoff/initial-duration must not exceed ai/backoff/max-duration",
     ) { low, high ->
       low <= high
-    },
+    }
   )
 
 enum class Loosening {
@@ -242,14 +223,10 @@ private val LOOSENS: Map<Pair<String, String>, Loosening> =
     ("config.yml" to "ai/continuous") to Loosening.WHEN_OFF,
     ("config.yml" to "ai/worldguard/enabled") to Loosening.WHEN_ON,
     ("config.yml" to "ai/worldguard/mode") to Loosening.WHEN_SKIPPING_DETECTION,
-    ("config.yml" to "ai/buffer/flag") to Loosening.WHEN_HIGHER,
-    ("config.yml" to "ai/buffer/multiplier") to Loosening.WHEN_LOWER,
-    ("config.yml" to "ai/buffer/decrease") to Loosening.WHEN_HIGHER,
     ("config.yml" to "ai/persistent-buffer/enabled") to Loosening.WHEN_OFF,
     ("config.yml" to "ai/persistent-buffer/ttl-hours") to Loosening.WHEN_LOWER,
     ("config.yml" to "ai/persistent-buffer/decay-rate-per-hour") to Loosening.WHEN_HIGHER,
     ("config.yml" to "exemptions/bedrock") to Loosening.WHEN_ON,
-    ("config.yml" to "suspicious/alerts/buffer") to Loosening.WHEN_HIGHER,
     ("config.yml" to "history/enabled") to Loosening.WHEN_OFF,
     ("config.yml" to "alerts/print-to-console") to Loosening.WHEN_OFF,
     ("config.yml" to "ai/worldguard/flag-overrides-list") to Loosening.WHEN_ON,

@@ -28,47 +28,27 @@ class EditorDiffTest {
   fun `a change that loosens the check asks for confirming, one that tightens it does not`() {
     val looser =
       EditorDiff.rows(
-        Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "50.0", "500.0"))))
+        Delta(
+          mapOf(
+            "config.yml" to
+              listOf(Change("ai/persistent-buffer/decay-rate-per-hour", "2.0", "20.0"))
+          )
+        )
       )
     val tighter =
       EditorDiff.rows(
-        Delta(mapOf("config.yml" to listOf(Change("ai/buffer/flag", "50.0", "30.0"))))
+        Delta(
+          mapOf(
+            "config.yml" to listOf(Change("ai/persistent-buffer/decay-rate-per-hour", "2.0", "1.0"))
+          )
+        )
       )
     val off =
       EditorDiff.rows(Delta(mapOf("config.yml" to listOf(Change("ai/enabled", "true", "false")))))
 
-    assertTrue(EditorDiff.needsConfirming(looser), "a higher flag threshold catches fewer people")
+    assertTrue(EditorDiff.needsConfirming(looser), "a faster decay forgets cheaters sooner")
     assertFalse(EditorDiff.needsConfirming(tighter))
     assertTrue(EditorDiff.needsConfirming(off))
-  }
-
-  @Test
-  fun `a punishment group that ends in a ban asks for confirming and shows the actions in order`() {
-    val rows =
-      EditorDiff.rows(
-        Delta(
-          punishments =
-            listOf(
-              PunishmentEdit(
-                "AI",
-                mapOf(
-                  "20" to listOf("[alert]", "ban <player> nope"),
-                  "5" to listOf("[alert]", "[log]"),
-                ),
-              )
-            )
-        )
-      )
-
-    assertEquals(
-      listOf("AI 5-19", "AI 20+"),
-      rows.map { it.key },
-      "a step runs until the next one, so the diff must show the span, not a single level",
-    )
-    assertEquals("[alert] | [log]", rows.first().after)
-    assertEquals(DiffWeight.ORDINARY, rows.first().weight)
-    assertEquals(DiffWeight.NOTABLE, rows.last().weight)
-    assertTrue(EditorDiff.needsConfirming(rows))
   }
 
   @Test
@@ -78,11 +58,10 @@ class EditorDiffTest {
         EditorDiff.rows(Delta(mapOf("config.yml" to listOf(Change(path, was, now)))))
       )
 
-    assertTrue(notable("ai/buffer/flag", "50.0", "80.0"), "a higher bar catches fewer")
-    assertFalse(notable("ai/buffer/flag", "50.0", "30.0"))
-    assertTrue(notable("ai/buffer/multiplier", "100.0", "10.0"), "slower growth is weaker")
-    assertFalse(notable("ai/buffer/multiplier", "100.0", "200.0"))
-    assertTrue(notable("ai/buffer/decrease", "0.25", "5.0"), "faster decay is weaker")
+    assertTrue(notable("ai/persistent-buffer/decay-rate-per-hour", "2.0", "5.0"), "faster decay")
+    assertFalse(notable("ai/persistent-buffer/decay-rate-per-hour", "2.0", "1.0"))
+    assertTrue(notable("ai/persistent-buffer/ttl-hours", "48", "10"), "a shorter memory is weaker")
+    assertFalse(notable("ai/persistent-buffer/ttl-hours", "48", "100"))
     assertTrue(
       notable("ai/worldguard/mode", "skip-punishment", "skip-detection"),
       "skip-detection stops sending windows, so the region goes unwatched",
@@ -104,28 +83,6 @@ class EditorDiffTest {
         )
       }
     }
-  }
-
-  @Test
-  fun `steps one after another read as single levels, the last one is open ended`() {
-    val rows =
-      EditorDiff.rows(
-        Delta(
-          punishments =
-            listOf(
-              PunishmentEdit(
-                "AI",
-                mapOf(
-                  "1" to listOf("[alert]"),
-                  "2" to listOf("[log]"),
-                  "10" to listOf("kick <player> stop"),
-                ),
-              )
-            )
-        )
-      )
-
-    assertEquals(listOf("AI 1", "AI 2-9", "AI 10+"), rows.map { it.key })
   }
 
   @Test
