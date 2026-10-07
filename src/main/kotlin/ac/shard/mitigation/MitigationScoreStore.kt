@@ -21,12 +21,13 @@ import ac.shard.database.DatabaseManager
 import ac.shard.database.StoredScore
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
+import ac.shard.utils.WallClock
 
 class MitigationScoreStore(
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
-  private val settings: () -> MitigationSettings,
-  private val clock: () -> Long = System::currentTimeMillis,
+  private val settings: MitigationSettingsSource,
+  private val clock: WallClock,
 ) {
 
   fun restoreOnLogin(shardPlayer: ShardPlayer) {
@@ -34,7 +35,10 @@ class MitigationScoreStore(
     if (!score.persistEnabled) return
 
     scheduler.runAsync {
-      val stored = databaseManager.database.loadMitigationScore(shardPlayer.uuid) ?: return@runAsync
+      val available = databaseManager.isAvailable
+      val stored = databaseManager.database.loadMitigationScore(shardPlayer.uuid)
+      shardPlayer.scoreLoaded = available && databaseManager.isAvailable
+      if (stored == null) return@runAsync
       if (!shardPlayer.player.isOnline) return@runAsync
 
       val now = clock()
@@ -51,7 +55,7 @@ class MitigationScoreStore(
   }
 
   fun save(shardPlayer: ShardPlayer) {
-    if (!settings().score.persistEnabled) return
+    if (!settings().score.persistEnabled || !shardPlayer.scoreLoaded) return
 
     val state = shardPlayer.mitigation
     val seen = state.history
