@@ -34,7 +34,8 @@ class MitigationsFileTest {
       complaints,
     )
 
-  private fun MitigationRule.flat(): Map<String, Double> = (effects as RuleEffects.Flat).values
+  private fun MitigationRule.flat(): Map<EffectChannel, Double> =
+    (effects as RuleEffects.Flat).values
 
   private fun shipped(complaints: MutableList<String> = mutableListOf()): MitigationSettings {
     val stream =
@@ -234,10 +235,8 @@ class MitigationsFileTest {
     val effects = tax.effects as RuleEffects.Scale
     val atEntry = effects.resolve(RuleFacts(0.0, 0.0, 0.90, 0L, 0, 0, 0L, true))
     val atCeiling = effects.resolve(RuleFacts(0.0, 0.0, 0.96, 0L, 0, 0, 0L, true))
-    assertTrue(atEntry.getValue(MitigationSettings.MELEE) > 0.9, "one honest window must not sting")
-    assertTrue(
-      atCeiling.getValue(MitigationSettings.MELEE) < atEntry.getValue(MitigationSettings.MELEE)
-    )
+    assertTrue(atEntry.getValue(EffectChannel.MELEE) > 0.9, "one honest window must not sting")
+    assertTrue(atCeiling.getValue(EffectChannel.MELEE) < atEntry.getValue(EffectChannel.MELEE))
   }
 
   @Test
@@ -347,27 +346,23 @@ class MitigationsFileTest {
     val strong = settings.rule("strong")!!.flat()
 
     assertTrue(
-      blatant.getValue(MitigationSettings.INCOMING) > strong.getValue(MitigationSettings.INCOMING),
+      blatant.getValue(EffectChannel.INCOMING) > strong.getValue(EffectChannel.INCOMING),
       "the rule that proves more may take more",
     )
+    assertTrue(blatant.getValue(EffectChannel.HEALING) < strong.getValue(EffectChannel.HEALING))
+    assertTrue(blatant.getValue(EffectChannel.MELEE) < strong.getValue(EffectChannel.MELEE))
+    assertNull(settings.rule("sustained")?.flat()?.get(EffectChannel.HEALING))
+    assertTrue(blatant.getValue(EffectChannel.CANCEL) > 0.0)
     assertTrue(
-      blatant.getValue(MitigationSettings.HEALING) < strong.getValue(MitigationSettings.HEALING)
-    )
-    assertTrue(
-      blatant.getValue(MitigationSettings.MELEE) < strong.getValue(MitigationSettings.MELEE)
-    )
-    assertNull(settings.rule("sustained")?.flat()?.get(MitigationSettings.HEALING))
-    assertTrue(blatant.getValue(MitigationSettings.CANCEL) > 0.0)
-    assertTrue(
-      blatant.getValue(MitigationSettings.CANCEL) > strong.getValue(MitigationSettings.CANCEL),
+      blatant.getValue(EffectChannel.CANCEL) > strong.getValue(EffectChannel.CANCEL),
       "a miss is the loudest channel, so the rule that proves less uses it more sparingly",
     )
-    assertNull(settings.rule("sustained")?.flat()?.get(MitigationSettings.CANCEL))
+    assertNull(settings.rule("sustained")?.flat()?.get(EffectChannel.CANCEL))
     assertNull(
-      settings.rule("sustained")?.flat()?.get(MitigationSettings.INCOMING),
+      settings.rule("sustained")?.flat()?.get(EffectChannel.INCOMING),
       "the half-bypass rule leans on a weak per-window signal and must not raise damage taken",
     )
-    assertNull(settings.rule("watching")?.flat()?.get(MitigationSettings.INCOMING))
+    assertNull(settings.rule("watching")?.flat()?.get(EffectChannel.INCOMING))
   }
 
   @Test
@@ -386,10 +381,10 @@ class MitigationsFileTest {
       )
 
     val effects = settings.rule("silly")!!.flat()
-    assertEquals(1.0, effects[MitigationSettings.MELEE], "dealing more damage is not a mitigation")
+    assertEquals(1.0, effects[EffectChannel.MELEE], "dealing more damage is not a mitigation")
     assertEquals(
       1.0,
-      effects[MitigationSettings.INCOMING],
+      effects[EffectChannel.INCOMING],
       "taking less damage is not a mitigation either",
     )
   }

@@ -18,7 +18,6 @@
 package ac.shard.mitigation
 
 import ac.shard.Shard
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
 import ac.shard.config.MitigationsFile
@@ -27,7 +26,8 @@ import ac.shard.database.InMemoryViolationDatabase
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.WallClock
 import io.mockk.every
 import io.mockk.mockk
 import java.util.UUID
@@ -37,23 +37,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class MitigationRuntimeLogTest {
 
   private val scoring = MitigationsFile.DEFAULT_SCORE
 
-  @BeforeEach
-  fun setUp() {
-    val localeManager = mockk<LocaleManager>(relaxed = true)
-    every { localeManager.getRawMessage(any()) } returns ""
-    MessageUtil.init(
-      localeManager,
+  private val messages =
+    Messages(
+      mockk<LocaleManager>(relaxed = true) { every { getRawMessage(any()) } returns "" },
       mockk<BukkitAudiences>(relaxed = true),
       Logger.getLogger("test"),
     )
-  }
 
   private class Ticker(var now: Long = 1_775_000_000_000L)
 
@@ -90,7 +85,7 @@ class MitigationRuntimeLogTest {
       enabled = true,
       entry = RuleCondition.Threshold(Fact.SCORE, above = 30.0),
       until = RuleCondition.Threshold(Fact.SCORE, below = 20.0),
-      effects = RuleEffects.Flat(mapOf(MitigationSettings.MELEE to 0.2)),
+      effects = RuleEffects.Flat(mapOf(EffectChannel.MELEE to 0.2)),
       timing =
         RuleTiming(
           delayMinMillis = 0L,
@@ -109,7 +104,7 @@ class MitigationRuntimeLogTest {
     logEnabled: Boolean = true,
   ): Fixture {
     val ticker = Ticker()
-    val clock = { ticker.now }
+    val clock = WallClock { ticker.now }
     val settings =
       MitigationSettings(
         enabled = true,
@@ -127,7 +122,6 @@ class MitigationRuntimeLogTest {
         every { this@mockk.uuid } returns uuid
         every { player.name } returns "zamik"
         every { joinTime } returns ticker.now
-        every { checkManager.getCheck(AiCheck::class.java) } returns null
       }
 
     val playerDataManager =
@@ -142,26 +136,28 @@ class MitigationRuntimeLogTest {
           }
       }
 
-    val database = InMemoryViolationDatabase(mockk(relaxed = true))
+    val database = InMemoryViolationDatabase()
     val databaseManager =
       mockk<DatabaseManager>(relaxed = true) { every { this@mockk.database } returns database }
     val logStore = MitigationLogStore(databaseManager, mockk(relaxed = true), { settings }, clock)
 
     val runtime =
       MitigationRuntime(
+        messages = messages,
         plugin = mockk<Shard>(relaxed = true),
         playerDataManager = playerDataManager,
         configManager = mockk<ConfigManager>(relaxed = true),
         alertManager = mockk(relaxed = true),
         skip = mockk<MitigationSkip>(relaxed = true) { every { skipReason(any()) } returns null },
         engine = RuleEngine({ settings }, clock, Random(1)),
-        damageProcessor = mockk(relaxed = true),
-        stamps = HitStamps(),
+        stamps = HitStamps(clock),
         debugManager = mockk(relaxed = true),
         scheduler = scheduler,
         logStore = logStore,
         settings = { settings },
         clock = clock,
+        events = mockk(relaxed = true),
+        sessions = mockk(relaxed = true),
       )
 
     return Fixture(runtime, logStore, state, player, database, uuid, ticker)

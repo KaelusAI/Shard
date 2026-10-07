@@ -17,6 +17,7 @@
  */
 package ac.shard.mitigation
 
+import ac.shard.utils.WallClock
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -41,7 +42,7 @@ class HitStampsTest {
 
   @Test
   fun `an arrow is spent once and gone`() {
-    val stamps = HitStamps()
+    val stamps = HitStamps(WallClock.SYSTEM)
     val arrow = UUID.randomUUID()
     stamps.remember(arrow, UUID.randomUUID(), 0.5)
 
@@ -64,7 +65,7 @@ class HitStampsTest {
 
   @Test
   fun `a full multiplier is not worth remembering`() {
-    val stamps = HitStamps()
+    val stamps = HitStamps(WallClock.SYSTEM)
     val crystal = UUID.randomUUID()
 
     stamps.remember(crystal, UUID.randomUUID(), 1.0)

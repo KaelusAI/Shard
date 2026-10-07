@@ -19,6 +19,10 @@ package ac.shard.mitigation
 
 data class SkipSettings(val bedrock: Boolean, val followAiRegions: Boolean)
 
+fun interface MitigationSettingsSource {
+  operator fun invoke(): MitigationSettings
+}
+
 data class MitigationSettings(
   val enabled: Boolean,
   val logEnabled: Boolean,
@@ -55,16 +59,6 @@ data class MitigationSettings(
   }
 
   companion object {
-    const val MELEE = "melee"
-    const val PROJECTILE = "projectile"
-    const val CRYSTAL = "crystal"
-    const val INCOMING = "incoming"
-    const val HEALING = "healing"
-    const val CANCEL = "cancel"
-
     const val MAX_INCOMING = 4.0
-
-    val OUTGOING = setOf(MELEE, PROJECTILE, CRYSTAL)
-    val CHANNELS = OUTGOING + HEALING + INCOMING + CANCEL
   }
 }

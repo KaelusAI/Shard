@@ -19,11 +19,18 @@
 
 package ac.shard.mitigation
 
-import ac.shard.api.event.MitigationEvent
+import ac.shard.api.event.mitigation.MitigationApplyEvent
+import ac.shard.api.impl.Sessions
+import ac.shard.api.impl.apiTier
+import ac.shard.api.impl.event.MitigationApplyEventImpl
+import ac.shard.api.impl.event.ShardEvents
+import ac.shard.api.mitigation.MitigationChannel
+import ac.shard.api.mitigation.MitigationTier
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import kotlin.random.Random
 import org.bukkit.entity.EnderCrystal
+import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
 import org.bukkit.entity.Projectile
 import org.bukkit.entity.TNTPrimed
@@ -40,6 +47,8 @@ private const val SURVIVES_BY = 0.5
 class MitigationChannelListener(
   private val playerDataManager: PlayerDataManager,
   private val stamps: HitStamps,
+  private val events: ShardEvents,
+  private val sessions: Sessions,
   private val random: Random = Random.Default,
 ) : Listener {
 
@@ -59,13 +68,12 @@ class MitigationChannelListener(
 
     val shardPlayer = playerDataManager.getPlayer(attacker) ?: return
 
-    if (direct !is Projectile && cancelled(shardPlayer)) {
+    if (direct !is Projectile && cancelled(shardPlayer, victim)) {
       event.isCancelled = true
       return
     }
 
-    val channel =
-      if (direct is Projectile) MitigationSettings.PROJECTILE else MitigationSettings.MELEE
+    val channel = if (direct is Projectile) EffectChannel.PROJECTILE else EffectChannel.MELEE
     scale(event, shardPlayer, channel, multiplierFrom(shardPlayer, direct, channel))
   }
 
@@ -77,7 +85,7 @@ class MitigationChannelListener(
     stamps.remember(
       projectile.uniqueId,
       shardPlayer.uuid,
-      multiplier(shardPlayer, MitigationSettings.PROJECTILE),
+      multiplier(shardPlayer, EffectChannel.PROJECTILE),
     )
   }
 
@@ -89,7 +97,7 @@ class MitigationChannelListener(
     stamps.remember(
       crystal.uniqueId,
       shardPlayer.uuid,
-      multiplier(shardPlayer, MitigationSettings.CRYSTAL),
+      multiplier(shardPlayer, EffectChannel.CRYSTAL),
     )
   }
 
@@ -104,7 +112,7 @@ class MitigationChannelListener(
   private fun multiplierFrom(
     shardPlayer: ShardPlayer,
     direct: org.bukkit.entity.Entity?,
-    channel: String,
+    channel: EffectChannel,
   ): Double =
     if (direct is Projectile) {
       stamps.take(direct.uniqueId)?.multiplier ?: 1.0
@@ -120,30 +128,30 @@ class MitigationChannelListener(
     val stamp = subject?.let { stamps.peek(it) } ?: return
     if (stamp.owner == victim.uniqueId) return
     val shardPlayer = playerDataManager.getPlayer(stamp.owner) ?: return
-    scale(event, shardPlayer, MitigationSettings.CRYSTAL, stamp.multiplier)
+    scale(event, shardPlayer, EffectChannel.CRYSTAL, stamp.multiplier)
   }
 
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
   fun onHeal(event: EntityRegainHealthEvent) {
     val player = event.entity as? Player ?: return
     val shardPlayer = playerDataManager.getPlayer(player) ?: return
-    val multiplier = multiplier(shardPlayer, MitigationSettings.HEALING)
+    val multiplier = multiplier(shardPlayer, EffectChannel.HEALING)
     if (multiplier >= 1.0) return
-    if (vetoed(shardPlayer, MitigationSettings.HEALING)) return
+    if (vetoed(shardPlayer, EffectChannel.HEALING, multiplier, null)) return
     event.amount = event.amount * multiplier
   }
 
-  private fun cancelled(shardPlayer: ShardPlayer): Boolean {
-    val chance = shardPlayer.mitigation.chanceFor(MitigationSettings.CANCEL)
+  private fun cancelled(shardPlayer: ShardPlayer, victim: Entity): Boolean {
+    val chance = shardPlayer.mitigation.chanceFor(EffectChannel.CANCEL)
     if (chance <= 0.0 || random.nextDouble() >= chance) return false
-    return !vetoed(shardPlayer, MitigationSettings.CANCEL)
+    return !vetoed(shardPlayer, EffectChannel.CANCEL, chance, victim)
   }
 
   private fun boostIncoming(event: EntityDamageByEntityEvent, victim: Player) {
     val shardPlayer = playerDataManager.getPlayer(victim) ?: return
-    val multiplier = multiplier(shardPlayer, MitigationSettings.INCOMING)
+    val multiplier = multiplier(shardPlayer, EffectChannel.INCOMING)
     if (multiplier <= 1.0) return
-    if (vetoed(shardPlayer, MitigationSettings.INCOMING)) return
+    if (vetoed(shardPlayer, EffectChannel.INCOMING, multiplier, event.damager)) return
 
     val survivable = event.finalDamage < victim.health
     event.damage = event.damage * multiplier
@@ -156,28 +164,34 @@ class MitigationChannelListener(
   private fun scale(
     event: EntityDamageByEntityEvent,
     shardPlayer: ShardPlayer,
-    channel: String,
+    channel: EffectChannel,
     multiplier: Double,
   ) {
     if (multiplier >= 1.0) return
-    if (vetoed(shardPlayer, channel)) return
+    if (vetoed(shardPlayer, channel, multiplier, event.entity)) return
     event.damage = event.damage * multiplier
   }
 
-  private fun multiplier(shardPlayer: ShardPlayer, channel: String): Double =
+  private fun multiplier(shardPlayer: ShardPlayer, channel: EffectChannel): Double =
     shardPlayer.mitigation.multiplierFor(channel)
 
-  private fun vetoed(shardPlayer: ShardPlayer, channel: String): Boolean {
+  private fun vetoed(
+    shardPlayer: ShardPlayer,
+    channel: EffectChannel,
+    effect: Double,
+    counterpart: Entity?,
+  ): Boolean {
+    if (!events.wants(MitigationApplyEvent::class.java)) return false
     val state = shardPlayer.mitigation
     val event =
-      MitigationEvent(
-        shardPlayer.uuid,
-        shardPlayer.player.name,
-        state.applied?.id ?: channel,
-        state.appliedTier.name,
-        state.score,
+      MitigationApplyEventImpl(
+        sessions.of(shardPlayer),
+        MitigationChannel.valueOf(channel.name),
+        apiTier(state.appliedTier.name) ?: MitigationTier.NONE,
+        state.applied?.id,
+        effect,
+        counterpart,
       )
-    shardPlayer.eventBus.post(event)
-    return event.cancelled
+    return events.fire(event).isCancelled
   }
 }

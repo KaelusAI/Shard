@@ -48,7 +48,7 @@ score:
 #             release-jitter-seconds, max-seconds, max-answers. hold-seconds is a floor,
 #             the two max are ceilings that outrank until.
 rules:
-  # Buffer thresholds only mean something next to ai.buffer.* in config.yml.
+  # Buffer thresholds only mean something next to the model buffer in the server profile.
   - id: blatant
     level: high
     enabled: true

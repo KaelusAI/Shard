@@ -19,35 +19,39 @@ package ac.shard.di
 
 import ac.shard.config.MitigationsFile
 import ac.shard.mitigation.HitStamps
-import ac.shard.mitigation.MitigationSettings
+import ac.shard.mitigation.MitigationSettingsSource
+import ac.shard.utils.WallClock
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 
 class HitStampsBindingTest {
 
   @Test
-  fun `hit stamps keep their own clock while a settings provider sits in the graph`() {
+  fun `hit stamps read the clock of the graph next to a settings source`() {
+    var now = 0L
     val app = koinApplication {
       modules(
         module {
-          single<() -> MitigationSettings> { { MitigationsFile.OFF } }
-          single { HitStamps() }
+          single { MitigationSettingsSource { MitigationsFile.OFF } }
+          single { WallClock { now } }
+          singleOf(::HitStamps)
         }
       )
     }
-
     val stamps = app.koin.get<HitStamps>()
-    val projectile = UUID.randomUUID()
+    val kept = UUID.randomUUID()
+    val expired = UUID.randomUUID()
 
-    stamps.remember(projectile, UUID.randomUUID(), 0.5)
+    stamps.remember(kept, UUID.randomUUID(), 0.5)
+    assertNotNull(stamps.take(kept))
 
-    assertNotNull(
-      stamps.take(projectile),
-      "a stamp is only kept when the clock returns a number, so this fails once the " +
-        "settings provider is injected in place of the clock",
-    )
+    stamps.remember(expired, UUID.randomUUID(), 0.5)
+    now = Long.MAX_VALUE / 2
+    assertNull(stamps.take(expired), "the stamp expires by the injected clock")
   }
 }

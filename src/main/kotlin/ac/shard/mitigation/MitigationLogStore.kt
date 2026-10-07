@@ -21,13 +21,14 @@ import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
 import ac.shard.database.MitigationLogEntry
 import ac.shard.player.ShardPlayer
+import ac.shard.utils.WallClock
 import java.util.Locale
 
 class MitigationLogStore(
   private val databaseManager: DatabaseManager,
   private val configManager: ConfigManager,
-  private val settings: () -> MitigationSettings,
-  private val clock: () -> Long = System::currentTimeMillis,
+  private val settings: MitigationSettingsSource,
+  private val clock: WallClock,
 ) {
 
   fun enabled(): Boolean = settings().logEnabled

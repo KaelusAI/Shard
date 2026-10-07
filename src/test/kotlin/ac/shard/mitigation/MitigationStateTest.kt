@@ -33,6 +33,25 @@ class MitigationStateTest {
     noteProbability(probability, at, books)
 
   @Test
+  fun `a restore that lands after a reset does not bring the score back`() {
+    val state = MitigationState()
+
+    state.clearScore(start)
+    state.restore(5.0, start + 1L, ac.shard.config.MitigationsFile.DEFAULT_SCORE)
+
+    assertEquals(0.0, state.score)
+  }
+
+  @Test
+  fun `a restore without a reset sets the score`() {
+    val state = MitigationState()
+
+    state.restore(5.0, start, ac.shard.config.MitigationsFile.DEFAULT_SCORE)
+
+    assertEquals(5.0, state.score)
+  }
+
+  @Test
   fun `an answer only credits the movement it was actually computed from`() {
     val state = MitigationState()
 

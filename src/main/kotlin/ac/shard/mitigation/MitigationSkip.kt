@@ -19,9 +19,7 @@
 
 package ac.shard.mitigation
 
-import ac.shard.config.ConfigManager
 import ac.shard.player.ShardPlayer
-import ac.shard.region.RegionProvider
 
 const val NO_MITIGATE_PERMISSION = "shard.nomitigate"
 
@@ -35,30 +33,20 @@ enum class SkipReason {
   TOO_FEW_ANSWERS,
 }
 
-class MitigationSkip(
-  private val configManager: ConfigManager,
-  private val regionProvider: RegionProvider,
-  private val settings: () -> MitigationSettings,
-) {
+class MitigationSkip(private val settings: MitigationSettingsSource) {
 
   fun skipReason(shardPlayer: ShardPlayer): SkipReason? {
     val config = settings()
     if (!config.enabled) return SkipReason.TURNED_OFF
 
-    val player = shardPlayer.player
     val skip = config.skip
 
-    if (shardPlayer.exemptManager.isDisabled(player)) return SkipReason.CHECKS_DISABLED
-    if (shardPlayer.exemptManager.isExempt(player)) return SkipReason.EXEMPT
-    if (player.hasPermission(NO_MITIGATE_PERMISSION)) return SkipReason.NO_MITIGATE
+    if (shardPlayer.exemptManager.isDisabled(shardPlayer)) return SkipReason.CHECKS_DISABLED
+    if (shardPlayer.exemptManager.isExempt(shardPlayer)) return SkipReason.EXEMPT
+    if (shardPlayer.exemptManager.isMitigationExempt(shardPlayer)) return SkipReason.NO_MITIGATE
     if (skip.bedrock && shardPlayer.isBedrockExempt) return SkipReason.BEDROCK
-    if (
-      skip.followAiRegions &&
-        configManager.isAiWorldGuardEnabled() &&
-        regionProvider.isPlayerInDisabledRegion(player)
-    ) {
-      return SkipReason.DISABLED_REGION
-    }
+    if (skip.followAiRegions && shardPlayer.ai.inDisabledRegion) return SkipReason.DISABLED_REGION
+    if (shardPlayer.mitigation.answers < config.score.minAnswers) return SkipReason.TOO_FEW_ANSWERS
 
     return null
   }

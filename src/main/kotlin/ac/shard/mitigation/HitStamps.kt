@@ -17,6 +17,7 @@
  */
 package ac.shard.mitigation
 
+import ac.shard.utils.WallClock
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -25,7 +26,7 @@ private const val SWEEP_EVERY = 256
 
 data class HitStamp(val owner: UUID, val multiplier: Double)
 
-class HitStamps(private val clock: () -> Long = System::currentTimeMillis) {
+class HitStamps(private val clock: WallClock) {
 
   private data class Entry(val stamp: HitStamp, val expiresAt: Long)
 

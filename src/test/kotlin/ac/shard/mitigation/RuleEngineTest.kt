@@ -48,7 +48,7 @@ class RuleEngineTest {
       enabled = true,
       entry = entry,
       until = until,
-      effects = RuleEffects.Flat(mapOf(MitigationSettings.MELEE to melee)),
+      effects = RuleEffects.Flat(mapOf(EffectChannel.MELEE to melee)),
       timing =
         RuleTiming(
           delayMinMillis = delay,
@@ -113,7 +113,7 @@ class RuleEngineTest {
             Fact.PROBABILITY,
             from = 0.90,
             to = 1.0,
-            ranges = mapOf(MitigationSettings.MELEE to (1.0 to 0.0)),
+            ranges = mapOf(EffectChannel.MELEE to (1.0 to 0.0)),
           ),
         timing = RuleTiming(0L, 0L, true, 0L, 0L),
       )
@@ -121,17 +121,17 @@ class RuleEngineTest {
     val state = MitigationState()
 
     engine.evaluate(state, facts(probability = 0.95, inCombat = true), null)
-    assertEquals(0.5, state.multiplierFor(MitigationSettings.MELEE), 1e-9)
+    assertEquals(0.5, state.multiplierFor(EffectChannel.MELEE), 1e-9)
 
     ticker.now += 1_000L
     engine.evaluate(state, facts(probability = 0.99, inCombat = true), null)
-    assertEquals(0.1, state.multiplierFor(MitigationSettings.MELEE), 1e-9)
+    assertEquals(0.1, state.multiplierFor(EffectChannel.MELEE), 1e-9)
 
     ticker.now += 1_000L
     engine.evaluate(state, facts(probability = 0.40, inCombat = true), null)
     assertEquals(
       1.0,
-      state.multiplierFor(MitigationSettings.MELEE),
+      state.multiplierFor(EffectChannel.MELEE),
       1e-9,
     )
   }

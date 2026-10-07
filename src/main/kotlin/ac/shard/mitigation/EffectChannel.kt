@@ -17,21 +17,21 @@
  */
 package ac.shard.mitigation
 
-import ac.shard.damage.DamageProcessor
-import ac.shard.player.ShardPlayer
+import java.util.Locale
 
-class MitigationDamageProcessor : DamageProcessor {
+enum class EffectChannel {
+  MELEE,
+  PROJECTILE,
+  CRYSTAL,
+  INCOMING,
+  HEALING,
+  CANCEL;
 
-  override fun reset(shardPlayer: ShardPlayer) {
-    shardPlayer.combat.damageMultiplier = 1.0
-  }
+  val key: String = name.lowercase(Locale.ROOT)
 
-  override fun applyProbability(shardPlayer: ShardPlayer, probability: Double) {
-    refresh(shardPlayer)
-  }
-
-  fun refresh(shardPlayer: ShardPlayer) {
-    shardPlayer.combat.damageMultiplier =
-      shardPlayer.mitigation.multiplierFor(MitigationSettings.MELEE)
+  companion object {
+    fun of(key: String): EffectChannel? = entries.firstOrNull {
+      it.key == key.lowercase(Locale.ROOT)
+    }
   }
 }

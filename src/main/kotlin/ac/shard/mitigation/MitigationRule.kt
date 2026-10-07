@@ -29,26 +29,26 @@ data class RuleTiming(
 
 sealed interface RuleEffects {
 
-  val channels: Set<String>
+  val channels: Set<EffectChannel>
 
-  fun resolve(facts: RuleFacts): Map<String, Double>
+  fun resolve(facts: RuleFacts): Map<EffectChannel, Double>
 
-  data class Flat(val values: Map<String, Double>) : RuleEffects {
-    override val channels: Set<String> = values.keys
+  data class Flat(val values: Map<EffectChannel, Double>) : RuleEffects {
+    override val channels: Set<EffectChannel> = values.keys
 
-    override fun resolve(facts: RuleFacts): Map<String, Double> = values
+    override fun resolve(facts: RuleFacts): Map<EffectChannel, Double> = values
   }
 
   data class Scale(
     val fact: Fact,
     val from: Double,
     val to: Double,
-    val ranges: Map<String, Pair<Double, Double>>,
+    val ranges: Map<EffectChannel, Pair<Double, Double>>,
     val label: String? = null,
   ) : RuleEffects {
-    override val channels: Set<String> = ranges.keys
+    override val channels: Set<EffectChannel> = ranges.keys
 
-    override fun resolve(facts: RuleFacts): Map<String, Double> {
+    override fun resolve(facts: RuleFacts): Map<EffectChannel, Double> {
       val span = to - from
       val reading = fact.read(facts, label)
       val share = if (span == 0.0) 1.0 else ((reading - from) / span).coerceIn(0.0, 1.0)

@@ -19,9 +19,9 @@ package ac.shard.mitigation
 
 import ac.shard.Shard
 import ac.shard.ai.label.LabelKey
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
 import ac.shard.config.MitigationsFile
+import ac.shard.detection.DetectionState
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import io.mockk.every
@@ -347,7 +347,12 @@ class MitigationLabelRulesTest {
     val facts = factsWith(buffers = mapOf("aim" to 20.0, "trigger" to 40.0), probabilities = null)
 
     assertEquals("aim", effects.label)
-    assertEquals(0.55, effects.resolve(facts)["melee"]!!, 1e-9, "halfway on aim, not on the sum")
+    assertEquals(
+      0.55,
+      effects.resolve(facts)[EffectChannel.MELEE]!!,
+      1e-9,
+      "halfway on aim, not on the sum",
+    )
     assertTrue(complaints.any { it.contains("on a scale") }, complaints.toString())
   }
 
@@ -417,10 +422,10 @@ class MitigationLabelRulesTest {
     state.noteProbability(0.5, now - heardMillisAgo, HoldAccounting(emptySet(), 1_000L, 0.5))
 
     val aiCheck =
-      mockk<AiCheck>(relaxed = true) {
+      mockk<DetectionState>(relaxed = true) {
         every { labelBufferSnapshot() } returns buffers
         every { lastLabelProbabilities } returns probabilities.orEmpty()
-        every { buffer } returns (buffers.values.maxOrNull() ?: 0.0)
+        every { primaryBuffer } returns (buffers.values.maxOrNull() ?: 0.0)
         every { lastCheatProbability } returns (probabilities?.values?.maxOrNull() ?: 0.0)
       }
 
@@ -429,7 +434,7 @@ class MitigationLabelRulesTest {
         every { mitigation } returns state
         every { uuid } returns UUID.randomUUID()
         every { joinTime } returns 0L
-        every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
+        every { detection } returns aiCheck
       }
 
     return runtime(now).factsFor(player)
@@ -445,19 +450,21 @@ class MitigationLabelRulesTest {
         rules = emptyList(),
       )
     return MitigationRuntime(
+      messages = mockk(relaxed = true),
       plugin = mockk<Shard>(relaxed = true),
       playerDataManager = mockk<PlayerDataManager>(relaxed = true),
       configManager = mockk<ConfigManager>(relaxed = true),
       alertManager = mockk(relaxed = true),
       skip = mockk<MitigationSkip>(relaxed = true) { every { skipReason(any()) } returns null },
       engine = RuleEngine({ settings }, { now }, Random(1)),
-      damageProcessor = mockk(relaxed = true),
-      stamps = HitStamps(),
+      stamps = HitStamps { now },
       debugManager = mockk(relaxed = true),
       scheduler = mockk(relaxed = true),
       logStore = mockk(relaxed = true),
       settings = { settings },
       clock = { now },
+      events = mockk(relaxed = true),
+      sessions = mockk(relaxed = true),
     )
   }
 }

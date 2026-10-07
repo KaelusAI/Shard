@@ -17,37 +17,43 @@
  */
 package ac.shard.mitigation
 
-import ac.shard.config.ConfigManager
+import ac.shard.ai.stream.ModelSpec
+import ac.shard.ai.stream.StreamProfile
 import ac.shard.monitor.hud.MILLIS_PER_TICK
 import ac.shard.player.ShardPlayer
+import ac.shard.utils.WallClock
 
 class MitigationScorer(
-  private val configManager: ConfigManager,
-  private val settings: () -> MitigationSettings,
-  private val clock: () -> Long = System::currentTimeMillis,
+  private val settings: MitigationSettingsSource,
+  private val clock: WallClock,
 ) {
 
+  @Suppress("LongParameterList")
   fun record(
     shardPlayer: ShardPlayer,
+    profile: StreamProfile,
+    model: ModelSpec,
     probability: Double,
     labels: Map<String, Double> = emptyMap(),
+    mitigating: List<ModelSpec> = profile.active.filter { it.role.mitigate != null },
   ) {
     val config = settings()
     val now = clock()
+    val weightSum = mitigating.sumOf { it.mitigationWeight }
+    val share = if (weightSum > 0.0) model.mitigationWeight / weightSum else 0.0
     val contribution =
-      ScoreMath.contribution(
-        probability,
-        configManager.aiStep,
-        (configManager.aiPreWindow + configManager.aiPostWindow),
-        config.score,
-      )
-    shardPlayer.mitigation.record(contribution, probability, now, config.score)
+      share * ScoreMath.contribution(probability, model.cadence, profile.primary.span, config.score)
+    val lead =
+      (mitigating.firstOrNull { it.id == profile.primary.id } ?: mitigating.firstOrNull())?.id ==
+        model.id
+    shardPlayer.mitigation.record(contribution, probability, now, config.score, answered = lead)
+    if (!lead) return
     shardPlayer.mitigation.noteProbability(
       probability,
       now,
       HoldAccounting(
         config.probabilityHolds,
-        (configManager.aiPreWindow + configManager.aiPostWindow) * MILLIS_PER_TICK,
+        model.span * MILLIS_PER_TICK,
         config.score.forgetRate,
       ),
       labels,

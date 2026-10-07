@@ -22,8 +22,10 @@ package ac.shard.mitigation
 import ac.shard.Shard
 import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
-import ac.shard.api.event.MitigationRuleEvent
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.api.impl.Sessions
+import ac.shard.api.impl.apiTier
+import ac.shard.api.impl.event.MitigationChangeEventImpl
+import ac.shard.api.impl.event.ShardEvents
 import ac.shard.config.ConfigManager
 import ac.shard.debug.DebugCategory
 import ac.shard.debug.DebugManager
@@ -32,36 +34,40 @@ import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.WallClock
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 
 private const val PERIOD_TICKS = 20L
-private const val NO_RULE = "none"
 private const val ANSWER_STALE_MILLIS = 3_000L
+private const val DEFAULT_COMBAT_TICKS = 64
+private const val RELOAD = "configuration reloaded"
 
 class MitigationRuntime(
+  private val messages: Messages,
   private val plugin: Shard,
   private val playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
   private val alertManager: AlertManager,
   private val skip: MitigationSkip,
   private val engine: RuleEngine,
-  private val damageProcessor: MitigationDamageProcessor,
   private val stamps: HitStamps,
   private val debugManager: DebugManager,
   private val scheduler: SchedulerService,
   private val logStore: MitigationLogStore,
-  private val settings: () -> MitigationSettings,
-  private val clock: () -> Long = System::currentTimeMillis,
+  private val settings: MitigationSettingsSource,
+  private val clock: WallClock,
+  private val events: ShardEvents,
+  private val sessions: Sessions,
 ) {
 
   private var handle: TaskHandle? = null
 
   fun enable() {
     plugin.server.pluginManager.registerEvents(
-      MitigationChannelListener(playerDataManager, stamps),
+      MitigationChannelListener(playerDataManager, stamps, events, sessions),
       plugin,
     )
     handle = scheduler.runTimer({ tick() }, PERIOD_TICKS, PERIOD_TICKS)
@@ -78,14 +84,23 @@ class MitigationRuntime(
     val fresh = settings().rules.associateBy { it.id }
     playerDataManager.getPlayers().forEach { shardPlayer ->
       val state = shardPlayer.mitigation
-      val running = state.matched ?: state.applied
-      if (running != null && fresh[running.id] == null) {
+      val appliedId = state.applied?.id
+      val before = state.appliedTier
+      if (appliedId != null && fresh[appliedId] == null) {
         release(shardPlayer)
+        announce(shardPlayer, RuleChange(appliedId, null, RELOAD), before)
         return@forEach
       }
-      state.matched = state.matched?.let { fresh.getValue(it.id) }
-      state.applied = state.applied?.let { fresh.getValue(it.id) }
-      state.spent = state.spent?.let { fresh[it.id] }
+      state.updatePhase { phase ->
+        phase.copy(
+          matched = phase.matched?.let { fresh[it.id] },
+          applied = phase.applied?.let { fresh[it.id] },
+          spent = phase.spent?.let { fresh[it.id] },
+        )
+      }
+      if (state.appliedTier != before) {
+        announce(shardPlayer, RuleChange(appliedId, appliedId, RELOAD), before)
+      }
     }
   }
 
@@ -100,28 +115,31 @@ class MitigationRuntime(
   fun factsFor(shardPlayer: ShardPlayer): RuleFacts {
     val now = clock()
     val state = shardPlayer.mitigation
-    val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java)
+    val ai = shardPlayer.detection
     val heard = state.lastAnswerAtMillis
     val listening = heard != 0L && now - heard <= ANSWER_STALE_MILLIS
     return RuleFacts(
       score = state.score,
-      buffer = aiCheck?.buffer ?: 0.0,
-      probability = if (listening) aiCheck?.lastCheatProbability ?: 0.0 else 0.0,
+      buffer = ai.primaryBuffer,
+      probability = if (listening) ai.lastCheatProbability else 0.0,
       answers = state.answers,
       sessions = state.history.sessions,
       days = state.history.days,
       onlineMillis = now - shardPlayer.joinTime,
       inCombat =
         shardPlayer.combat.ticksSinceAttack <=
-          (configManager.aiPreWindow + configManager.aiPostWindow),
+          (configManager.streamProfile?.primary?.span ?: DEFAULT_COMBAT_TICKS),
       probabilityHolds = if (listening) state.probabilityHolds() else emptyMap(),
-      labelBuffers = aiCheck?.labelBufferSnapshot().orEmpty(),
-      labelProbabilities = if (listening) aiCheck?.lastLabelProbabilities.orEmpty() else emptyMap(),
+      labelBuffers = primaryOnly(ai.labelBufferSnapshot()),
+      labelProbabilities = if (listening) primaryOnly(ai.lastLabelProbabilities) else emptyMap(),
     )
   }
 
+  private fun primaryOnly(values: Map<String, Double>): Map<String, Double> = values.filterKeys {
+    '/' !in it
+  }
+
   private fun advance(shardPlayer: ShardPlayer) {
-    val config = settings()
     val state = shardPlayer.mitigation
     val applying = state.appliedTier
     val wasApplied = state.applied
@@ -129,9 +147,7 @@ class MitigationRuntime(
     val peak = state.peakScore
 
     val facts = factsFor(shardPlayer)
-    val enoughAnswers = state.answers >= config.score.minAnswers
-    val reason =
-      skip.skipReason(shardPlayer) ?: (SkipReason.TOO_FEW_ANSWERS.takeIf { !enoughAnswers })
+    val reason = skip.skipReason(shardPlayer)
 
     val change = engine.evaluate(state, facts, reason)
     if (state.applied !== wasApplied && wasApplied != null && startedAt != 0L) {
@@ -140,9 +156,8 @@ class MitigationRuntime(
     trackPeak(state, wasApplied)
 
     countTowardsRepeat(shardPlayer)
-    damageProcessor.refresh(shardPlayer)
 
-    if (change != null) announce(shardPlayer, change)
+    if (change != null) announce(shardPlayer, change, applying)
     tellStaff(shardPlayer, applying)
   }
 
@@ -164,12 +179,17 @@ class MitigationRuntime(
   }
 
   private fun trackPeak(state: MitigationState, wasApplied: MitigationRule?) {
-    state.peakScore =
-      when {
-        state.applied == null -> 0.0
-        state.applied !== wasApplied -> state.score
-        else -> maxOf(state.peakScore, state.score)
-      }
+    val score = state.score
+    state.updatePhase { phase ->
+      phase.copy(
+        peakScore =
+          when {
+            phase.applied == null -> 0.0
+            phase.applied !== wasApplied -> score
+            else -> maxOf(phase.peakScore, score)
+          }
+      )
+    }
   }
 
   private fun log(
@@ -200,15 +220,8 @@ class MitigationRuntime(
         async,
       )
     }
-    state.matched = null
-    state.applied = null
-    state.onsetAtMillis = clock()
-    state.holdUntilMillis = clock()
-    state.appliedAtMillis = 0L
-    state.peakScore = 0.0
-    state.spent = null
-    state.activeEffects = emptyMap()
-    shardPlayer.combat.damageMultiplier = 1.0
+    val now = clock()
+    state.updatePhase { RulePhase(onsetAtMillis = now, holdUntilMillis = now) }
   }
 
   private fun tellStaff(shardPlayer: ShardPlayer, was: MitigationTier) {
@@ -217,7 +230,7 @@ class MitigationRuntime(
     if (now == was || !now.atLeast(FIRST_GAMEPLAY_TIER) || now.ordinal <= was.ordinal) return
 
     alertManager.send(
-      MessageUtil.getMessage(
+      messages.getMessage(
         Message.MITIGATIONS_ALERT,
         "player",
         shardPlayer.player.name,
@@ -232,21 +245,21 @@ class MitigationRuntime(
     )
   }
 
-  private fun announce(shardPlayer: ShardPlayer, change: RuleChange) {
+  private fun announce(shardPlayer: ShardPlayer, change: RuleChange, previous: MitigationTier) {
     val state = shardPlayer.mitigation
     debugManager.log(
       DebugCategory.MITIGATION,
       "${shardPlayer.player.name} ${change.from ?: "-"} -> ${change.to ?: "-"} " +
         "at ${format(state.score)}: ${change.reason}",
     )
-    shardPlayer.eventBus.post(
-      MitigationRuleEvent(
-        shardPlayer.uuid,
-        shardPlayer.player.name,
-        change.from ?: NO_RULE,
-        change.to ?: NO_RULE,
-        state.score,
-        change.reason,
+    events.publish(
+      MitigationChangeEventImpl(
+        sessions.of(shardPlayer),
+        apiTier(previous.name) ?: ac.shard.api.mitigation.MitigationTier.NONE,
+        apiTier(state.appliedTier.name) ?: ac.shard.api.mitigation.MitigationTier.NONE,
+        change.from,
+        change.to,
+        null,
       )
     )
   }

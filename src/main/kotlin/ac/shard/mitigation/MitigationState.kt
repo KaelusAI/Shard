@@ -21,6 +21,19 @@ import java.util.Locale
 
 data class HoldAccounting(val keys: Set<HoldKey>, val coverMillis: Long, val forgetRate: Double)
 
+data class RulePhase(
+  val matched: MitigationRule? = null,
+  val applied: MitigationRule? = null,
+  val matchedSinceMillis: Long = 0L,
+  val onsetAtMillis: Long = 0L,
+  val holdUntilMillis: Long = 0L,
+  val appliedAtMillis: Long = 0L,
+  val peakScore: Double = 0.0,
+  val answersAtApply: Long = 0L,
+  val spent: MitigationRule? = null,
+  val activeEffects: Map<EffectChannel, Double> = emptyMap(),
+)
+
 data class ScoreHistory(val sessions: Int, val days: Int, val lastDay: Long) {
   companion object {
     val EMPTY = ScoreHistory(0, 0, 0L)
@@ -51,6 +64,7 @@ data class WindowShape(val low: Long, val middle: Long, val high: Long) {
 
 @Suppress("TooManyFunctions")
 class MitigationState {
+  private var scoreCleared = false
 
   @Volatile
   var score: Double = 0.0
@@ -60,25 +74,33 @@ class MitigationState {
   var answers: Long = 0L
     private set
 
-  @Volatile var matched: MitigationRule? = null
+  @Volatile
+  var phase: RulePhase = RulePhase()
+    private set
 
-  @Volatile var applied: MitigationRule? = null
+  val matched: MitigationRule?
+    get() = phase.matched
 
-  @Volatile var matchedSinceMillis: Long = 0L
+  val applied: MitigationRule?
+    get() = phase.applied
 
-  @Volatile var onsetAtMillis: Long = 0L
+  val matchedSinceMillis: Long
+    get() = phase.matchedSinceMillis
 
-  @Volatile var holdUntilMillis: Long = 0L
+  val onsetAtMillis: Long
+    get() = phase.onsetAtMillis
 
-  @Volatile var appliedAtMillis: Long = 0L
+  val appliedAtMillis: Long
+    get() = phase.appliedAtMillis
 
-  @Volatile var peakScore: Double = 0.0
+  val peakScore: Double
+    get() = phase.peakScore
 
-  @Volatile var answersAtApply: Long = 0L
+  val spent: MitigationRule?
+    get() = phase.spent
 
-  @Volatile var spent: MitigationRule? = null
-
-  @Volatile var activeEffects: Map<String, Double> = emptyMap()
+  val activeEffects: Map<EffectChannel, Double>
+    get() = phase.activeEffects
 
   @Volatile var lastAnswerAtMillis: Long = 0L
 
@@ -92,6 +114,18 @@ class MitigationState {
   private val histogram = IntArray(ScoreMath.HISTOGRAM_BINS)
   private val held = HashMap<HoldKey, Long>()
 
+  @Synchronized
+  fun <T> transition(change: (RulePhase) -> Pair<RulePhase, T>): T {
+    val (next, result) = change(phase)
+    phase = next
+    return result
+  }
+
+  @Synchronized
+  fun updatePhase(change: (RulePhase) -> RulePhase) {
+    phase = change(phase)
+  }
+
   val appliedTier: MitigationTier
     get() = applied?.level ?: MitigationTier.NONE
 
@@ -101,17 +135,24 @@ class MitigationState {
   val tierName: String
     get() = appliedTier.name.lowercase(Locale.US)
 
-  val effects: Set<String>
+  val effects: Set<EffectChannel>
     get() = applied?.effects?.channels ?: emptySet()
 
-  fun multiplierFor(channel: String): Double = activeEffects[channel] ?: 1.0
+  fun multiplierFor(channel: EffectChannel): Double = activeEffects[channel] ?: 1.0
 
-  fun chanceFor(channel: String): Double = activeEffects[channel] ?: 0.0
+  fun chanceFor(channel: EffectChannel): Double = activeEffects[channel] ?: 0.0
 
   @Synchronized
-  fun record(contribution: Double, probability: Double, now: Long, settings: ScoreSettings) {
+  fun record(
+    contribution: Double,
+    probability: Double,
+    now: Long,
+    settings: ScoreSettings,
+    answered: Boolean = true,
+  ) {
     leak(now, settings)
     score = ScoreMath.clampToRange(score + contribution, settings)
+    if (!answered) return
     answers++
     histogram[ScoreMath.bin(probability)]++
   }
@@ -179,6 +220,7 @@ class MitigationState {
 
   @Synchronized
   fun restore(value: Double, now: Long, settings: ScoreSettings) {
+    if (scoreCleared) return
     score = ScoreMath.clampToRange(value.coerceAtMost(settings.capOnRestore), settings)
     lastLeakMillis = now
   }
@@ -189,6 +231,7 @@ class MitigationState {
 
   @Synchronized
   fun clearScore(now: Long) {
+    scoreCleared = true
     score = 0.0
     lastLeakMillis = now
     held.clear()

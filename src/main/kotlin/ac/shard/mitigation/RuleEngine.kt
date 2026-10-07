@@ -19,75 +19,85 @@
 
 package ac.shard.mitigation
 
+import ac.shard.utils.WallClock
 import kotlin.random.Random
 
 data class RuleChange(val from: String?, val to: String?, val reason: String)
 
 class RuleEngine(
-  private val settings: () -> MitigationSettings,
-  private val clock: () -> Long,
-  private val random: Random = Random.Default,
+  private val settings: MitigationSettingsSource,
+  private val clock: WallClock,
+  private val random: Random,
 ) {
 
   fun evaluate(state: MitigationState, facts: RuleFacts, skip: SkipReason?): RuleChange? {
     val config = settings()
     val now = clock()
     state.leak(now, config.score)
-
-    if (skip != null || !config.enabled) {
-      val stopped = release(state, now, skip?.name?.lowercase() ?: TURNED_OFF)
-      state.activeEffects = emptyMap()
-      return stopped
+    return state.transition { phase ->
+      if (skip != null || !config.enabled) {
+        val (stopped, change) = release(phase, now, skip?.name?.lowercase() ?: TURNED_OFF)
+        stopped.copy(activeEffects = emptyMap()) to change
+      } else {
+        step(phase, facts, config.rules, now)
+      }
     }
-
-    val pick = pick(state, facts, config.rules, now)
-    var change: RuleChange? = null
-
-    if (pick !== state.matched) {
-      val from = state.matched
-      state.matched = pick
-      state.matchedSinceMillis = now
-      state.onsetAtMillis = now + delayFor(from, pick)
-      state.holdUntilMillis = now + (pick?.timing?.holdMillis ?: 0L)
-      change = RuleChange(from?.id, pick?.id, reasonFor(from, pick))
-    }
-
-    settle(state, facts, now)
-    restate(state, facts)
-    return change
   }
 
-  private fun pick(
-    state: MitigationState,
+  private fun step(
+    start: RulePhase,
     facts: RuleFacts,
     rules: List<MitigationRule>,
     now: Long,
-  ): MitigationRule? {
-    if (state.spent?.matches(facts) == false) state.spent = null
-    val best = rules.firstOrNull { it.matches(facts) && it !== state.spent }
-    val current = state.matched ?: return best
-
-    if (best != null && best.order < current.order) return best
-    if (expired(state, current, facts, now)) {
-      state.spent = current
-      return best.takeIf { it !== current }
+  ): Pair<RulePhase, RuleChange?> {
+    val (pick, picked) = pick(start, facts, rules, now)
+    var phase = picked
+    var change: RuleChange? = null
+    if (pick !== phase.matched) {
+      val from = phase.matched
+      phase =
+        phase.copy(
+          matched = pick,
+          matchedSinceMillis = now,
+          onsetAtMillis = now + delayFor(from, pick),
+          holdUntilMillis = now + (pick?.timing?.holdMillis ?: 0L),
+        )
+      change = RuleChange(from?.id, pick?.id, reasonFor(from, pick))
     }
-    if (!current.releases(facts)) return current
-    if (now < state.holdUntilMillis) return current
-    return best
+    phase = settle(phase, facts, now)
+    return phase.copy(activeEffects = phase.applied?.effects?.resolve(facts) ?: emptyMap()) to
+      change
+  }
+
+  private fun pick(
+    phase: RulePhase,
+    facts: RuleFacts,
+    rules: List<MitigationRule>,
+    now: Long,
+  ): Pair<MitigationRule?, RulePhase> {
+    val p = if (phase.spent?.matches(facts) == false) phase.copy(spent = null) else phase
+    val best = rules.firstOrNull { it.matches(facts) && it !== p.spent }
+    val current = p.matched ?: return best to p
+
+    if (best != null && best.order < current.order) return best to p
+    if (expired(p, current, facts, now))
+      return best.takeIf { it !== current } to p.copy(spent = current)
+    if (!current.releases(facts)) return current to p
+    if (now < p.holdUntilMillis) return current to p
+    return best to p
   }
 
   private fun expired(
-    state: MitigationState,
+    phase: RulePhase,
     current: MitigationRule,
     facts: RuleFacts,
     now: Long,
   ): Boolean {
-    if (state.appliedAtMillis == 0L) return false
+    if (phase.appliedAtMillis == 0L) return false
     val span = current.timing.maxMillis
     val windows = current.timing.maxAnswers
-    return (span > 0L && now - state.appliedAtMillis >= span) ||
-      (windows > 0L && facts.answers - state.answersAtApply >= windows)
+    return (span > 0L && now - phase.appliedAtMillis >= span) ||
+      (windows > 0L && facts.answers - phase.answersAtApply >= windows)
   }
 
   private fun delayFor(from: MitigationRule?, to: MitigationRule?): Long {
@@ -100,31 +110,29 @@ class RuleEngine(
     return if (high <= low) low else random.nextLong(low, high + 1)
   }
 
-  private fun settle(state: MitigationState, facts: RuleFacts, now: Long) {
-    if (state.applied === state.matched) return
-    if (now < state.onsetAtMillis) return
-
-    val target = state.matched
-    if (target != null && !target.timing.startsInCombat && facts.inCombat) return
-
-    state.applied = target
-    state.appliedAtMillis = if (target == null) 0L else now
-    state.answersAtApply = facts.answers
+  private fun settle(phase: RulePhase, facts: RuleFacts, now: Long): RulePhase {
+    if (phase.applied === phase.matched || now < phase.onsetAtMillis) return phase
+    val target = phase.matched
+    if (target != null && !target.timing.startsInCombat && facts.inCombat) return phase
+    return phase.copy(
+      applied = target,
+      appliedAtMillis = if (target == null) 0L else now,
+      answersAtApply = facts.answers,
+    )
   }
 
-  private fun restate(state: MitigationState, facts: RuleFacts) {
-    state.activeEffects = state.applied?.effects?.resolve(facts) ?: emptyMap()
-  }
-
-  private fun release(state: MitigationState, now: Long, reason: String): RuleChange? {
-    if (state.matched == null && state.applied == null) return null
-    val from = state.matched ?: state.applied
-    state.matched = null
-    state.applied = null
-    state.onsetAtMillis = now
-    state.holdUntilMillis = now
-    state.appliedAtMillis = 0L
-    return RuleChange(from?.id, null, reason)
+  private fun release(phase: RulePhase, now: Long, reason: String): Pair<RulePhase, RuleChange?> {
+    if (phase.matched == null && phase.applied == null) return phase to null
+    val from = phase.matched ?: phase.applied
+    val stopped =
+      phase.copy(
+        matched = null,
+        applied = null,
+        onsetAtMillis = now,
+        holdUntilMillis = now,
+        appliedAtMillis = 0L,
+      )
+    return stopped to RuleChange(from?.id, null, reason)
   }
 
   private fun reasonFor(from: MitigationRule?, to: MitigationRule?): String =

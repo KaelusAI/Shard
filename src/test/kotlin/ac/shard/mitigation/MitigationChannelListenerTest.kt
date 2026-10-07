@@ -19,6 +19,7 @@ package ac.shard.mitigation
 
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
+import ac.shard.utils.WallClock
 import io.mockk.every
 import io.mockk.mockk
 import java.util.UUID
@@ -44,7 +45,9 @@ class MitigationChannelListenerTest {
 
   private fun fixture(projectileMultiplier: Double): Fixture {
     val state = MitigationState()
-    state.activeEffects = mapOf(MitigationSettings.PROJECTILE to projectileMultiplier)
+    state.updatePhase {
+      it.copy(activeEffects = mapOf(EffectChannel.PROJECTILE to projectileMultiplier))
+    }
     val shooter = mockk<Player>(relaxed = true) { every { uniqueId } returns shooterId }
     val shardPlayer =
       mockk<ShardPlayer>(relaxed = true) {
@@ -53,8 +56,10 @@ class MitigationChannelListenerTest {
       }
     val playerDataManager =
       mockk<PlayerDataManager>(relaxed = true) { every { getPlayer(shooter) } returns shardPlayer }
-    val stamps = HitStamps()
-    return Fixture(MitigationChannelListener(playerDataManager, stamps), stamps, shooter)
+    val stamps = HitStamps(WallClock.SYSTEM)
+    val listener =
+      MitigationChannelListener(playerDataManager, stamps, mockk(relaxed = true), mockk())
+    return Fixture(listener, stamps, shooter)
   }
 
   private fun arrowFrom(source: ProjectileSource?): Arrow =
