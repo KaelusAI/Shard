@@ -2,7 +2,7 @@
 # Copyright 2026 KaelusAI, DefineOutside and contributors, Licensed under GPLv3.
 
 # Do not change this value manually.
-config-version: 5
+config-version: 6
 
 # Locale: en, ru
 locale: "en"
@@ -14,12 +14,12 @@ ai:
   server: "https://api.shard.ac/v2/inference"
   # Compress request bodies with gzip. Cuts bandwidth up to 6x.
   gzip: true
-  # Overwritten by the panel while the server is linked via /shard connect.
-  inference:
-    pre-window: 32
-    post-window: 32
-    # Minimum ticks between inference requests. Set <= post-window to send one per attack.
-    step: 32
+  # Narrows the models the server's profile enables. A model can be turned off, or one of its roles
+  # (alert, mitigate, punish) switched off. Nothing here can enable a model the profile does not list.
+  # models:
+  #   fast: off
+  #   deep:
+  #     punish: false
   collect:
     # Ticks captured before and after each attack when recording with /shard collect.
     pre-window: 128
@@ -29,24 +29,8 @@ ai:
     names:
       # aim: "Aimbot"
       # trigger: "Auto Clicker"
-    # auto | single | multilabel | multiclass. Overrides the mode the server sends.
-    # multiclass needs the model to state its clean labels and a threshold per label.
-    mode: auto
     # auto | always | never. never puts every label into one shared buffer and one AI check.
     split: auto
-    # Cap on labels tracked per player. The weakest buffer is evicted first, and one at the
-    # flag is never dropped.
-    max-tracked: 32
-  buffer:
-    # The violation level (VL) at which a flag will be triggered.
-    flag: 50.0
-    # The value to which the buffer is reset after a flag.
-    reset-on-flag: 25.0
-    # The multiplier for increasing the buffer when cheat probability is high (>0.9).
-    # (probability - 0.9) * multiplier
-    multiplier: 100.0
-    # The amount subtracted from the buffer when cheat probability is low (<0.1).
-    decrease: 1.0
   worldguard:
     # Enable WorldGuard region checking?
     enabled: true
@@ -76,20 +60,10 @@ ai:
     # Multiplier for the time to wait for each subsequent error.
     multiplier: 2.0
   batch:
-    # Send inferences in batches
-    enabled: true
     # Max items per batch (server limit 256)
     max-size: 32
     # Flush partial batch after this delay
     max-delay-ms: 50
-  retry:
-    # Total attempts (including initial)
-    max-attempts: 3
-    initial-delay-ms: 500
-    max-delay-ms: 5000
-    multiplier: 2.0
-    # Jitter (0.0 disables)
-    jitter: 0.25
   persistent-buffer:
     enabled: true
     # Drop saved buffer after N hours offline
@@ -102,23 +76,6 @@ ai:
     disconnect-window-seconds: 300
     # Skip save below this value
     save-threshold: 1.0
-
-# Extra events that start recording a window. A melee hit on a player always starts one and is not
-# listed here. Windows from these events are recorded but not sent to the model.
-experimental:
-  extra-window-starts:
-    # Melee hit on a non-player living entity.
-    melee-living-other: false
-    # Hit on an end crystal.
-    attack-end-crystal: false
-    # Hit on any other entity, or on an id the plugin does not track.
-    attack-entity-other: false
-    # Charging or detonating a respawn anchor.
-    use-respawn-anchor: false
-    # Placing an end crystal on obsidian or bedrock.
-    place-end-crystal: false
-    # An explosion reached the player.
-    explosion-received: false
 
 exemptions:
   # Skip all checks for Bedrock players connecting through Geyser/Floodgate?
@@ -139,6 +96,14 @@ telemetry:
   # entry showing the total player count.
   # The SHARD_GROUP_ID environment variable overrides this.
   group-id: ""
+
+cloud:
+  # Sync punishments.yml with the Shard panel.
+  # Commands stay on this server, the panel sees only their names.
+  #   sync    edit in the panel and here. A setting changed in both keeps the value from this server
+  #   upload  the panel shows punishments but cannot change them
+  #   off     punishments are not sent to the panel
+  punishments: sync
 
 client-brand:
   # This means it won't broadcast their brand to operators if the brand matches the following regexes
@@ -179,8 +144,6 @@ database:
 editor:
   # Every result waits for the server console and nothing is applied from in-game chat.
   console-only: false
-  # The same, but only for results that add a console command to punishments.yml.
-  console-for-commands: false
 
 # Redis connection, used by the network section below.
 redis:
@@ -220,10 +183,6 @@ network:
     ttl-seconds: 30
     # How often this server republishes its suspicious players, in seconds.
     refresh-seconds: 10
-
-suspicious:
-  alerts:
-    buffer: 25.0
 
 # Should the duplicate movement packet be cancelled?
 # Mojang fixed this in 1.21. This packet was introduced as part of the bucket desync workaround.

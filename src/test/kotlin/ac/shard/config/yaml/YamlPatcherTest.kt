@@ -127,7 +127,7 @@ class YamlPatcherTest {
   fun `lookups are case sensitive`() {
     val tree = YamlPatcher.read(bundled("punishments.yml"))
 
-    assertTrue(tree.find("Punishments") != null, "the file spells it with a capital P")
-    assertTrue(tree.find("punishments") == null, "a lowercase path must not resolve")
+    assertTrue(tree.find("groups/general") != null, "the file spells it in lowercase")
+    assertTrue(tree.find("groups/GENERAL") == null, "an uppercase path must not resolve")
   }
 }

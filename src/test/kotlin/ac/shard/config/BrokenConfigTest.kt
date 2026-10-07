@@ -49,15 +49,19 @@ class BrokenConfigTest {
   fun `a config that stops parsing does not wipe the loaded values`(@TempDir dir: Path) {
     val (plugin, logger) = runtime(dir)
     val manager = ConfigManager(plugin, CredentialsStore(plugin))
-    val flagBefore = manager.config.getDouble("ai.buffer.flag", -1.0)
-    assertTrue(flagBefore > 0.0, "the bundled config should carry a flag threshold")
+    val flagBefore = manager.config.getDouble("ai.persistent-buffer.cap-on-restore", -1.0)
+    assertTrue(flagBefore > 0.0, "the bundled config should carry a restore cap")
+    val generationBefore = manager.settings.localAi.generation
 
     dir.resolve("config.yml").writeText("ai:\n  buffer:\n   flag: [unclosed\n\tenabled: true\n")
     manager.reloadConfig()
 
+    assertEquals(generationBefore + 1, manager.settings.localAi.generation)
+    assertEquals(flagBefore, manager.settings.buffer.cap)
+
     assertEquals(
       flagBefore,
-      manager.config.getDouble("ai.buffer.flag", -1.0),
+      manager.config.getDouble("ai.persistent-buffer.cap-on-restore", -1.0),
       "a broken reload must keep the values that were already loaded",
     )
     io.mockk.verify { logger.severe(match<String> { it.contains("could not be parsed") }) }

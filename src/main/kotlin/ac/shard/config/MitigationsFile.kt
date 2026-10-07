@@ -20,6 +20,7 @@
 package ac.shard.config
 
 import ac.shard.ai.label.LabelKey
+import ac.shard.mitigation.EffectChannel
 import ac.shard.mitigation.Fact
 import ac.shard.mitigation.Fold
 import ac.shard.mitigation.MitigationRule
@@ -140,12 +141,12 @@ object MitigationsFile {
     node: ConfigurationNode,
     id: String,
     complaints: MutableList<String>,
-  ): Map<String, Double> {
-    val effects = linkedMapOf<String, Double>()
+  ): Map<EffectChannel, Double> {
+    val effects = linkedMapOf<EffectChannel, Double>()
     node.childrenMap().forEach { (key, child) ->
-      val channel = key.toString().lowercase()
-      if (channel !in MitigationSettings.CHANNELS) {
-        complaints += "rule $id sets an unknown channel $channel"
+      val channel = EffectChannel.of(key.toString())
+      if (channel == null) {
+        complaints += "rule $id sets an unknown channel ${key.toString().lowercase()}"
         return@forEach
       }
       effects[channel] = clampChannel(channel, child.getDouble(1.0))
@@ -166,13 +167,14 @@ object MitigationsFile {
     val pick = selector(fact, node, "rule $id", complaints, foldAllowed = false) ?: return null
     val from = node.node("from").getDouble(0.0)
     val to = node.node("to").getDouble(1.0)
-    val ranges = linkedMapOf<String, Pair<Double, Double>>()
+    val ranges = linkedMapOf<EffectChannel, Pair<Double, Double>>()
     node.childrenMap().forEach { (key, child) ->
-      val channel = key.toString().lowercase()
-      if (channel in MitigationSettings.CHANNELS) {
+      val channel = EffectChannel.of(key.toString())
+      if (channel != null) {
         val pair = numbers(child)
         if (pair.size != 2) {
-          complaints += "rule $id needs two numbers for $channel, one for each end of the scale"
+          complaints +=
+            "rule $id needs two numbers for ${channel.key}, one for each end of the scale"
         } else {
           ranges[channel] = clampChannel(channel, pair[0]) to clampChannel(channel, pair[1])
         }
@@ -231,8 +233,8 @@ object MitigationsFile {
     return Selector(null, fold)
   }
 
-  private fun clampChannel(channel: String, value: Double): Double =
-    if (channel == MitigationSettings.INCOMING) {
+  private fun clampChannel(channel: EffectChannel, value: Double): Double =
+    if (channel == EffectChannel.INCOMING) {
       value.coerceIn(1.0, MitigationSettings.MAX_INCOMING)
     } else {
       value.coerceIn(0.0, 1.0)

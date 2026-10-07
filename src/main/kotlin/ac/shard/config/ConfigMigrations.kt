@@ -20,14 +20,33 @@ package ac.shard.config
 import java.io.File
 
 internal object ConfigMigrations {
-  const val LATEST_VERSION = 5
-  const val MONITOR_LATEST_VERSION = 2
+  const val LATEST_VERSION = 6
+  const val MONITOR_LATEST_VERSION = 3
   const val MITIGATIONS_LATEST_VERSION = 2
 
   private val DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH =
     listOf("debug/categories/api-error/timeout", "debug/categories/api-error/service-unavailable")
 
   private const val VERSION_WITH_ATTACK_WINDOWS = 4
+
+  private const val MONITOR_VERSION_WITH_MODEL = 3
+
+  private val MONITOR_V3_REFRESHED =
+    listOf(
+      "format/dmg/hide-when-default",
+      "view/position",
+      "modes",
+      "outputs/chat/live/cooldown-ticks",
+      "outputs/sidebar/lines",
+      "outputs/chat/live/all-labels-template",
+      "outputs/chat/live/flagged-all-labels-template",
+      "theme/calm/prob",
+      "theme/vivid/prob",
+      "theme/minimal/prob",
+      "theme/calm/models",
+      "theme/vivid/models",
+      "theme/minimal/models",
+    )
 
   private val LATEST_BY_FILE =
     mapOf(
@@ -66,6 +85,11 @@ internal object ConfigMigrations {
       drops += DEBUG_CATEGORIES_UNMUTED_BY_DROPPING_THE_SWITCH
       drops += "ai/damage-reduction"
       drops += "mitigation"
+      drops += listOf("ai/buffer", "ai/labels/mode", "ai/labels/max-tracked")
+      drops += listOf("experimental", "suspicious", "editor/console-for-commands")
+    }
+    if (fileName == "monitor.yml" && currentVersion < MONITOR_VERSION_WITH_MODEL) {
+      drops += MONITOR_V3_REFRESHED
     }
     return drops
   }

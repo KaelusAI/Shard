@@ -108,12 +108,13 @@ class LocaleManager(private val plugin: Shard, private val configManager: Config
   }
 
   private fun resolveNode(key: Message): ConfigurationNode {
-    val path = key.path
-    val node = messagesConfig.node(path)
-    if (!node.empty()) {
-      return node
+    val node = messagesConfig.node(key.path)
+    val legacy = key.legacyPath?.let(messagesConfig::node)
+    return when {
+      !node.empty() -> node
+      legacy != null && !legacy.empty() -> legacy
+      else -> firstPresent(key.path, defaultLocaleMessages, defaultMessages) ?: node
     }
-    return firstPresent(path, defaultLocaleMessages, defaultMessages) ?: node
   }
 
   private fun firstPresent(path: String, vararg sources: ConfigView?): ConfigurationNode? {

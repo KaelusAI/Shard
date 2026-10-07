@@ -148,6 +148,10 @@ class ConfigMigrationsTest {
     )
     assertContains(ConfigMigrations.forcedDropsForUpgradeFrom(0), "config-version")
     assertContains(ConfigMigrations.forcedDropsForUpgradeFrom(3), "ai/continuous")
+    assertContains(
+      ConfigMigrations.forcedDropsForUpgradeFrom(2, "monitor.yml"),
+      "outputs/sidebar/lines",
+    )
   }
 
   @Test
@@ -295,7 +299,7 @@ class ConfigMigrationsTest {
     val merged = userFile.readText()
     assertContains(merged, "update: 5")
     assertContains(merged, """prefix: "MYPREFIX"""")
-    assertContains(merged, "compact: [prob, name]")
+    assertContains(merged, "compact: [name, prob, buffer, models,")
     assertContains(merged, "config-version: ${ConfigMigrations.MONITOR_LATEST_VERSION}")
     assertContains(merged, "per-player: true")
     assertContains(merged, "theme:")
@@ -350,7 +354,7 @@ class ConfigMigrationsTest {
         .trimIndent()
     )
 
-    assertTrue(renameCrossServerToNetwork(file))
+    assertTrue(renameLegacyNetworkSection(file))
 
     val moved = file.readText()
     assertContains(moved, """name: "PvP"""")
@@ -382,7 +386,7 @@ class ConfigMigrationsTest {
         .trimIndent() + "\n"
     file.writeText(before)
 
-    assertTrue(renameCrossServerToNetwork(file))
+    assertTrue(renameLegacyNetworkSection(file))
 
     assertEquals(
       before
@@ -404,7 +408,7 @@ class ConfigMigrationsTest {
     file.writeText(legacy)
     assertEquals(3, ConfigMigrations.readVersion(file))
 
-    renameCrossServerToNetwork(file)
+    renameLegacyNetworkSection(file)
     runMigration(file)
 
     val merged = file.readText()
@@ -431,7 +435,7 @@ class ConfigMigrationsTest {
     file.writeText(legacy)
     assertContains(legacy, "timeout: true", ignoreCase = false)
 
-    renameCrossServerToNetwork(file)
+    renameLegacyNetworkSection(file)
     runMigration(file)
 
     val merged = file.readText()
@@ -455,7 +459,7 @@ class ConfigMigrationsTest {
     file.writeText(legacy)
     assertContains(legacy, "damage-reduction:")
 
-    renameCrossServerToNetwork(file)
+    renameLegacyNetworkSection(file)
     runMigration(file)
 
     val merged = file.readText()
@@ -497,6 +501,6 @@ class ConfigMigrationsTest {
     val file = dir.resolve("config.yml").toFile()
     file.writeText("network:\n  enabled: true\n  name: \"PvP\"\n")
 
-    assertFalse(renameCrossServerToNetwork(file))
+    assertFalse(renameLegacyNetworkSection(file))
   }
 }

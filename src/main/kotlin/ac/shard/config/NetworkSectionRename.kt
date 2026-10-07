@@ -29,7 +29,7 @@ private val RENAMES =
     "cross-server" to "network",
   )
 
-internal fun renameCrossServerToNetwork(file: File): Boolean {
+internal fun renameLegacyNetworkSection(file: File): Boolean {
   val tree = if (file.exists()) runCatching { YamlPatcher.read(file) }.getOrNull() else null
   val worthMoving = tree?.find("cross-server") != null && tree.find("network") == null
   return if (!worthMoving) {

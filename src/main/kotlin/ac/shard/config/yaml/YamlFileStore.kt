@@ -17,8 +17,8 @@
  */
 package ac.shard.config.yaml
 
+import ac.shard.utils.AtomicFiles
 import java.io.File
-import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermissions
@@ -135,28 +135,7 @@ internal class YamlFileStore(
   }
 
   private fun replace(target: File, body: String) {
-    val tmp = File(target.parentFile, "${target.name}.tmp")
-    try {
-      Files.deleteIfExists(tmp.toPath())
-      tmp.writeText(body)
-      restrict(tmp)
-      moveIntoPlace(tmp, target)
-    } finally {
-      tmp.delete()
-    }
-  }
-
-  private fun moveIntoPlace(tmp: File, target: File) {
-    try {
-      Files.move(
-        tmp.toPath(),
-        target.toPath(),
-        StandardCopyOption.ATOMIC_MOVE,
-        StandardCopyOption.REPLACE_EXISTING,
-      )
-    } catch (_: AtomicMoveNotSupportedException) {
-      Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
-    }
+    AtomicFiles.replace(target.toPath(), ownerOnly = true) { Files.writeString(it, body) }
   }
 
   private fun restrict(target: File) {
