@@ -17,7 +17,7 @@ BuildConfig.init(project)
 
 group = "ac.shard"
 
-version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.0.0"
+version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.1.0"
 
 repositories {
   mavenCentral()
