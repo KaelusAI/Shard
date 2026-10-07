@@ -25,7 +25,7 @@ import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.MonitorOutputRegistry
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import java.util.Locale
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
@@ -37,28 +37,29 @@ import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
 
 class MonitorInfoCommand(
+  private val messages: Messages,
   private val settingsService: MonitorSettingsService,
   private val hudService: MonitorHudService,
   private val registry: MonitorOutputRegistry,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
     monitorCommand(manager, path = listOf("output")) {
-      handler(this@MonitorInfoCommand::showOutputs)
+      handler { showOutputs(it) }
     }
     monitorCommand(manager, path = listOf("settings")) {
-      handler(this@MonitorInfoCommand::showSettings)
+      handler { showSettings(it) }
     }
     monitorCommand(manager, path = listOf("help"), playerOnly = false) {
-      handler(this@MonitorInfoCommand::showHelp)
+      handler { showHelp(it) }
     }
   }
 
   private fun showOutputs(context: CommandContext<Sender>) {
     val sender = context.sender()
     val player = sender.player ?: return
-    MessageUtil.sendMessage(player, MessageUtil.getMessage(Message.MONITOR_OUTPUT_HEADER))
+    messages.sendMessage(player, messages.getMessage(Message.MONITOR_OUTPUT_HEADER))
     MonitorOutputKind.entries.forEach { kind ->
-      MessageUtil.sendMessage(player, outputRow(player, kind))
+      messages.sendMessage(player, outputRow(player, kind))
     }
   }
 
@@ -66,28 +67,29 @@ class MonitorInfoCommand(
     val sender = context.sender()
     val player = sender.player ?: return
     val settings = settingsService.getSettings(player.uniqueId)
-    MessageUtil.sendMessage(player, MessageUtil.getMessage(Message.MONITOR_SETTINGS_HEADER))
+    messages.sendMessage(player, messages.getMessage(Message.MONITOR_SETTINGS_HEADER))
     settingRows(settings).forEach { (key, value) ->
-      MessageUtil.sendMessage(player, settingRow(key, value))
+      messages.sendMessage(player, settingRow(key, value))
     }
-    MessageUtil.sendMessage(player, MessageUtil.getMessage(Message.MONITOR_SETTINGS_HINT))
+    messages.sendMessage(player, messages.getMessage(Message.MONITOR_SETTINGS_HINT))
   }
 
   private fun showHelp(context: CommandContext<Sender>) {
-    MessageUtil.sendMessageList(context.sender().nativeSender, Message.MONITOR_HELP)
+    messages.sendMessageList(context.sender().nativeSender, Message.MONITOR_HELP)
   }
 
   private fun outputRow(player: Player, kind: MonitorOutputKind): Component =
-    MessageUtil.getMessage(
+    messages
+      .getMessage(
         Message.MONITOR_OUTPUT_ENTRY,
         TagResolver.resolver(
           Placeholder.unparsed("output", kind.key),
-          Placeholder.component("status", MessageUtil.getMessage(statusKey(player, kind))),
+          Placeholder.component("status", messages.getMessage(statusKey(player, kind))),
         ),
       )
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(Message.MONITOR_OUTPUT_ENTRY_HOVER, "output", kind.key)
+          messages.getMessage(Message.MONITOR_OUTPUT_ENTRY_HOVER, "output", kind.key)
         )
       )
       .clickEvent(ClickEvent.runCommand(toggleCommand(player, kind)))
@@ -108,10 +110,11 @@ class MonitorInfoCommand(
     }
 
   private fun settingRow(setting: String, value: String): Component =
-    MessageUtil.getMessage(Message.MONITOR_SETTINGS_ENTRY, "setting", setting, "value", value)
+    messages
+      .getMessage(Message.MONITOR_SETTINGS_ENTRY, "setting", setting, "value", value)
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(Message.MONITOR_SETTINGS_ENTRY_HOVER, "setting", setting)
+          messages.getMessage(Message.MONITOR_SETTINGS_ENTRY_HOVER, "setting", setting)
         )
       )
       .clickEvent(ClickEvent.suggestCommand("/shard monitor set $setting "))

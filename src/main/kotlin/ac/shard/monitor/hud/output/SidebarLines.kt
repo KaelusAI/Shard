@@ -63,7 +63,7 @@ private fun frameLines(frame: MonitorFrame, config: SidebarConfig, budget: Int):
   if (!frame.dataPresent || !frame.aiActive) {
     return listOf(fillFrameTemplate(config.unavailableLine, frame))
   }
-  val room = budget - (config.lines.size - config.lines.count { it.trim() == LABEL_LINES_MARKER })
+  val room = budget - config.lines.count { it.trim() != LABEL_LINES_MARKER }
   val lines = config.lines.flatMap { expand(it, frame, config, room) }
   return if (config.dropBlankLines) lines.filter { it.isNotBlank() } else lines
 }
@@ -75,6 +75,15 @@ private fun expand(
   room: Int,
 ): List<String> =
   when {
+    line.trim() == MODEL_LINE_MARKER ->
+      if (frame.placeholders[MODEL_KEY].isNullOrEmpty()) emptyList()
+      else listOf(fillFrameTemplate(config.modelLine, frame))
+    line.trim() == MODELS_BLOCK_MARKER ->
+      frame.others.flatMap { other ->
+        config.modelsBlock.map { template ->
+          fillTemplate(template) { key -> other[key] ?: frame.placeholders[key] }
+        }
+      }
     line.trim() != LABEL_LINES_MARKER -> listOf(fillFrameTemplate(line, frame))
     frame.labels.isEmpty() -> listOf(fillFrameTemplate(config.noLabelsLine, frame))
     else -> listOf(fillFrameTemplate(config.labelsTitle, frame)) + labelRows(frame, config, room)
@@ -115,6 +124,9 @@ private fun bukkitObjectiveName(viewer: Player, slot: Int): String? {
 }
 
 internal const val LABEL_LINES_MARKER = "{label_lines}"
+internal const val MODEL_LINE_MARKER = "{model_line}"
+private const val MODEL_KEY = "model"
+internal const val MODELS_BLOCK_MARKER = "{models_block}"
 internal const val SIDEBAR_MAX_TARGETS = 4
 private const val SIDEBAR_OBJECTIVE_PREFIX = "shm_"
 private const val SIDEBAR_HASH_LENGTH = 8

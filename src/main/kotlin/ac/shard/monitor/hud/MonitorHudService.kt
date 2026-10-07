@@ -29,7 +29,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.logging.Logger
-import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 
 enum class StartResult {
@@ -50,10 +49,16 @@ class MonitorHudService(
   private val localeManager: LocaleManager,
   private val playerDataManager: PlayerDataManager,
   private val logger: Logger,
+  failures: MonitorOutputFailures,
+  private val server: org.bukkit.Server,
 ) : MonitorOutputFailureSink {
-  private val autoTargets = MonitorAutoTargets(playerDataManager, index)
+  private val autoTargets = MonitorAutoTargets(playerDataManager, index, server)
   private val sessions = ConcurrentHashMap<UUID, MonitorHudSession>()
   private val sessionIds = AtomicLong()
+
+  init {
+    failures.listen(this)
+  }
 
   @Volatile
   var runtimeConfig: MonitorHudRuntimeConfig =
@@ -167,7 +172,7 @@ class MonitorHudService(
   }
 
   private fun reopen(viewer: Player, carried: List<UUID>, mode: MonitorTargetMode) {
-    val players = carried.mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }
+    val players = carried.mapNotNull { server.getPlayer(it) }.filter { it.isOnline }
     val started =
       if (mode.isAuto) {
         start(viewer, null, mode) == StartResult.STARTED

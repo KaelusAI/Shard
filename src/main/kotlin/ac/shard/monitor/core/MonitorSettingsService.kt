@@ -122,7 +122,9 @@ class MonitorSettingsService(
   }
 
   private fun loadFromDatabase(uuid: UUID): MonitorSettings? =
-    databaseManager.database.loadMonitorSettings(uuid)
+    databaseManager.database.loadMonitorSettings(uuid)?.let { stored ->
+      if (stored.models == ModelFilter.UNSET) stored.copy(models = defaults().models) else stored
+    }
 
   private fun readSnapshot(): Snapshot {
     val config = configManager.monitorConfig
@@ -139,6 +141,7 @@ class MonitorSettingsService(
           chatStyle = MonitorChatStyle.fromConfig(config.getString("defaults.chat-style", "live")),
           showCollect = config.getBoolean("defaults.show-collect", true),
           showInference = config.getBoolean("defaults.show-inference", true),
+          models = ModelFilter.parse(config.getString("defaults.models", "all")) ?: ModelFilter.ALL,
         ),
       perPlayer = config.getBoolean("storage.per-player", true),
       prewarmOnJoin = config.getBoolean("storage.prewarm-on-join", true),

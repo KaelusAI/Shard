@@ -17,7 +17,7 @@
  */
 package ac.shard.monitor.core
 
-import ac.shard.ai.label.LabelKey
+import ac.shard.ai.label.DetectionKey
 import java.util.Locale
 
 data class MonitorSettings(
@@ -32,7 +32,52 @@ data class MonitorSettings(
   val showCollect: Boolean = true,
   val showInference: Boolean = true,
   val labelFocus: String = LabelFocus.AUTO,
+  val models: String = ModelFilter.ALL,
 )
+
+object ModelFilter {
+  const val ALL = "all"
+
+  const val PRIMARY = "primary"
+
+  const val UNSET = ""
+
+  fun parse(raw: String?): String? {
+    val value = raw?.trim()?.lowercase(Locale.ROOT) ?: return null
+    return when (value) {
+      ALL -> ALL
+      PRIMARY -> PRIMARY
+      else -> {
+        val ids = value.split(',').map(String::trim).filter(String::isNotEmpty)
+        ids
+          .takeIf { list ->
+            list.isNotEmpty() && list.all { ID.matches(it) && it != ALL && it != PRIMARY }
+          }
+          ?.distinct()
+          ?.sorted()
+          ?.joinToString(",")
+          ?.takeIf { it.length <= MAX_LENGTH }
+      }
+    }
+  }
+
+  fun shows(value: String, modelId: String, primary: Boolean): Boolean =
+    when (value) {
+      ALL,
+      UNSET -> true
+      PRIMARY -> primary
+      else -> modelId.lowercase(Locale.ROOT) in value.split(',')
+    }
+
+  fun describe(value: String): String = value
+
+  fun ids(value: String): List<String> =
+    if (value == ALL || value == PRIMARY || value == UNSET) emptyList() else value.split(',')
+
+  const val MAX_LENGTH = 255
+
+  private val ID = Regex("[a-z0-9_.-]{1,64}")
+}
 
 object LabelFocus {
   const val AUTO = ""
@@ -53,7 +98,7 @@ object LabelFocus {
       "every",
       "both",
       ALL -> ALL
-      else -> LabelKey.canonical(value)
+      else -> DetectionKey.selector(value)
     }
   }
 

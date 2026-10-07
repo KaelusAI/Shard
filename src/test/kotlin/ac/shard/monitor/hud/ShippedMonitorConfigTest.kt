@@ -19,6 +19,7 @@ package ac.shard.monitor.hud
 
 import ac.shard.ai.label.LabelCatalog
 import ac.shard.config.ConfigView
+import ac.shard.monitor.core.MonitorInferenceInfo
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorOutputKind
@@ -51,7 +52,10 @@ class ShippedMonitorConfigTest {
       Logger.getLogger("shipped-monitor-config"),
     )
 
-  private fun frame(showName: MonitorNameMode = MonitorNameMode.ALWAYS): MonitorFrame =
+  private fun frame(
+    showName: MonitorNameMode = MonitorNameMode.ALWAYS,
+    inference: MonitorInferenceInfo? = null,
+  ): MonitorFrame =
     MonitorFrameBuilder(LabelCatalog(local = { emptyMap() }))
       .build(
         MonitorFrameRequest(
@@ -66,6 +70,7 @@ class ShippedMonitorConfigTest {
               rawPing = 57,
               damageMultiplier = 1.0,
               prob90 = 0,
+              inference = inference,
             ),
           settings =
             MonitorSettings(
@@ -80,6 +85,7 @@ class ShippedMonitorConfigTest {
           trend = 0.0,
           selfView = false,
           unavailableHeadline = "no data",
+          collectVisible = true,
         ),
         shipped,
       )
@@ -89,10 +95,18 @@ class ShippedMonitorConfigTest {
     assertEquals(
       "<gray>@Steve</gray><dark_gray> • </dark_gray>" +
         "<bold><white>43%</white></bold><dark_gray> • </dark_gray>" +
-        "<color:#86EFAC>+0.00</color><dark_gray> • </dark_gray>" +
         "<color:#FBBF24>◆ 2.50</color>",
       frame().headline,
     )
+  }
+
+  @Test
+  fun `the shipped compact mode shows the inference status only when detection stopped`() {
+    val running = frame(inference = MonitorInferenceInfo("idle", fault = false)).headline
+    val stopped = frame(inference = MonitorInferenceInfo("paused", fault = true)).headline
+
+    assertTrue("idle" !in running, running)
+    assertTrue(stopped.endsWith("<color:#F87171>err paused</color>"), stopped)
   }
 
   @Test

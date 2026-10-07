@@ -95,7 +95,7 @@ class ScoreboardPacketBridge(private val cache: ComponentCache) {
 
   fun removeEntry(viewer: Player, objective: String, entry: String) {
     val packet =
-      if (supportsFancyText(viewer)) {
+      if (serverSupportsFancyText()) {
         WrapperPlayServerResetScore(entry, objective)
       } else {
         WrapperPlayServerUpdateScore(

@@ -23,7 +23,7 @@ import ac.shard.monitor.hud.MonitorTargetsService
 import ac.shard.monitor.hud.TargetChange
 import ac.shard.monitor.hud.outputCapacity
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.bukkit.entity.Player
 
 internal fun restartIfSessionShapeChanged(
@@ -37,7 +37,7 @@ internal fun restartIfSessionShapeChanged(
   }
 }
 
-internal fun replyToAdd(
+internal fun Messages.replyToAdd(
   viewer: Player,
   target: Player,
   change: TargetChange,
@@ -47,9 +47,9 @@ internal fun replyToAdd(
   when (change) {
     TargetChange.APPLIED -> replyAdded(viewer, target, targets, hudService)
     TargetChange.ALREADY_WATCHED ->
-      MessageUtil.sendMessage(viewer, Message.MONITOR_TARGET_ALREADY, "player", target.name)
+      sendMessage(viewer, Message.MONITOR_TARGET_ALREADY, "player", target.name)
     else ->
-      MessageUtil.sendMessage(
+      sendMessage(
         viewer,
         Message.MONITOR_TARGET_LIMIT,
         "output",
@@ -60,14 +60,14 @@ internal fun replyToAdd(
   }
 }
 
-private fun replyAdded(
+private fun Messages.replyAdded(
   viewer: Player,
   target: Player,
   targets: MonitorTargetsService,
   hudService: MonitorHudService,
 ) {
   val total = targets.size(viewer.uniqueId)
-  MessageUtil.sendMessage(
+  sendMessage(
     viewer,
     Message.MONITOR_TARGET_ADDED,
     "player",
@@ -79,7 +79,7 @@ private fun replyAdded(
   val narrowest = session.outputs.minByOrNull { outputCapacity(it, session.config) } ?: return
   val shown = outputCapacity(narrowest, session.config)
   if (total > shown) {
-    MessageUtil.sendMessage(
+    sendMessage(
       viewer,
       Message.MONITOR_TARGET_OVERFLOW,
       "output",

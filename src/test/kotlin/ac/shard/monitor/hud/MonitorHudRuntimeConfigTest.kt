@@ -110,7 +110,7 @@ class MonitorHudRuntimeConfigTest {
     val config = load("modes:\n  compact: [nonsense, junk]\n")
 
     assertEquals(
-      listOf(MonitorToken.PROB, MonitorToken.TREND, MonitorToken.BUFFER),
+      listOf(MonitorToken.PROB, MonitorToken.BUFFER),
       config.tokens(MonitorMode.COMPACT),
     )
   }

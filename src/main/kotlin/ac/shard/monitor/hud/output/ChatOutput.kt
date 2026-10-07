@@ -41,6 +41,7 @@ data class LiveSignal(
   val flagged: Boolean,
   val probability: Double,
   val nowMillis: Long,
+  val model: String = "",
 )
 
 class ChatOutput(private val sink: ChatSink) : MonitorOutput {
@@ -89,7 +90,7 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
     if (state == null || !shouldSendLine(state, context, signal)) {
       return false
     }
-    state.lastLineAt[signal.frame.targetId] = signal.nowMillis
+    state.lastLineAt[signal.frame.targetId to signal.model] = signal.nowMillis
     val config = context.config.chat
     val template = config.templateFor(signal.flagged, signal.frame.allLabels)
     sink.send(context.viewer, fillLive(template, config, signal.frame))
@@ -113,7 +114,7 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
     val config = context.config.chat
     val loudEnough =
       (signal.flagged && config.alwaysShowFlagged) || signal.probability >= config.minProbability
-    val last = state.lastLineAt[signal.frame.targetId] ?: 0L
+    val last = state.lastLineAt[signal.frame.targetId to signal.model] ?: 0L
     return loudEnough && signal.nowMillis - last >= config.cooldownMillis
   }
 
@@ -136,7 +137,7 @@ class ChatOutput(private val sink: ChatSink) : MonitorOutput {
 
   internal class ChatState(val style: MonitorChatStyle) {
     var lastSummary: String = ""
-    val lastLineAt = HashMap<UUID, Long>()
+    val lastLineAt = HashMap<Pair<UUID, String>, Long>()
   }
 }
 

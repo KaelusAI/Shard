@@ -53,6 +53,8 @@ data class SidebarConfig(
   val labelLine: String,
   val noLabelsLine: String,
   val labelsOverflow: String,
+  val modelLine: String = DEFAULT_SIDEBAR_MODEL_LINE,
+  val modelsBlock: List<String> = DEFAULT_SIDEBAR_MODELS_BLOCK,
 ) {
   companion object {
     fun from(config: ConfigView, updateTicks: Long, viewSlot: Int, logger: Logger): SidebarConfig {
@@ -91,6 +93,11 @@ data class SidebarConfig(
           config.getString("outputs.sidebar.no-labels-line", DEFAULT_SIDEBAR_NO_LABELS_LINE),
         labelsOverflow =
           config.getString("outputs.sidebar.labels-overflow", DEFAULT_SIDEBAR_LABELS_OVERFLOW),
+        modelLine = config.getString("outputs.sidebar.model-line", DEFAULT_SIDEBAR_MODEL_LINE),
+        modelsBlock =
+          config.getStringList("outputs.sidebar.models-block").ifEmpty {
+            DEFAULT_SIDEBAR_MODELS_BLOCK
+          },
       )
     }
   }
@@ -142,7 +149,7 @@ data class ChatConfig(
         cooldownMillis =
           config
             .getLong("outputs.chat.live.cooldown-ticks", DEFAULT_LIVE_COOLDOWN_TICKS)
-            .coerceAtLeast(1L) * MILLIS_PER_TICK,
+            .coerceAtLeast(0L) * MILLIS_PER_TICK,
         unknownPing = config.getString("outputs.chat.live.unknown-ping", DEFAULT_UNKNOWN_PING),
         liveTemplate = liveTemplate,
         flaggedTemplate = flagged.ifBlank { liveTemplate },
@@ -217,17 +224,26 @@ internal const val DEFAULT_SIDEBAR_LABEL_LINE =
   "<color:#C4B5FD>{label}</color>  <white>{prob}%</white>  <yellow>◆ {buffer}</yellow>"
 internal const val DEFAULT_SIDEBAR_NO_LABELS_LINE = "<gray>Buffer</gray>  {buffer!}"
 internal const val DEFAULT_SIDEBAR_LABELS_OVERFLOW = "<dark_gray>… and {count} more</dark_gray>"
+internal const val DEFAULT_SIDEBAR_MODEL_LINE = "<gray>Model</gray>   <white>{model}</white>"
+internal val DEFAULT_SIDEBAR_MODELS_BLOCK =
+  listOf(
+    "",
+    "<gray>Model</gray>   <white>{model}</white>",
+    "<gray>Prob</gray>    <bold><white>{prob}%</white></bold>",
+    "<gray>Buffer</gray>  {buffer!}",
+  )
 internal const val DEFAULT_SIDEBAR_UNAVAILABLE = "<gray>no data</gray>"
 internal const val DEFAULT_CHAT_SUMMARY_TICKS = 200L
 internal const val MIN_CHAT_SUMMARY_TICKS = 20L
-internal const val DEFAULT_LIVE_COOLDOWN_TICKS = 20L
+internal const val DEFAULT_LIVE_COOLDOWN_TICKS = 0L
 internal const val DEFAULT_UNKNOWN_PING = "--"
 internal const val DEFAULT_CHAT_SUMMARY_TEMPLATE = "<prefix> {headline}"
 internal const val DEFAULT_LIVE_TEMPLATE =
   "<prefix> <white>{name}</white> <gray>»</gray> {prob!} <gray>•</gray> {trend!} " +
     "<gray>•</gray> {buffer!}"
 internal const val DEFAULT_ALL_LABELS_TEMPLATE =
-  "<prefix> <white>{name}</white> <gray>»</gray> {labels!} <gray>•</gray> {trend!}"
+  "<prefix> <white>{name}</white> <gray>»</gray> <gray>{model_prefix}</gray>{labels!} " +
+    "<gray>•</gray> {trend!}"
 internal const val DEFAULT_LABEL_HOVER =
   "<hover:show_text:'<gray>Buffer by detection:</gray> <white>{labels}</white>'>{label!}</hover>"
 internal const val DEFAULT_TABLIST_HEADER = "<gradient:#8e9eab:#eef2f3>Shard Monitor</gradient>"
@@ -236,9 +252,11 @@ internal val DEFAULT_SIDEBAR_LINES =
   listOf(
     "<gray>Target</gray>  <white>{name}</white>",
     "",
-    "<gray>Prob</gray>    {prob!}",
+    "{model_line}",
+    "<gray>Prob</gray>    <bold><white>{prob}%</white></bold>",
     "<gray>Trend</gray>   {trend!}",
     "<gray>Buffer</gray>  {buffer!}",
     "<gray>Ping</gray>    {ping!}",
     "<gray>Dmg</gray>     {dmg!}",
+    "{models_block}",
   )

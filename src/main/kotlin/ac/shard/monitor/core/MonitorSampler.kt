@@ -17,8 +17,10 @@
  */
 package ac.shard.monitor.core
 
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.ai.stream.BlockReason
 import ac.shard.data.CollectManager
+import ac.shard.detection.PlayerInference
+import ac.shard.mitigation.EffectChannel
 import ac.shard.player.PlayerDataManager
 import java.time.Duration
 import java.time.Instant
@@ -31,7 +33,8 @@ class MonitorSampler(
 ) {
   fun sample(target: Player): MonitorSample {
     val shardTarget = playerDataManager.getPlayer(target)
-    val aiCheck = shardTarget?.checkManager?.getCheck(AiCheck::class.java)
+    val aiCheck = shardTarget?.ai
+    val state = shardTarget?.detection
     return MonitorSample(
       targetId = target.uniqueId,
       targetName = target.name,
@@ -39,24 +42,26 @@ class MonitorSampler(
       aiActive = aiCheck != null,
       probability =
         MonitorLabelInfo.probabilityOfLeader(
-          aiCheck?.labelBufferSnapshot().orEmpty(),
-          aiCheck?.lastLabelProbabilities.orEmpty(),
-          aiCheck?.lastCheatProbability ?: 0.0,
+          state?.labelBufferSnapshot().orEmpty(),
+          state?.lastLabelProbabilities.orEmpty(),
+          state?.lastCheatProbability ?: 0.0,
         ),
-      buffer = aiCheck?.buffer ?: 0.0,
+      buffer = state?.primaryBuffer ?: 0.0,
       rawPing = target.ping,
-      damageMultiplier = shardTarget?.combat?.damageMultiplier ?: 1.0,
-      prob90 = aiCheck?.prob90 ?: 0,
+      damageMultiplier = shardTarget?.mitigation?.multiplierFor(EffectChannel.MELEE) ?: 1.0,
+      prob90 = state?.prob90 ?: 0,
       collect = collectInfo(target),
-      inference = aiCheck?.let { MonitorInferenceInfo(inferenceStatus(it.inferenceProgress)) },
-      leadingLabel = aiCheck?.let { leadingLabel(it.labelBufferSnapshot()) },
-      labelBuffers = aiCheck?.labelBufferSnapshot().orEmpty(),
-      labelProbabilities = aiCheck?.lastLabelProbabilities.orEmpty(),
-      declaredLabels = aiCheck?.declaredLabels.orEmpty(),
+      inference = aiCheck?.let(::inferenceInfo),
+      leadingLabel = state?.let { leadingLabel(it.labelBufferSnapshot()) },
+      labelBuffers = state?.labelBufferSnapshot().orEmpty(),
+      labelProbabilities = state?.lastLabelProbabilities.orEmpty(),
+      declaredLabels = state?.declaredLabels.orEmpty(),
       tier = shardTarget?.mitigation?.appliedTier?.name ?: "NONE",
       score = shardTarget?.mitigation?.score ?: 0.0,
       rule = shardTarget?.mitigation?.applied?.id.orEmpty(),
       appliedForMillis = appliedFor(shardTarget),
+      model = state?.shownModelTitle.orEmpty(),
+      models = state?.modelCards().orEmpty(),
     )
   }
 
@@ -81,8 +86,22 @@ class MonitorSampler(
   private fun tickStatus(progress: Int, postWindow: Int): String =
     if (progress < 0) WAITING else "$progress/$postWindow"
 
-  private fun inferenceStatus(progress: IntArray?): String =
-    if (progress == null) WAITING else "${progress[0]}/${progress[1]}"
+  private fun inferenceInfo(aiCheck: PlayerInference): MonitorInferenceInfo {
+    val blocked = aiCheck.streamBlockReason
+    val models = if (blocked == null) aiCheck.inferenceProgressByModel() else emptyList()
+    val states = models.map { (model, progress) ->
+      model.displayTitle to if (progress == null) IDLE else "${progress[0]}/${progress[1]}"
+    }
+    val named = states.distinctBy { it.second }.size > 1
+    val status =
+      when {
+        blocked != null -> BLOCK_WORDS.getValue(blocked)
+        states.isEmpty() -> IDLE
+        named -> states.joinToString(", ") { (title, state) -> "$title $state" }
+        else -> states.first().second
+      }
+    return MonitorInferenceInfo(status, blocked in FAULTS, named)
+  }
 
   private fun appliedFor(shardTarget: ac.shard.player.ShardPlayer?): Long {
     val state = shardTarget?.mitigation
@@ -96,5 +115,23 @@ class MonitorSampler(
 
   private companion object {
     const val WAITING = "waiting"
+    const val IDLE = "idle"
+    val FAULTS =
+      setOf(
+        BlockReason.NO_PROFILE,
+        BlockReason.COOLDOWN,
+        BlockReason.STREAM_LIMIT,
+        BlockReason.PROTOCOL,
+      )
+    val BLOCK_WORDS =
+      mapOf(
+        BlockReason.NO_PROFILE to "no profile",
+        BlockReason.DISABLED to "off",
+        BlockReason.VEHICLE to "vehicle",
+        BlockReason.REGION to "region",
+        BlockReason.COOLDOWN to "paused",
+        BlockReason.STREAM_LIMIT to "limited",
+        BlockReason.PROTOCOL to "error",
+      )
   }
 }

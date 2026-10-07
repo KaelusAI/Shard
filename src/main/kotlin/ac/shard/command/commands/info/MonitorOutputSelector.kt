@@ -21,7 +21,7 @@ import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.MonitorOutputRegistry
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.bukkit.entity.Player
 
 enum class OutputChange {
@@ -31,6 +31,7 @@ enum class OutputChange {
 }
 
 class MonitorOutputSelector(
+  private val messages: Messages,
   private val registry: MonitorOutputRegistry,
   private val hudService: MonitorHudService,
 ) {
@@ -45,7 +46,7 @@ class MonitorOutputSelector(
       MonitorOutputKind.entries.firstOrNull { it.key.equals(name, true) }
     }
     if (kinds.isEmpty() || kinds.any { it == null }) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         player,
         Message.MONITOR_OUTPUT_INVALID,
         "options",
@@ -82,7 +83,7 @@ class MonitorOutputSelector(
   ): Set<MonitorOutputKind>? {
     val left = current - picked.toSet()
     if (left.isEmpty()) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         player,
         Message.MONITOR_OUTPUT_LAST,
         "output",
@@ -102,7 +103,7 @@ class MonitorOutputSelector(
         !registry.isSupported(kind) -> Message.MONITOR_OUTPUT_UNSUPPORTED
         else -> null
       }
-    message?.let { MessageUtil.sendMessage(player, it, "output", kind.key, "fallback", fallback) }
+    message?.let { messages.sendMessage(player, it, "output", kind.key, "fallback", fallback) }
     return message == null
   }
 }

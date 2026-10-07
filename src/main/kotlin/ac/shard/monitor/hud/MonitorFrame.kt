@@ -37,6 +37,7 @@ data class MonitorFrame(
   val aiActive: Boolean,
   val labels: List<MonitorFrameLabel> = emptyList(),
   val allLabels: Boolean = false,
+  val others: List<Map<String, String>> = emptyList(),
 )
 
 data class MonitorFrameLabel(

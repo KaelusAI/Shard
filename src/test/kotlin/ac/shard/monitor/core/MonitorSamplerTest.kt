@@ -17,9 +17,12 @@
  */
 package ac.shard.monitor.core
 
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.ai.stream.BlockReason
+import ac.shard.ai.stream.ModelSpec
 import ac.shard.data.CollectManager
+import ac.shard.detection.DetectionState
+import ac.shard.detection.PlayerInference
+import ac.shard.mitigation.EffectChannel
 import ac.shard.mitigation.MitigationState
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
@@ -63,48 +66,49 @@ class MonitorSamplerTest {
     assertEquals("Target", sample.targetName)
   }
 
-  @Test
-  fun `known player without ai check is present but not active`() {
+  private class Active(
+    val players: PlayerDataManager,
+    val target: Player,
+    val aiCheck: PlayerInference,
+  ) {
+    fun inference(): MonitorInferenceInfo? =
+      MonitorSampler(players, noCollector()).sample(target).inference
+
+    fun status(): String? = inference()?.status
+  }
+
+  private fun active(): Active {
     val playerDataManager = mockk<PlayerDataManager>()
     val target = target()
     val shardPlayer = mockk<ShardPlayer>()
-    val checkManager = mockk<CheckManager>()
+    val aiCheck = mockk<PlayerInference>()
+    val state = mockk<DetectionState>()
+    val mitigation = MitigationState()
+    mitigation.updatePhase { it.copy(activeEffects = mapOf(EffectChannel.MELEE to 0.25)) }
     every { playerDataManager.getPlayer(target) } returns shardPlayer
-    every { shardPlayer.checkManager } returns checkManager
-    every { shardPlayer.combat } returns CombatState(0).also { it.damageMultiplier = 0.5 }
-    every { shardPlayer.mitigation } returns MitigationState()
-    every { checkManager.getCheck(AiCheck::class.java) } returns null
-
-    val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
-
-    assertTrue(sample.dataPresent)
-    assertFalse(sample.aiActive)
-    assertEquals(0.0, sample.probability)
-    assertEquals(0.5, sample.damageMultiplier)
+    every { shardPlayer.combat } returns CombatState(0)
+    every { shardPlayer.mitigation } returns mitigation
+    every { shardPlayer.ai } returns aiCheck
+    every { shardPlayer.detection } returns state
+    every { state.lastProbability } returns 0.87
+    every { state.primaryBuffer } returns 31.5
+    every { state.prob90 } returns 4
+    every { aiCheck.inferenceProgressByModel() } returns emptyList()
+    every { aiCheck.streamBlockReason } returns null
+    every { state.shownModelTitle } returns ""
+    every { state.modelCards() } returns emptyList()
+    every { state.labelBufferSnapshot() } returns emptyMap()
+    every { state.lastCheatProbability } returns 0.87
+    every { state.lastLabelProbabilities } returns emptyMap()
+    every { state.declaredLabels } returns emptyList()
+    return Active(playerDataManager, target, aiCheck)
   }
 
   @Test
   fun `active ai check carries every value through`() {
-    val playerDataManager = mockk<PlayerDataManager>()
-    val target = target()
-    val shardPlayer = mockk<ShardPlayer>()
-    val checkManager = mockk<CheckManager>()
-    val aiCheck = mockk<AiCheck>()
-    every { playerDataManager.getPlayer(target) } returns shardPlayer
-    every { shardPlayer.checkManager } returns checkManager
-    every { shardPlayer.combat } returns CombatState(0).also { it.damageMultiplier = 0.25 }
-    every { shardPlayer.mitigation } returns MitigationState()
-    every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
-    every { aiCheck.lastProbability } returns 0.87
-    every { aiCheck.buffer } returns 31.5
-    every { aiCheck.prob90 } returns 4
-    every { aiCheck.inferenceProgress } returns null
-    every { aiCheck.labelBufferSnapshot() } returns emptyMap()
-    every { aiCheck.lastCheatProbability } returns 0.87
-    every { aiCheck.lastLabelProbabilities } returns emptyMap()
-    every { aiCheck.declaredLabels } returns emptyList()
+    val f = active()
 
-    val sample = MonitorSampler(playerDataManager, noCollector()).sample(target)
+    val sample = MonitorSampler(f.players, noCollector()).sample(f.target)
 
     assertTrue(sample.dataPresent)
     assertTrue(sample.aiActive)
@@ -112,6 +116,39 @@ class MonitorSamplerTest {
     assertEquals(31.5, sample.buffer)
     assertEquals(0.25, sample.damageMultiplier)
     assertEquals(4, sample.prob90)
+    assertEquals(MonitorInferenceInfo("idle", fault = false), sample.inference)
+
+    every { f.aiCheck.streamBlockReason } returns BlockReason.COOLDOWN
+    assertEquals(
+      MonitorInferenceInfo("paused", fault = true),
+      MonitorSampler(f.players, noCollector()).sample(f.target).inference,
+    )
+
+    every { f.aiCheck.streamBlockReason } returns BlockReason.VEHICLE
+    assertEquals(
+      MonitorInferenceInfo("vehicle", fault = false),
+      MonitorSampler(f.players, noCollector()).sample(f.target).inference,
+    )
+  }
+
+  @Test
+  fun `several models are each named unless they share one state`() {
+    val f = active()
+    val main = mockk<ModelSpec> { every { displayTitle } returns "A" }
+    val side = mockk<ModelSpec> { every { displayTitle } returns "B" }
+
+    every { f.aiCheck.inferenceProgressByModel() } returns
+      listOf(main to intArrayOf(12, 32), side to intArrayOf(3, 8))
+    assertEquals("A 12/32, B 3/8", f.status(), "each model counts its own window")
+    assertTrue(f.inference()!!.named, "named models drop the plain prefix")
+
+    every { f.aiCheck.inferenceProgressByModel() } returns
+      listOf(main to null, side to intArrayOf(3, 8))
+    assertEquals("A idle, B 3/8", f.status())
+
+    every { f.aiCheck.inferenceProgressByModel() } returns listOf(main to null, side to null)
+    assertEquals("idle", f.status(), "models in the same state read as one")
+    assertFalse(f.inference()!!.named)
   }
 }
 

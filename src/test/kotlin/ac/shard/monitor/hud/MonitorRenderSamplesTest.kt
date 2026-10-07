@@ -87,14 +87,14 @@ class MonitorRenderSamplesTest {
     )
 
     val sidebar = buildSidebarLines(payload(frame), shipped.sidebar)
-    assertEquals("<gray>Buffer</gray>", sidebar[4], "the rows below it carry their own numbers")
+    assertEquals("<gray>Buffer</gray>", sidebar[3], "the rows below it carry their own numbers")
     assertEquals(
       "<color:#C4B5FD>Auto Clicker</color>  <white>96%</white>  <yellow>◆ 63.40</yellow>",
-      sidebar[5],
+      sidebar[4],
     )
     assertEquals(
       "<color:#C4B5FD>Aim Assist</color>  <white>35%</white>  <yellow>◆ 51.20</yellow>",
-      sidebar[6],
+      sidebar[5],
     )
   }
 
@@ -312,6 +312,24 @@ class MonitorRenderSamplesTest {
     )
   }
 
+  @Test
+  fun `the sidebar names the model on its own row only when there are several`() {
+    val buffers = mapOf("aim" to 51.2)
+    val named = buildSidebarLines(payload(frame(buffers, model = "a")), shipped.sidebar)
+    assertEquals("<gray>Model</gray>   <white>a</white>", named[2])
+    assertEquals("<gray>Prob</gray>    <bold><white>35%</white></bold>", named[3])
+    val single = buildSidebarLines(payload(frame(buffers)), shipped.sidebar)
+    assertEquals(named.size - 1, single.size)
+    assertFalse(single.any { "Model" in it })
+  }
+
+  @Test
+  fun `all names the model in front of the list`() {
+    val buffers = mapOf("aim" to 70.0, "trigger" to 5.0)
+    val line = actionBar(frame(buffers, focus = LabelFocus.ALL, model = "a"))
+    assertTrue("<gray>a<dark_gray> • </dark_gray></gray><gray>Aim Assist" in line, line)
+  }
+
   private fun actionBar(frame: MonitorFrame) = fillFrameTemplate(shipped.actionBar.template, frame)
 
   private fun bossBar(frame: MonitorFrame) = fillFrameTemplate(shipped.bossBar.title, frame)
@@ -366,6 +384,7 @@ class MonitorRenderSamplesTest {
     focus: String = LabelFocus.AUTO,
     names: Map<String, String> = titles,
     declared: List<String> = emptyList(),
+    model: String = "",
   ): MonitorFrame =
     MonitorFrameBuilder(LabelCatalog(local = { emptyMap() }, fromServer = { names })) { atMillis }
       .build(
@@ -385,6 +404,7 @@ class MonitorRenderSamplesTest {
               labelBuffers = buffers,
               labelProbabilities = probabilities,
               declaredLabels = declared,
+              model = model,
             ),
           settings =
             MonitorSettings(

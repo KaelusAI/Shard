@@ -26,7 +26,7 @@ import ac.shard.monitor.hud.StartResult
 import ac.shard.monitor.hud.TargetChange
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.bukkit.parser.PlayerParser
@@ -36,50 +36,51 @@ import org.incendo.cloud.parser.standard.StringParser
 
 @Suppress("TooManyFunctions")
 class MonitorCommand(
+  private val messages: Messages,
   private val hudService: MonitorHudService,
   private val targetsService: MonitorTargetsService,
   private val settingsService: MonitorSettingsService,
 ) : ShardCommand {
-  private val autoCommand = MonitorAutoCommand(hudService, settingsService)
+  private val autoCommand = MonitorAutoCommand(messages, hudService, settingsService)
 
   @Suppress("LongMethod")
   override fun register(manager: CommandManager<Sender>) {
     val watched = MonitorSuggestions.watched(targetsService)
 
-    monitorCommand(manager) { handler(this@MonitorCommand::toggleSelf) }
+    monitorCommand(manager) { handler { toggleSelf(it) } }
     monitorCommand(manager) {
       required("target", PlayerParser.playerParser())
-      handler(this@MonitorCommand::toggleTarget)
+      handler { toggleTarget(it) }
     }
     monitorCommand(manager, path = listOf("add")) {
       required("target", PlayerParser.playerParser())
-      handler(this@MonitorCommand::addTarget)
+      handler { addTarget(it) }
     }
     monitorCommand(manager, path = listOf("remove")) {
       required("target", StringParser.stringParser()) { suggestionProvider = watched }
-      handler(this@MonitorCommand::removeTarget)
+      handler { removeTarget(it) }
     }
-    monitorCommand(manager, path = listOf("auto")) { handler(this@MonitorCommand::watchAuto) }
-    monitorCommand(manager, path = listOf("all")) { handler(this@MonitorCommand::watchAll) }
+    monitorCommand(manager, path = listOf("auto")) { handler { watchAuto(it) } }
+    monitorCommand(manager, path = listOf("all")) { handler { watchAll(it) } }
     monitorCommand(manager, path = listOf("suspicious")) {
-      handler(this@MonitorCommand::watchSuspicious)
+      handler { watchSuspicious(it) }
     }
-    monitorCommand(manager, path = listOf("manual")) { handler(this@MonitorCommand::watchManual) }
-    monitorCommand(manager, path = listOf("clear")) { handler(this@MonitorCommand::clearTargets) }
-    monitorCommand(manager, path = listOf("stop")) { handler(this@MonitorCommand::stopMonitor) }
+    monitorCommand(manager, path = listOf("manual")) { handler { watchManual(it) } }
+    monitorCommand(manager, path = listOf("clear")) { handler { clearTargets(it) } }
+    monitorCommand(manager, path = listOf("stop")) { handler { stopMonitor(it) } }
     monitorCommand(
       manager,
       path = listOf("list"),
       permission = "shard.monitor.list",
       playerOnly = false,
     ) {
-      handler(this@MonitorCommand::listSessions)
+      handler { listSessions(it) }
     }
 
-    probCommand(manager) { handler(this@MonitorCommand::deprecatedProb) }
+    probCommand(manager) { handler { deprecatedProb(it) } }
     probCommand(manager) {
       required("target", PlayerParser.playerParser())
-      handler(this@MonitorCommand::deprecatedProb)
+      handler { deprecatedProb(it) }
     }
   }
 
@@ -93,7 +94,7 @@ class MonitorCommand(
     val player = sender.player ?: return
     val target: Player = context["target"]
     if (player.uniqueId != target.uniqueId && !canWatchOthers(player)) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.MONITOR_NO_PERMISSION_OTHER)
+      messages.sendMessage(sender.nativeSender, Message.MONITOR_NO_PERMISSION_OTHER)
       return
     }
     toggle(player, target)
@@ -104,14 +105,14 @@ class MonitorCommand(
     val player = sender.player ?: return
     val target: Player = context["target"]
     if (!canWatchMany(player)) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.MONITOR_MULTI_NO_PERMISSION)
+      messages.sendMessage(sender.nativeSender, Message.MONITOR_MULTI_NO_PERMISSION)
       return
     }
     val change = targetsService.add(player, target)
     if (change == TargetChange.NO_SESSION) {
       toggle(player, target)
     } else {
-      replyToAdd(player, target, change, targetsService, hudService)
+      messages.replyToAdd(player, target, change, targetsService, hudService)
     }
   }
 
@@ -121,7 +122,7 @@ class MonitorCommand(
     val name: String = context["target"]
     when (targetsService.remove(player, name)) {
       TargetChange.APPLIED ->
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender.nativeSender,
           Message.MONITOR_TARGET_REMOVED,
           "player",
@@ -130,9 +131,9 @@ class MonitorCommand(
           targetsService.size(player.uniqueId).toString(),
         )
       TargetChange.NO_SESSION ->
-        MessageUtil.sendMessage(sender.nativeSender, Message.MONITOR_NOT_ACTIVE)
+        messages.sendMessage(sender.nativeSender, Message.MONITOR_NOT_ACTIVE)
       else ->
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender.nativeSender,
           Message.MONITOR_TARGET_NOT_WATCHED,
           "player",
@@ -170,9 +171,9 @@ class MonitorCommand(
     val player = sender.player ?: return
     val cleared = targetsService.clear(player)
     if (cleared == 0) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.MONITOR_NOT_ACTIVE)
+      messages.sendMessage(sender.nativeSender, Message.MONITOR_NOT_ACTIVE)
     } else {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.MONITOR_TARGETS_CLEARED,
         "count",
@@ -186,11 +187,11 @@ class MonitorCommand(
     val player = sender.player ?: return
     val names = targetsService.names(player.uniqueId)
     if (names.isEmpty()) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.MONITOR_NOT_ACTIVE)
+      messages.sendMessage(sender.nativeSender, Message.MONITOR_NOT_ACTIVE)
       return
     }
     hudService.stop(player.uniqueId, player)
-    MessageUtil.sendMessage(
+    messages.sendMessage(
       sender.nativeSender,
       Message.MONITOR_DISABLED,
       "player",
@@ -202,17 +203,17 @@ class MonitorCommand(
     val nativeSender = context.sender().nativeSender
     val sessions = hudService.activeSessions
     if (sessions.isEmpty()) {
-      MessageUtil.sendMessage(nativeSender, Message.MONITOR_LIST_EMPTY)
+      messages.sendMessage(nativeSender, Message.MONITOR_LIST_EMPTY)
       return
     }
-    MessageUtil.sendMessage(
+    messages.sendMessage(
       nativeSender,
       Message.MONITOR_LIST_HEADER,
       "count",
       sessions.size.toString(),
     )
     sessions.forEach { session ->
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         nativeSender,
         Message.MONITOR_LIST_ENTRY,
         "viewer",
@@ -228,28 +229,28 @@ class MonitorCommand(
   }
 
   private fun deprecatedProb(context: CommandContext<Sender>) {
-    MessageUtil.sendMessage(context.sender().nativeSender, Message.MONITOR_PROB_DEPRECATED)
+    messages.sendMessage(context.sender().nativeSender, Message.MONITOR_PROB_DEPRECATED)
   }
 
   private fun toggle(viewer: Player, target: Player) {
     val watching = targetsService.names(viewer.uniqueId)
     if (watching.size == 1 && watching.first().equals(target.name, ignoreCase = true)) {
       hudService.stop(viewer.uniqueId, viewer)
-      MessageUtil.sendMessage(viewer, Message.MONITOR_DISABLED, "player", target.name)
+      messages.sendMessage(viewer, Message.MONITOR_DISABLED, "player", target.name)
       return
     }
     when (hudService.start(viewer, target)) {
       StartResult.STARTED ->
-        MessageUtil.sendMessage(viewer, Message.MONITOR_ENABLED, "player", target.name)
+        messages.sendMessage(viewer, Message.MONITOR_ENABLED, "player", target.name)
       StartResult.LIMIT_REACHED ->
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           viewer,
           Message.MONITOR_LIMIT_REACHED,
           "limit",
           hudService.runtimeConfig.limits.maxSessions.toString(),
         )
       StartResult.NO_OUTPUT ->
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           viewer,
           Message.MONITOR_OUTPUT_DISABLED,
           "output",

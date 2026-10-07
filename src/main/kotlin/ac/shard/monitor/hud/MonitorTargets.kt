@@ -30,17 +30,24 @@ class MonitorTargetState(
   val targetId: UUID,
   val targetName: String,
   val texts: UnavailableTexts,
-  threshold: Double,
-  decayCycles: Int,
+  private val threshold: Double,
+  private val decayCycles: Int,
 ) {
   private val pingSampler = PingSampler()
   private val trendTracker = TrendTracker(threshold, decayCycles)
+  private val modelTrends = HashMap<String, TrendTracker>()
+
+  fun modelTrend(modelId: String, probability: Double): Double =
+    modelTrends.getOrPut(modelId) { TrendTracker(threshold, decayCycles) }.update(probability)
 
   var ping = PING_UNAVAILABLE
     private set
 
   var trend = 0.0
     private set
+
+  val trendSettled: Boolean
+    get() = trendTracker.settled
 
   var idleCycles = 0
 

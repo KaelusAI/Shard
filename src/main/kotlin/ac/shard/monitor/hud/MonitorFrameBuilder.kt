@@ -17,8 +17,11 @@
  */
 package ac.shard.monitor.hud
 
+import ac.shard.ai.label.DetectionKey
 import ac.shard.ai.label.LabelCatalog
+import ac.shard.ai.label.LabelKey
 import ac.shard.monitor.core.LabelFocus
+import ac.shard.monitor.core.ModelFilter
 import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorSample
@@ -29,6 +32,7 @@ import ac.shard.monitor.core.fillTemplate
 import ac.shard.monitor.core.formatDecimal
 import ac.shard.monitor.core.formatSigned
 import ac.shard.monitor.core.padInt
+import ac.shard.utils.WallClock
 import kotlin.math.abs
 
 data class MonitorFrameRequest(
@@ -39,12 +43,13 @@ data class MonitorFrameRequest(
   val selfView: Boolean,
   val unavailableHeadline: String,
   val collectVisible: Boolean = false,
+  val trendSettled: Boolean = false,
 )
 
 @Suppress("TooManyFunctions")
 class MonitorFrameBuilder(
   private val labelCatalog: LabelCatalog,
-  private val clock: () -> Long = System::currentTimeMillis,
+  private val clock: WallClock = WallClock.SYSTEM,
 ) {
   private fun focusOf(
     labels: List<MonitorFrameLabel>,
@@ -61,19 +66,22 @@ class MonitorFrameBuilder(
   private fun showsAll(settings: MonitorSettings, labels: List<MonitorFrameLabel>): Boolean =
     settings.labelFocus == LabelFocus.ALL && labels.isNotEmpty()
 
-  fun build(request: MonitorFrameRequest, config: MonitorHudRuntimeConfig): MonitorFrame {
+  fun build(original: MonitorFrameRequest, config: MonitorHudRuntimeConfig): MonitorFrame {
+    val request = withSelectedLead(original)
     val sample = request.sample
     val available = sample.dataPresent && sample.aiActive
     val labels = frameLabels(sample, config)
     val focus = focusOf(labels, config, request.settings.labelFocus)
     val raw = rawValues(request, config, labels, focus)
-    val extra = extraPlaceholders(sample, config, labels, focus)
+    val model = modelOf(sample, focus)
+    val prefix = modelPrefix(model, config.themes.separator(request.settings.theme))
+    val extra = extraPlaceholders(sample, config, labels, focus, prefix)
     val themed = raw.mapValues { (token, value) ->
       if (token in VANISH_WHEN_EMPTY && value.isEmpty()) {
         ""
       } else {
         dropEmptyTags(
-          fillTemplate(config.themes.template(request.settings.theme, token)) { key ->
+          fillTemplate(templateFor(token, request, config)) { key ->
             if (key == token.key) value else extra[token]?.get(key)
           }
         )
@@ -85,7 +93,7 @@ class MonitorFrameBuilder(
       targetId = sample.targetId,
       targetName = sample.targetName,
       headline = headline,
-      placeholders = placeholdersOf(raw, themed, headline),
+      placeholders = placeholdersOf(raw, themed, headline, model, prefix),
       progress =
         if (available) config.bossBar.progressFor(sample.probability, sample.buffer) else 0f,
       severity =
@@ -94,7 +102,62 @@ class MonitorFrameBuilder(
       aiActive = sample.aiActive,
       labels = labels,
       allLabels = showsAll(request.settings, labels),
+      others = if (available) otherModels(request, config) else emptyList(),
     )
+  }
+
+  private fun otherModels(
+    request: MonitorFrameRequest,
+    config: MonitorHudRuntimeConfig,
+  ): List<Map<String, String>> {
+    val format = config.format
+    val theme = request.settings.theme
+    return request.sample.models
+      .filter { !it.primary && ModelFilter.shows(request.settings.models, it.id, primary = false) }
+      .map { card ->
+        val prob = formatDecimal(card.probability * PERCENT_SCALE, format.probDecimals)
+        val buffer = formatDecimal(card.buffer, format.bufferDecimals)
+        mapOf(
+          MODEL to card.title,
+          MonitorToken.PROB.key to prob,
+          MonitorToken.PROB.key + THEMED_SUFFIX to
+            themedValue(config.themes.template(theme, MonitorToken.PROB), MonitorToken.PROB, prob),
+          MonitorToken.BUFFER.key to buffer,
+          MonitorToken.BUFFER.key + THEMED_SUFFIX to
+            themedValue(
+              config.themes.template(theme, MonitorToken.BUFFER),
+              MonitorToken.BUFFER,
+              buffer,
+            ),
+        )
+      }
+  }
+
+  private fun themedValue(template: String, token: MonitorToken, value: String): String =
+    dropEmptyTags(
+      fillTemplate(template) { key ->
+        when (key) {
+          token.key -> value
+          "model_prefix",
+          "label_suffix" -> ""
+          else -> null
+        }
+      }
+    )
+
+  private fun templateFor(
+    token: MonitorToken,
+    request: MonitorFrameRequest,
+    config: MonitorHudRuntimeConfig,
+  ): String {
+    val theme = request.settings.theme
+    val inference = request.sample.inference.takeIf { token == MonitorToken.INFERENCE }
+    return when {
+      token == MonitorToken.INFERENCE_ERRORS || inference?.fault == true ->
+        config.themes.inferenceError(theme)
+      inference?.named == true -> config.themes.inferenceModels(theme)
+      else -> config.themes.template(theme, token)
+    }
   }
 
   private fun frameLabels(
@@ -144,6 +207,7 @@ class MonitorFrameBuilder(
         steadyBuffer(focus, labels, config.behavior).ifEmpty {
           formatDecimal(sample.buffer, format.bufferDecimals)
         },
+      MonitorToken.MODELS to othersText(request, config),
       MonitorToken.LABEL to steadyName(focus, labels, config.behavior),
       MonitorToken.LABELS to labelsText(labels),
       MonitorToken.PING to ping,
@@ -151,18 +215,48 @@ class MonitorFrameBuilder(
       MonitorToken.PROB90 to sample.prob90.toString(),
       MonitorToken.COLLECT to (sample.collect?.status ?: ""),
       MonitorToken.INFERENCE to (sample.inference?.status ?: ""),
+      MonitorToken.INFERENCE_ERRORS to (sample.inference?.status ?: ""),
       MonitorToken.TIER to tierText(sample.tier, format.tierUppercase),
       MonitorToken.SCORE to formatDecimal(sample.score, format.scoreDecimals),
       MonitorToken.RULE to ruleText(sample),
     )
   }
 
-  private fun written(label: MonitorFrameLabel, behavior: MonitorBehaviorConfig): String =
-    if (behavior.labelUsesKey) {
-      shorten(label.key, behavior.labelMaxLength, behavior.nameTruncateSuffix)
-    } else {
-      label.name
-    }
+  private fun othersText(request: MonitorFrameRequest, config: MonitorHudRuntimeConfig): String {
+    val format = config.format
+    val theme = request.settings.theme
+    val separator = config.themes.separator(theme)
+    return request.sample.models
+      .filter { !it.primary && ModelFilter.shows(request.settings.models, it.id, primary = false) }
+      .joinToString(separator) { card ->
+        val probability = formatDecimal(card.probability * PERCENT_SCALE, format.probDecimals)
+        val template = config.themes.template(theme, MonitorToken.PROB)
+        val title = if (MODEL_PREFIX_KEY in template) "" else modelPrefix(card.title, separator)
+        val prob =
+          title +
+            fillTemplate(template) { key ->
+              when (key) {
+                MonitorToken.PROB.key -> probability
+                "model_prefix" -> modelPrefix(card.title, separator)
+                "label_suffix" -> ""
+                else -> null
+              }
+            }
+        val buffer =
+          fillTemplate(config.themes.template(theme, MonitorToken.BUFFER)) { key ->
+            if (key == MonitorToken.BUFFER.key) formatDecimal(card.buffer, format.bufferDecimals)
+            else null
+          }
+        dropEmptyTags(prob) + separator + dropEmptyTags(buffer)
+      }
+  }
+
+  private fun written(label: MonitorFrameLabel, behavior: MonitorBehaviorConfig): String {
+    val bare = DetectionKey.parseAddress(label.key)?.label ?: label.key
+    if (LabelKey.isReserved(bare)) return ""
+    val own = if (behavior.labelUsesKey) bare else labelCatalog.ownName(label.key)
+    return shorten(own, behavior.labelMaxLength, behavior.nameTruncateSuffix)
+  }
 
   private fun steadyName(
     focus: MonitorFrameLabel?,
@@ -205,8 +299,8 @@ class MonitorFrameBuilder(
     labels: List<MonitorFrameLabel>,
     behavior: MonitorBehaviorConfig,
   ): String {
-    if (focus == null) return ""
-    return " " + steadyName(focus, labels, behavior)
+    val name = focus?.let { steadyName(it, labels, behavior) }.orEmpty()
+    return if (name.isBlank()) "" else " $name"
   }
 
   private fun labelsText(labels: List<MonitorFrameLabel>): String =
@@ -217,6 +311,7 @@ class MonitorFrameBuilder(
     config: MonitorHudRuntimeConfig,
     labels: List<MonitorFrameLabel>,
     focus: MonitorFrameLabel?,
+    prefix: String,
   ): Map<MonitorToken, Map<String, String>> {
     val out = mutableMapOf<MonitorToken, Map<String, String>>()
     val at = labels.indexOf(focus) + 1
@@ -228,6 +323,7 @@ class MonitorFrameBuilder(
       mapOf(
         "label" to name,
         "label_suffix" to steadySuffix(focus, labels, config.behavior),
+        MODEL_PREFIX to prefix,
         "position" to position,
       )
     out[MonitorToken.LABEL] =
@@ -246,9 +342,39 @@ class MonitorFrameBuilder(
           "elapsed" to it.elapsed,
         )
     }
-    sample.inference?.let { out[MonitorToken.INFERENCE] = mapOf("status" to it.status) }
+    sample.inference?.let {
+      out[MonitorToken.INFERENCE] = mapOf("status" to it.status)
+      out[MonitorToken.INFERENCE_ERRORS] = mapOf("status" to it.status)
+    }
     return out
   }
+
+  private fun withSelectedLead(request: MonitorFrameRequest): MonitorFrameRequest {
+    val sample = request.sample
+    val filter = request.settings.models
+    val primaryHidden = sample.models.any { it.primary && !ModelFilter.shows(filter, it.id, true) }
+    val lead =
+      sample.models
+        .firstOrNull { !it.primary && ModelFilter.shows(filter, it.id, false) }
+        ?.takeIf { primaryHidden } ?: return request
+    return request.copy(
+      sample =
+        sample.copy(
+          probability = lead.probability,
+          buffer = lead.buffer,
+          prob90 = 0,
+          leadingLabel = null,
+          labelBuffers = emptyMap(),
+          labelProbabilities = emptyMap(),
+          declaredLabels = emptyList(),
+          model = lead.title,
+          models = sample.models.filter { it !== lead },
+        )
+    )
+  }
+
+  private fun modelOf(sample: MonitorSample, focus: MonitorFrameLabel?): String =
+    focus?.let { labelCatalog.ownerTitle(it.key) } ?: sample.model
 
   private fun headlineOf(
     request: MonitorFrameRequest,
@@ -286,19 +412,23 @@ class MonitorFrameBuilder(
     val (enabled, info) =
       if (token == MonitorToken.COLLECT) settings.showCollect to sample.collect
       else settings.showInference to sample.inference
-    return themed[token].takeIf { recordingVisible(request, enabled, info) }
+    val wanted = token != MonitorToken.INFERENCE_ERRORS || sample.inference?.fault == true
+    return themed[token].takeIf { wanted && recordingVisible(request, enabled, info) }
   }
 
   private fun focusPart(
     token: MonitorToken,
     all: Boolean,
     themed: Map<MonitorToken, String>,
-  ): String? =
-    when {
+    prefix: String,
+  ): String? {
+    val prefixed = if (prefix.isEmpty()) "" else "<gray>$prefix</gray>"
+    return when {
       !all -> themed[token]
-      token == MonitorToken.PROB -> themed[MonitorToken.LABELS]
+      token == MonitorToken.PROB -> themed[MonitorToken.LABELS]?.let { prefixed + it }
       else -> null
     }
+  }
 
   @Suppress("LongParameterList")
   private fun partFor(
@@ -313,18 +443,37 @@ class MonitorFrameBuilder(
     return when (token) {
       MonitorToken.NAME -> themed[token].takeIf { nameVisible(settings.showName, request.selfView) }
       MonitorToken.PROB,
-      MonitorToken.BUFFER -> focusPart(token, showsAll(settings, labels), themed)
+      MonitorToken.BUFFER ->
+        focusPart(
+          token,
+          showsAll(settings, labels),
+          themed,
+          modelPrefix(request.sample.model, config.themes.separator(settings.theme)),
+        )
       MonitorToken.TREND ->
-        if (settings.showTrend) themed[token] else neutralFor(behavior.neutralTrend, behavior)
+        quietPart(
+          settings.showTrend,
+          config.format.trendHideWhenSettled && request.trendSettled,
+          themed[token],
+          behavior.neutralTrend,
+          behavior,
+        )
       MonitorToken.PING ->
         if (settings.showPing) themed[token] else neutralFor(behavior.neutralPing, behavior)
       MonitorToken.DMG ->
-        if (dmgVisible(settings.showDmg, request.sample.damageMultiplier, config)) themed[token]
-        else neutralFor(behavior.neutralDmg, behavior)
-      MonitorToken.LABEL -> themed[token]?.takeIf { it.isNotEmpty() }
+        quietPart(
+          settings.showDmg,
+          dmgDefault(request.sample.damageMultiplier, config),
+          themed[token],
+          behavior.neutralDmg,
+          behavior,
+        )
+      MonitorToken.LABEL,
+      MonitorToken.MODELS -> themed[token]?.takeIf { it.isNotEmpty() }
       MonitorToken.LABELS -> themed[token].takeIf { labels.isNotEmpty() }
       MonitorToken.COLLECT,
-      MonitorToken.INFERENCE -> recordingPart(token, request, themed)
+      MonitorToken.INFERENCE,
+      MonitorToken.INFERENCE_ERRORS -> recordingPart(token, request, themed)
       MonitorToken.TIER,
       MonitorToken.SCORE,
       MonitorToken.RULE -> mitigationPart(token, request, config, themed)
@@ -363,16 +512,22 @@ class MonitorFrameBuilder(
   private fun tierVisible(tier: String, config: MonitorHudRuntimeConfig): Boolean =
     !(config.format.tierHideWhenNone && tier == NO_TIER)
 
-  private fun dmgVisible(
-    showDmg: Boolean,
-    multiplier: Double,
-    config: MonitorHudRuntimeConfig,
-  ): Boolean {
-    val hidden =
-      config.format.dmgHideWhenDefault &&
-        abs(multiplier - DEFAULT_DMG_MULTIPLIER) < MULTIPLIER_EPSILON
-    return showDmg && !hidden
-  }
+  private fun quietPart(
+    shown: Boolean,
+    atRest: Boolean,
+    value: String?,
+    neutral: String,
+    behavior: MonitorBehaviorConfig,
+  ): String? =
+    when {
+      !shown -> neutralFor(neutral, behavior)
+      atRest -> null
+      else -> value
+    }
+
+  private fun dmgDefault(multiplier: Double, config: MonitorHudRuntimeConfig): Boolean =
+    config.format.dmgHideWhenDefault &&
+      abs(multiplier - DEFAULT_DMG_MULTIPLIER) < MULTIPLIER_EPSILON
 
   private fun neutralFor(template: String, behavior: MonitorBehaviorConfig): String? {
     if (!behavior.keepLength || !behavior.showNeutralWhenHidden) {
@@ -388,18 +543,22 @@ class MonitorFrameBuilder(
     raw: Map<MonitorToken, String>,
     themed: Map<MonitorToken, String>,
     headline: String,
+    model: String,
+    prefix: String,
   ): Map<String, String> {
-    val values = HashMap<String, String>(raw.size * 2 + 1)
+    val values = HashMap<String, String>()
     for ((token, value) in raw) {
       values[token.key] = value
       values[token.key + THEMED_SUFFIX] = themed.getValue(token)
     }
     values[PLACEHOLDER_HEADLINE] = headline
+    values[MODEL] = model
+    values[MODEL_PREFIX] = prefix
     return values
   }
 
   private companion object {
-    val VANISH_WHEN_EMPTY = setOf(MonitorToken.LABEL, MonitorToken.LABELS)
+    val VANISH_WHEN_EMPTY = setOf(MonitorToken.LABEL, MonitorToken.LABELS, MonitorToken.MODELS)
 
     fun shorten(text: String, max: Int, suffix: String): String {
       if (max <= 0 || text.length <= max) return text
@@ -417,7 +576,14 @@ class MonitorFrameBuilder(
       }
     }
 
+    const val MODEL = "model"
+    const val MODEL_PREFIX = "model_prefix"
+
+    fun modelPrefix(model: String, separator: String): String =
+      if (model.isEmpty()) "" else model + separator
+
     const val PERCENT_SCALE = 100.0
+    const val MODEL_PREFIX_KEY = "{model_prefix}"
     const val NO_TIER = "NONE"
     const val MILLIS_PER_SECOND = 1000L
     const val SECONDS_PER_MINUTE = 60L

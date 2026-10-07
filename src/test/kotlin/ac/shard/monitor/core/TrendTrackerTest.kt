@@ -19,6 +19,8 @@ package ac.shard.monitor.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class TrendTrackerTest {
   @Test
@@ -72,5 +74,18 @@ class TrendTrackerTest {
     tracker.reset()
 
     assertEquals(0.0, tracker.update(0.90))
+  }
+
+  @Test
+  fun `the trend settles only after the probability has stopped moving`() {
+    val tracker = TrendTracker(threshold = 0.05, decayCycles = 2)
+    assertTrue(tracker.settled)
+    tracker.update(0.40)
+    tracker.update(0.41)
+    assertFalse(tracker.settled)
+    tracker.update(0.41)
+    assertFalse(tracker.settled)
+    tracker.update(0.41)
+    assertTrue(tracker.settled)
   }
 }

@@ -20,7 +20,12 @@ package ac.shard.monitor.core
 import ac.shard.config.ConfigView
 import java.util.Locale
 
-data class MonitorThemeEntry(val templates: Map<MonitorToken, String>, val separator: String)
+data class MonitorThemeEntry(
+  val templates: Map<MonitorToken, String>,
+  val separator: String,
+  val inferenceError: String = DEFAULT_INFERENCE_ERROR,
+  val inferenceModels: String = DEFAULT_INFERENCE_MODELS,
+)
 
 class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry>) {
   fun entry(theme: MonitorTheme): MonitorThemeEntry =
@@ -30,6 +35,10 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
     entry(theme).templates[token] ?: FALLBACK_TEMPLATES.getValue(token)
 
   fun separator(theme: MonitorTheme): String = entry(theme).separator
+
+  fun inferenceError(theme: MonitorTheme): String = entry(theme).inferenceError
+
+  fun inferenceModels(theme: MonitorTheme): String = entry(theme).inferenceModels
 
   companion object {
     fun from(config: ConfigView): MonitorThemeTable =
@@ -41,15 +50,21 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
         MonitorToken.entries.associateWith { token ->
           config.getString("$path.${token.key}", FALLBACK_TEMPLATES.getValue(token))
         }
-      return MonitorThemeEntry(templates, config.getString("$path.sep", DEFAULT_THEME_SEPARATOR))
+      return MonitorThemeEntry(
+        templates,
+        config.getString("$path.sep", DEFAULT_THEME_SEPARATOR),
+        config.getString("$path.inference-error", DEFAULT_INFERENCE_ERROR),
+        config.getString("$path.inference-models", DEFAULT_INFERENCE_MODELS),
+      )
     }
 
     private val FALLBACK_TEMPLATES =
       mapOf(
         MonitorToken.NAME to "<gray>@{name}</gray>",
-        MonitorToken.PROB to "{prob}%{label_suffix}",
+        MonitorToken.PROB to "{model_prefix}{prob}%{label_suffix}",
         MonitorToken.TREND to "{trend}",
         MonitorToken.BUFFER to "◆ {buffer}",
+        MonitorToken.MODELS to "{models}",
         MonitorToken.LABEL to "{label}{position}",
         MonitorToken.LABELS to "<gray>{labels}</gray>",
         MonitorToken.PING to "Ping {ping}ms",
@@ -57,6 +72,7 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
         MonitorToken.PROB90 to "<color:#F87171>90+ {prob90}</color>",
         MonitorToken.COLLECT to "<gray>{status} ticks ({label} w{windows} {elapsed})</gray>",
         MonitorToken.INFERENCE to "<gray>inf {status}</gray>",
+        MonitorToken.INFERENCE_ERRORS to DEFAULT_INFERENCE_ERROR,
         MonitorToken.TIER to "<color:#FBBF24>Mit {tier}</color>",
         MonitorToken.SCORE to "<color:#FBBF24>◇ {score}</color>",
         MonitorToken.RULE to "<color:#FBBF24>{rule}</color>",
@@ -65,3 +81,5 @@ class MonitorThemeTable(private val entries: Map<MonitorTheme, MonitorThemeEntry
 }
 
 internal const val DEFAULT_THEME_SEPARATOR = "<dark_gray>•</dark_gray>"
+internal const val DEFAULT_INFERENCE_ERROR = "<color:#F87171>err {status}</color>"
+internal const val DEFAULT_INFERENCE_MODELS = "<gray>{status}</gray>"

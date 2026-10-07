@@ -28,6 +28,7 @@ import java.util.UUID
 import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
@@ -50,6 +51,9 @@ class MonitorFrameBuilderTest {
         ping: "G{ping}"
         dmg: "D{dmg}"
         sep: "|"
+    format:
+      dmg:
+        hide-when-default: false
     behavior:
       neutral:
         ping: "<ping-off>"
@@ -185,14 +189,6 @@ class MonitorFrameBuilderTest {
   }
 
   @Test
-  fun `a default damage multiplier is hidden when the operator asks for it`() {
-    val yaml = baseYaml + "\nformat:\n  dmg:\n    hide-when-default: true\n"
-    val frame = builder.build(request(sample = sample(damageMultiplier = 1.0)), config(yaml))
-
-    assertEquals("NSteve|P43|T+0.00|B2.50|G57|<dmg-off>", frame.headline)
-  }
-
-  @Test
   fun `placeholders carry the raw value, the themed value and the headline`() {
     val frame = builder.build(request(), config())
 
@@ -264,5 +260,123 @@ class MonitorFrameBuilderTest {
     val frame = builder.build(request(sample = sample(buffer = 5.0)), config(yaml))
 
     assertEquals(0.5f, frame.progress)
+  }
+
+  @Test
+  fun `the main model is named only when the profile has several`() {
+    val yaml = baseYaml.replace("prob: \"P{prob}\"", "prob: \"P{model_prefix}{prob}\"")
+    val named = builder.build(request(sample().copy(model = "Shard 2")), config(yaml))
+    assertEquals("NSteve|PShard 2|43|T+0.00|B2.50|G57|D1.00", named.headline)
+    val single = builder.build(request(sample()), config(yaml))
+    assertEquals("NSteve|P43|T+0.00|B2.50|G57|D1.00", single.headline)
+    assertEquals("Shard 2|", named.placeholders["model_prefix"], "the theme separator follows it")
+    assertEquals("", single.placeholders["model_prefix"])
+  }
+
+  @Test
+  fun `the other models ride on the line and vanish with only one model`() {
+    val yaml =
+      baseYaml
+        .replace("compact: [name, prob, trend, buffer, ping, dmg]", "compact: [name, prob, models]")
+        .replace("buffer: \"B{buffer}\"", "buffer: \"B{buffer}\"\n    models: \"M{models}\"")
+    val side = ac.shard.detection.ModelCard("Side", 50.0, 2.1, emptyList(), false, 0.12)
+    val main = ac.shard.detection.ModelCard("Main", 50.0, 2.5, emptyList(), true, 0.43)
+    val two = builder.build(request(sample().copy(models = listOf(main, side))), config(yaml))
+    assertEquals(
+      "NSteve|P43|MSide|P12|B2.10",
+      two.headline,
+      "other models use the theme's own prob and buffer templates",
+    )
+    val one = builder.build(request(sample().copy(models = listOf(main))), config(yaml))
+    assertEquals("NSteve|P43", one.headline)
+    assertEquals(
+      listOf(
+        mapOf(
+          "model" to "Side",
+          "prob" to "12",
+          "prob!" to "P12",
+          "buffer" to "2.10",
+          "buffer!" to "B2.10",
+        )
+      ),
+      two.others,
+      "each other model carries its own values for the sidebar block",
+    )
+    assertTrue(one.others.isEmpty())
+  }
+
+  @Test
+  fun `a choice without the main model puts the first chosen one in its place`() {
+    val yaml =
+      baseYaml
+        .replace(
+          "compact: [name, prob, trend, buffer, ping, dmg]",
+          "compact: [name, prob, buffer, models]",
+        )
+        .replace("buffer: \"B{buffer}\"", "buffer: \"B{buffer}\"\n    models: \"M{models}\"")
+    val main = ac.shard.detection.ModelCard("Main", 50.0, 2.5, emptyList(), true, 0.43, "main")
+    val side = ac.shard.detection.ModelCard("Side", 50.0, 2.1, emptyList(), false, 0.12, "side")
+    val base = request(sample().copy(models = listOf(main, side)))
+
+    val only =
+      builder.build(base.copy(settings = base.settings.copy(models = "side")), config(yaml))
+    assertEquals("NSteve|P12|B2.10", only.headline)
+    assertTrue(only.others.isEmpty())
+
+    val both =
+      builder.build(base.copy(settings = base.settings.copy(models = "main,side")), config(yaml))
+    assertEquals("NSteve|P43|B2.50|MSide|P12|B2.10", both.headline)
+  }
+
+  @Test
+  fun `a settled trend leaves the line while a live zero trend stays`() {
+    val settled = builder.build(request().copy(trendSettled = true), config())
+    assertEquals("NSteve|P43|B2.50|G57|D1.00", settled.headline)
+    val live = builder.build(request(), config())
+    assertEquals("NSteve|P43|T+0.00|B2.50|G57|D1.00", live.headline)
+  }
+
+  @Test
+  fun `a default damage multiplier is left out without a placeholder`() {
+    val yaml = baseYaml.replace("hide-when-default: false", "hide-when-default: true")
+    val plain = builder.build(request(), config(yaml))
+    assertEquals("NSteve|P43|T+0.00|B2.50|G57", plain.headline)
+    val reduced = builder.build(request(sample(damageMultiplier = 0.7)), config(yaml))
+    assertEquals("NSteve|P43|T+0.00|B2.50|G57|D0.70", reduced.headline)
+    val off = builder.build(request(settings = settings(showDmg = false)), config(yaml))
+    assertEquals("NSteve|P43|T+0.00|B2.50|G57|<dmg-off>", off.headline)
+  }
+
+  @Test
+  fun `a second model's buffer never takes over the main line`() {
+    val buffer =
+      """"buffer": {"flag": 50, "reset": 25, "multiplier": 100, "decrease": 1, "tracked": 8}"""
+    val json =
+      """
+      {"profile_crc": "00000001", "wire_columns": ["attack_this_tick"], "chunk": 5,
+       "max_chunk_rows": 64, "primary": "a",
+       "models": [
+         {"id": "a", "title": "Main", "schedule": "attack", "pre": 20, "post": 20, "step": 20,
+          "events": ["hit_player"], $buffer},
+         {"id": "f", "title": "Side", "schedule": "slide", "window": 16, "stride": 8,
+          "events": ["hit_player"], $buffer}
+       ]}
+      """
+    val profile =
+      ac.shard.ai.stream.ProfileParser.parse(ac.shard.http.Json.mapper.readTree(json)).getOrThrow()
+    val builder = MonitorFrameBuilder(LabelCatalog(local = { emptyMap() }, profile = { profile }))
+    val yaml =
+      baseYaml.replace("prob: \"P{prob}\"", "prob: \"P{model_prefix}{prob}{label_suffix}\"")
+    val sample =
+      sample()
+        .copy(
+          model = "Main",
+          labelBuffers = mapOf("f/_unattributed" to 12.0),
+          labelProbabilities = mapOf("f/_unattributed" to 0.02),
+        )
+    val frame = builder.build(request(sample), config(yaml))
+    assertTrue("PMain|43|" in frame.headline, frame.headline)
+    assertFalse("Side" in frame.headline, frame.headline)
+    assertFalse("_unattributed" in frame.headline, frame.headline)
   }
 }

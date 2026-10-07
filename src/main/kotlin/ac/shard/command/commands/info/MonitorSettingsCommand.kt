@@ -20,6 +20,7 @@ package ac.shard.command.commands.info
 import ac.shard.command.ShardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.LabelFocus
+import ac.shard.monitor.core.ModelFilter
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -30,7 +31,7 @@ import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.MonitorOutputRegistry
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import java.util.Locale
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
@@ -40,6 +41,7 @@ import org.incendo.cloud.parser.standard.StringParser
 
 @Suppress("TooManyFunctions")
 class MonitorSettingsCommand(
+  private val messages: Messages,
   private val settingsService: MonitorSettingsService,
   private val hudService: MonitorHudService,
   private val registry: MonitorOutputRegistry,
@@ -73,14 +75,22 @@ class MonitorSettingsCommand(
       required("style", StringParser.stringParser()) {
         suggestionProvider = MonitorSuggestions.CHAT
       }
-      handler(this@MonitorSettingsCommand::setChatStyle)
+      handler { setChatStyle(it) }
     }
     listOf(listOf("set", "label"), listOf("label")).forEach { path ->
       monitorCommand(manager, path = path) {
         required("label", StringParser.stringParser()) {
           suggestionProvider = MonitorSuggestions.labelFocus(configManager)
         }
-        handler(this@MonitorSettingsCommand::setLabelFocus)
+        handler { setLabelFocus(it) }
+      }
+    }
+    listOf(listOf("set", "models"), listOf("models")).forEach { path ->
+      monitorCommand(manager, path = path) {
+        required("models", StringParser.stringParser()) {
+          suggestionProvider = MonitorSuggestions.models(configManager)
+        }
+        handler { setModels(it) }
       }
     }
     listOf(listOf("set", "output"), listOf("output")).forEach { path ->
@@ -98,7 +108,7 @@ class MonitorSettingsCommand(
       handler { ctx -> changeOutput(ctx, OutputChange.REMOVE) }
     }
     monitorCommand(manager, path = listOf("reset")) {
-      handler(this@MonitorSettingsCommand::resetSettings)
+      handler { resetSettings(it) }
     }
   }
 
@@ -165,6 +175,21 @@ class MonitorSettingsCommand(
     )
   }
 
+  private fun setModels(context: CommandContext<Sender>) {
+    val raw: String = context["models"]
+    val known = configManager.streamProfile?.active?.map { it.id.lowercase(Locale.ROOT) }
+    val parsed =
+      ModelFilter.parse(raw)?.takeIf { value ->
+        known == null || ModelFilter.ids(value).all { it in known }
+      }
+    applyOrReject(
+      context,
+      "models",
+      parsed?.let { { s: MonitorSettings -> s.copy(models = it) } },
+      parsed?.let(ModelFilter::describe) ?: raw,
+    )
+  }
+
   private fun setFlag(context: CommandContext<Sender>, key: SettingKey) {
     val raw: String = context["state"]
     val enabled = parseToggle(raw)
@@ -188,7 +213,7 @@ class MonitorSettingsCommand(
     val before = settingsService.getSettings(player.uniqueId)
     settingsService.mutate(player, { settingsService.defaults() }) { updated ->
       restartIfSessionShapeChanged(hudService, player, before, updated)
-      MessageUtil.sendMessage(sender.nativeSender, Message.MONITOR_RESET)
+      messages.sendMessage(sender.nativeSender, Message.MONITOR_RESET)
     }
   }
 
@@ -201,7 +226,7 @@ class MonitorSettingsCommand(
     val sender = context.sender()
     val player = sender.player ?: return
     if (mutator == null) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.MONITOR_INVALID_SETTING,
         "setting",
@@ -225,9 +250,9 @@ class MonitorSettingsCommand(
     settingsService.mutate(player, mutator) { updated ->
       restartIfSessionShapeChanged(hudService, player, before, updated)
       if (setting == null) {
-        MessageUtil.sendMessage(player, message, "output", value)
+        messages.sendMessage(player, message, "output", value)
       } else {
-        MessageUtil.sendMessage(player, message, "setting", setting, "value", value)
+        messages.sendMessage(player, message, "setting", setting, "value", value)
       }
     }
   }
@@ -256,5 +281,6 @@ internal fun optionsFor(setting: String): String =
     "name" -> MonitorNameMode.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
     "chat" -> MonitorChatStyle.entries.joinToString("/") { it.name.lowercase(Locale.ROOT) }
     "label" -> "auto/off/all/<label>"
+    "models" -> "all/primary/<model>[,<model>]"
     else -> "on/off"
   }

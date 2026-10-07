@@ -18,8 +18,8 @@
 package ac.shard.monitor.hud
 
 import ac.shard.ai.label.LabelCatalog
-import ac.shard.api.event.AiPredictionEvent
 import ac.shard.config.ConfigView
+import ac.shard.detection.Prediction
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -251,6 +251,17 @@ class MonitorHudSessionTest {
   }
 
   @Test
+  fun `a live frame names the main model the caller looked up`() {
+    val output = RecordingOutput(MonitorOutputPolicy(keepAliveCycles = 0, minIntervalCycles = 0))
+    val session = session(output)
+    session.render(listOf(sample()), settings(), builder)
+
+    val frame = session.liveFrame(event(), settings(), builder, "NONE", "a")
+
+    assertEquals("a<dark_gray>•</dark_gray>", frame?.placeholders?.get("model_prefix"))
+  }
+
+  @Test
   fun `a live frame carries the tier the caller looked up`() {
     val output = RecordingOutput(MonitorOutputPolicy(keepAliveCycles = 0, minIntervalCycles = 0))
     val session = session(output)
@@ -321,10 +332,9 @@ class MonitorHudSessionTest {
   }
 
   private fun event(probability: Double = 0.5) =
-    AiPredictionEvent(
+    Prediction(
       playerId = targetId,
       playerName = "Steve",
-      checkName = "AI",
       probability = probability,
       bufferBefore = 1.0,
       bufferAfter = 2.0,

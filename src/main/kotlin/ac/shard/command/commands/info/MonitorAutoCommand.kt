@@ -22,18 +22,19 @@ import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.StartResult
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 internal class MonitorAutoCommand(
+  private val messages: Messages,
   private val hudService: MonitorHudService,
   private val settingsService: MonitorSettingsService,
 ) {
   fun toggle(viewer: Player, sender: CommandSender, mode: MonitorTargetMode) {
     when {
       !canWatchAuto(viewer, mode) ->
-        MessageUtil.sendMessage(sender, Message.MONITOR_AUTO_NO_PERMISSION, "mode", mode.key)
+        messages.sendMessage(sender, Message.MONITOR_AUTO_NO_PERMISSION, "mode", mode.key)
       hudService.session(viewer.uniqueId)?.targetMode == mode -> stop(viewer, sender, mode)
       else -> start(viewer, sender, mode)
     }
@@ -42,11 +43,11 @@ internal class MonitorAutoCommand(
   fun manual(viewer: Player, sender: CommandSender) {
     val session = hudService.session(viewer.uniqueId)
     if (session == null || !session.targetMode.isAuto) {
-      MessageUtil.sendMessage(sender, Message.MONITOR_AUTO_NOT_ACTIVE)
+      messages.sendMessage(sender, Message.MONITOR_AUTO_NOT_ACTIVE)
       return
     }
     session.targetMode = MonitorTargetMode.MANUAL
-    MessageUtil.sendMessage(
+    messages.sendMessage(
       sender,
       Message.MONITOR_AUTO_MANUAL,
       "count",
@@ -56,22 +57,22 @@ internal class MonitorAutoCommand(
 
   private fun stop(viewer: Player, sender: CommandSender, mode: MonitorTargetMode) {
     hudService.stop(viewer.uniqueId, viewer)
-    MessageUtil.sendMessage(sender, Message.MONITOR_AUTO_STOPPED, "mode", mode.key)
+    messages.sendMessage(sender, Message.MONITOR_AUTO_STOPPED, "mode", mode.key)
   }
 
   private fun start(viewer: Player, sender: CommandSender, mode: MonitorTargetMode) {
     when (hudService.start(viewer, null, mode)) {
       StartResult.STARTED ->
-        MessageUtil.sendMessage(sender, Message.MONITOR_AUTO_ENABLED, "mode", mode.key)
+        messages.sendMessage(sender, Message.MONITOR_AUTO_ENABLED, "mode", mode.key)
       StartResult.LIMIT_REACHED ->
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender,
           Message.MONITOR_LIMIT_REACHED,
           "limit",
           hudService.runtimeConfig.limits.maxSessions.toString(),
         )
       StartResult.NO_OUTPUT ->
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender,
           Message.MONITOR_OUTPUT_DISABLED,
           "output",

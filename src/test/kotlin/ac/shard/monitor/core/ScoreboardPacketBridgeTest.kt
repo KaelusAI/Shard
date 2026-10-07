@@ -101,7 +101,7 @@ class ScoreboardPacketBridgeTest {
   }
 
   @Test
-  fun `entry removal uses reset-score only when both sides are modern`() {
+  fun `entry removal on a modern server uses reset-score`() {
     install(ServerVersion.V_1_21, ClientVersion.V_1_21)
     ScoreboardPacketBridge(ComponentCache()).removeEntry(viewer, "obj", "entry")
 
@@ -109,8 +109,16 @@ class ScoreboardPacketBridgeTest {
   }
 
   @Test
-  fun `entry removal falls back to the remove action for a legacy client`() {
+  fun `entry removal follows the server format even for a legacy client`() {
     install(ServerVersion.V_1_21, ClientVersion.V_1_20_2)
+    ScoreboardPacketBridge(ComponentCache()).removeEntry(viewer, "obj", "entry")
+
+    assertIs<WrapperPlayServerResetScore>(sent.single())
+  }
+
+  @Test
+  fun `entry removal on a legacy server uses the remove action`() {
+    install(ServerVersion.V_1_20_1, ClientVersion.V_1_21)
     ScoreboardPacketBridge(ComponentCache()).removeEntry(viewer, "obj", "entry")
 
     val packet = assertIs<WrapperPlayServerUpdateScore>(sent.single())

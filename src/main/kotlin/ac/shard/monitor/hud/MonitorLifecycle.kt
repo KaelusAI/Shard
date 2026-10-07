@@ -18,7 +18,7 @@
 package ac.shard.monitor.hud
 
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
@@ -26,6 +26,7 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerQuitEvent
 
 class MonitorLifecycle(
+  private val messages: Messages,
   private val hudService: MonitorHudService,
   private val index: MonitorTargetIndex,
 ) : Listener {
@@ -49,7 +50,7 @@ class MonitorLifecycle(
       } else {
         index.set(viewerId, session.targets.ids())
       }
-      MessageUtil.sendMessage(session.viewer, Message.MONITOR_DISABLED, "player", target.name)
+      messages.sendMessage(session.viewer, Message.MONITOR_DISABLED, "player", target.name)
     }
   }
 }

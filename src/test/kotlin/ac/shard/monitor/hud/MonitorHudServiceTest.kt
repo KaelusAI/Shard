@@ -18,11 +18,10 @@
 package ac.shard.monitor.hud
 
 import ac.shard.ai.label.LabelCatalog
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
 import ac.shard.config.LocaleManager
+import ac.shard.detection.DetectionState
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorOutputKind
@@ -135,11 +134,18 @@ class MonitorHudServiceTest {
       localeManager,
       playerDataManager,
       Logger.getLogger("hud-service-test"),
+      MonitorOutputFailures(),
+      mockk<org.bukkit.Server> {
+        every { getPlayer(any<java.util.UUID>()) } answers
+          {
+            org.bukkit.Bukkit.getPlayer(firstArg<java.util.UUID>())
+          }
+      },
     )
   }
 
   private fun online(name: String, buffer: Double): ShardPlayer {
-    val check = mockk<AiCheck>(relaxed = true)
+    val check = mockk<DetectionState>(relaxed = true)
     every { check.buffer } returns buffer
     return online(name, check)
   }
@@ -150,7 +156,7 @@ class MonitorHudServiceTest {
     ticksSinceAttack: Int,
     hasAttacked: Boolean = true,
   ): ShardPlayer {
-    val check = mockk<AiCheck>(relaxed = true)
+    val check = mockk<DetectionState>(relaxed = true)
     every { check.buffer } returns buffer
     val shardPlayer = online(name, check)
     val combat = CombatState(ticksSinceAttack)
@@ -159,13 +165,11 @@ class MonitorHudServiceTest {
     return shardPlayer
   }
 
-  private fun online(name: String, check: AiCheck): ShardPlayer {
+  private fun online(name: String, check: DetectionState): ShardPlayer {
     val player = player(UUID.randomUUID(), name)
-    val checkManager = mockk<CheckManager>(relaxed = true)
-    every { checkManager.getCheck(AiCheck::class.java) } returns check
     val shardPlayer = mockk<ShardPlayer>(relaxed = true)
     every { shardPlayer.player } returns player
-    every { shardPlayer.checkManager } returns checkManager
+    every { shardPlayer.detection } returns check
     return shardPlayer
   }
 
@@ -457,7 +461,7 @@ class MonitorHudServiceTest {
   @Test
   fun `a watched player stays until the buffer falls past the exit ratio`() {
     val service = service(yaml = "auto:\n  refresh-ticks: 1\n")
-    val check = mockk<AiCheck>(relaxed = true)
+    val check = mockk<DetectionState>(relaxed = true)
     every { check.buffer } returns 40.0
     every { playerDataManager.getPlayers() } returns listOf(online("Steve", check))
     val viewer = player(viewerId, "Admin")
@@ -474,7 +478,7 @@ class MonitorHudServiceTest {
   @Test
   fun `a watched player leaves once the buffer drops below the exit ratio`() {
     val service = service(yaml = "auto:\n  refresh-ticks: 1\n  linger-ticks: 0\n")
-    val check = mockk<AiCheck>(relaxed = true)
+    val check = mockk<DetectionState>(relaxed = true)
     every { check.buffer } returns 40.0
     every { playerDataManager.getPlayers() } returns listOf(online("Steve", check))
     val viewer = player(viewerId, "Admin")

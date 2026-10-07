@@ -17,8 +17,9 @@
  */
 package ac.shard.monitor.hud
 
-import ac.shard.api.event.AiPredictionEvent
-import ac.shard.api.event.ShardEventBus
+import ac.shard.detection.Prediction
+import ac.shard.detection.Predictions
+import ac.shard.monitor.core.ModelFilter
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorOutputKind
@@ -41,11 +42,11 @@ class MonitorLiveChatListener(
   private val playerDataManager: PlayerDataManager,
   private val logger: Logger,
 ) {
-  fun register(eventBus: ShardEventBus, pluginContext: Any) {
-    eventBus.subscribe(pluginContext, AiPredictionEvent::class.java, ::onPrediction)
+  fun register(predictions: Predictions) {
+    predictions.listen(::onPrediction)
   }
 
-  fun onPrediction(event: AiPredictionEvent) {
+  fun onPrediction(event: Prediction) {
     for (viewerId in index.viewersOf(event.playerId)) {
       val session = hudService.session(viewerId)
       if (session != null && wantsLiveChat(session)) {
@@ -59,25 +60,32 @@ class MonitorLiveChatListener(
       session.chatStyle == MonitorChatStyle.LIVE
 
   @Suppress("TooGenericExceptionCaught")
-  private fun deliver(session: MonitorHudSession, event: AiPredictionEvent) {
+  private fun deliver(session: MonitorHudSession, event: Prediction) {
     try {
       val settings = settingsService.getSettings(session.viewer.uniqueId)
-      val tier =
-        playerDataManager.getPlayer(event.playerId)?.mitigation?.appliedTier?.name ?: "NONE"
-      val frame = session.liveFrame(event, settings, frameBuilder, tier)
-      if (frame != null) {
-        chatOutput.deliverLive(
-          session.context,
-          LiveSignal(
-            frame,
-            event.flagged,
+      val target = playerDataManager.getPlayer(event.playerId)
+      val tier = target?.mitigation?.appliedTier?.name ?: "NONE"
+      val model =
+        if (event.primary) {
+          target?.detection?.shownModelTitle.orEmpty()
+        } else {
+          event.model
+        }
+      val frame = session.liveFrame(event, settings, frameBuilder, tier, model)
+      if (frame != null && ModelFilter.shows(settings.models, event.modelId, event.primary)) {
+        val probability =
+          if (event.primary) {
             MonitorLabelInfo.probabilityOfLeader(
               event.labelBuffers,
               event.labelProbabilities,
               event.probability,
-            ),
-            System.currentTimeMillis(),
-          ),
+            )
+          } else {
+            event.probability
+          }
+        chatOutput.deliverLive(
+          session.context,
+          LiveSignal(frame, event.flagged, probability, System.currentTimeMillis(), event.modelId),
         )
       }
     } catch (throwable: Throwable) {

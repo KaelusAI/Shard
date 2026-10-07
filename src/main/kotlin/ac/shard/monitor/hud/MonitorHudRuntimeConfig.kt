@@ -212,7 +212,7 @@ data class MonitorHudRuntimeConfig(
   }
 }
 
-internal val FALLBACK_TOKENS = listOf(MonitorToken.PROB, MonitorToken.TREND, MonitorToken.BUFFER)
+internal val FALLBACK_TOKENS = listOf(MonitorToken.PROB, MonitorToken.BUFFER)
 
 internal const val DEFAULT_HUD_UPDATE_TICKS = 2L
 internal const val DEFAULT_KEEPALIVE_TICKS = 20L

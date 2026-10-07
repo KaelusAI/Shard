@@ -18,6 +18,7 @@
 package ac.shard.monitor.core
 
 import ac.shard.ai.label.LabelKey
+import ac.shard.detection.ModelCard
 import java.util.UUID
 
 data class MonitorSample(
@@ -40,6 +41,8 @@ data class MonitorSample(
   val score: Double = 0.0,
   val rule: String = "",
   val appliedForMillis: Long = 0L,
+  val model: String = "",
+  val models: List<ModelCard> = emptyList(),
 )
 
 data class MonitorLabelInfo(val label: String, val buffer: Double) {
@@ -52,10 +55,12 @@ data class MonitorLabelInfo(val label: String, val buffer: Double) {
       fallback: Double,
     ): Double = leading(buffers)?.let { probabilities[it.label] } ?: fallback
 
+    private fun primaryLabel(key: String): Boolean = '/' !in key && !LabelKey.isReserved(key)
+
     fun attributed(buffers: Map<String, Double>): List<MonitorLabelInfo> =
       buffers
         .asSequence()
-        .filterNot { LabelKey.isReserved(it.key) }
+        .filter { primaryLabel(it.key) }
         .filter { it.value > 0.0 }
         .sortedByDescending { it.value }
         .map { MonitorLabelInfo(it.key, it.value) }
@@ -65,7 +70,7 @@ data class MonitorLabelInfo(val label: String, val buffer: Double) {
       val declared =
         (sample.declaredLabels + sample.labelProbabilities.keys + sample.labelBuffers.keys)
           .asSequence()
-          .filterNot(LabelKey::isReserved)
+          .filter(::primaryLabel)
           .distinct()
           .toList()
       return declared
@@ -86,4 +91,8 @@ data class MonitorCollectInfo(
   val elapsed: String,
 )
 
-data class MonitorInferenceInfo(val status: String)
+data class MonitorInferenceInfo(
+  val status: String,
+  val fault: Boolean = false,
+  val named: Boolean = false,
+)

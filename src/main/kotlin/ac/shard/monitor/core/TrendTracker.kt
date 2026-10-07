@@ -24,6 +24,9 @@ class TrendTracker(private val threshold: Double, private val decayCycles: Int) 
   private var trend = 0.0
   private var cyclesSinceChange = 0
 
+  val settled: Boolean
+    get() = lastProbability < 0.0 || (decayCycles > 0 && cyclesSinceChange >= decayCycles)
+
   fun update(probability: Double): Double {
     if (lastProbability >= 0.0) {
       applyDelta(probability - lastProbability)

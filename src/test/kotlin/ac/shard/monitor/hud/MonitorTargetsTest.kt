@@ -105,6 +105,8 @@ class MonitorTargetsTest {
       localeManager,
       mockk<ac.shard.player.PlayerDataManager>(relaxed = true),
       Logger.getLogger("targets-test"),
+      MonitorOutputFailures(),
+      mockk(relaxed = true),
     )
   }
 

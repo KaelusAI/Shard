@@ -17,7 +17,7 @@
  */
 package ac.shard.monitor.hud
 
-import ac.shard.api.event.AiPredictionEvent
+import ac.shard.detection.Prediction
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorOutputKind
@@ -147,27 +147,49 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
   }
 
   fun liveFrame(
-    event: AiPredictionEvent,
+    event: Prediction,
     settings: MonitorSettings,
     builder: MonitorFrameBuilder,
     tier: String,
+    model: String = "",
   ): MonitorFrame? {
     val state = targets.state(event.playerId) ?: return null
-    return frameFor(state, sampleOf(event, state, tier), settings, builder)
+    val sample = sampleOf(event, state, tier).copy(model = model)
+    return if (event.primary) {
+      frameFor(state, sample, settings, builder)
+    } else {
+      frameFor(
+        state,
+        sideSample(sample, event),
+        settings,
+        builder,
+        state.modelTrend(event.modelId, event.probability),
+      )
+    }
   }
+
+  private fun sideSample(sample: MonitorSample, event: Prediction): MonitorSample =
+    sample.copy(
+      probability = event.probability,
+      leadingLabel = null,
+      labelBuffers = emptyMap(),
+      labelProbabilities = emptyMap(),
+    )
 
   private fun frameFor(
     state: MonitorTargetState,
     sample: MonitorSample,
     settings: MonitorSettings,
     builder: MonitorFrameBuilder,
+    trend: Double? = null,
   ): MonitorFrame =
     builder.build(
       MonitorFrameRequest(
         sample = sample,
         settings = settings,
         pingValue = state.ping,
-        trend = state.trend,
+        trend = trend ?: state.trend,
+        trendSettled = trend == null && state.trendSettled,
         selfView = spec.viewer.uniqueId == state.targetId,
         unavailableHeadline = if (sample.dataPresent) state.texts.noAiCheck else state.texts.noData,
         collectVisible = spec.viewer.hasPermission(COLLECT_VIEW_PERMISSION),
@@ -200,7 +222,7 @@ class MonitorHudSession(private val spec: MonitorSessionSpec, outputs: List<Moni
   }
 
   private fun sampleOf(
-    event: AiPredictionEvent,
+    event: Prediction,
     state: MonitorTargetState,
     tier: String,
   ): MonitorSample =

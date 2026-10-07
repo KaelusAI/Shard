@@ -18,23 +18,29 @@
 package ac.shard.monitor.hud
 
 import ac.shard.Shard
-import ac.shard.api.event.ShardEventBus
+import ac.shard.detection.Predictions
 import ac.shard.monitor.core.MonitorSettingsLifecycle
 import ac.shard.monitor.core.MonitorSettingsService
+import ac.shard.utils.Messages
 
+@Suppress("LongParameterList")
 class MonitorRuntime(
   private val plugin: Shard,
   private val settingsService: MonitorSettingsService,
   private val hudService: MonitorHudService,
   private val index: MonitorTargetIndex,
   private val liveChatListener: MonitorLiveChatListener,
-  private val eventBus: ShardEventBus,
+  private val predictions: Predictions,
+  private val messages: Messages,
 ) {
   fun enable() {
     plugin.server.pluginManager.registerEvents(MonitorSettingsLifecycle(settingsService), plugin)
-    plugin.server.pluginManager.registerEvents(MonitorLifecycle(hudService, index), plugin)
+    plugin.server.pluginManager.registerEvents(
+      MonitorLifecycle(messages, hudService, index),
+      plugin,
+    )
     plugin.server.onlinePlayers.forEach { settingsService.prewarm(it.uniqueId) }
-    liveChatListener.register(eventBus, plugin)
+    liveChatListener.register(predictions)
   }
 
   fun disable() {

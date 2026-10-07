@@ -24,6 +24,7 @@ data class MonitorFormatConfig(
   val probDecimals: Int,
   val trendDecimals: Int,
   val trendThreshold: Double,
+  val trendHideWhenSettled: Boolean,
   val bufferDecimals: Int,
   val pingMinWidth: Int,
   val dmgDecimals: Int,
@@ -44,6 +45,7 @@ data class MonitorFormatConfig(
         trendDecimals = trendDecimals,
         trendThreshold =
           if (configuredThreshold > 0.0) configuredThreshold else autoTrendThreshold(trendDecimals),
+        trendHideWhenSettled = config.getBoolean("format.trend.hide-when-settled", true),
         bufferDecimals =
           config
             .getInt("format.buffer.decimals", DEFAULT_BUFFER_DECIMALS)
@@ -54,7 +56,7 @@ data class MonitorFormatConfig(
             .coerceIn(0, MAX_PING_WIDTH),
         dmgDecimals =
           config.getInt("format.dmg.decimals", DEFAULT_DMG_DECIMALS).coerceIn(0, MAX_DECIMALS),
-        dmgHideWhenDefault = config.getBoolean("format.dmg.hide-when-default", false),
+        dmgHideWhenDefault = config.getBoolean("format.dmg.hide-when-default", true),
         tierHideWhenNone = config.getBoolean("format.tier.hide-when-none", true),
         tierUppercase = config.getBoolean("format.tier.uppercase", false),
         scoreDecimals = config.getInt("format.score.decimals", 1).coerceIn(0, MAX_DECIMALS),

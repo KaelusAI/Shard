@@ -56,7 +56,15 @@ internal object MonitorSuggestions {
 
   fun labelFocus(configManager: ConfigManager): SuggestionProvider<Sender> =
     SuggestionProvider.blocking { _, _ ->
-      (listOf("auto", "off", "all") + configManager.aiLabels).map(Suggestion::suggestion)
+      (listOf("auto", "off", "all") + configManager.declaredDetections()).map(
+        Suggestion::suggestion
+      )
+    }
+
+  fun models(configManager: ConfigManager): SuggestionProvider<Sender> =
+    SuggestionProvider.blocking { _, _ ->
+      val ids = configManager.streamProfile?.active?.map { it.id }.orEmpty()
+      (listOf("all", "primary") + ids).map(Suggestion::suggestion)
     }
 
   fun watched(targets: MonitorTargetsService): SuggestionProvider<Sender> =

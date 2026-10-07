@@ -17,17 +17,16 @@
  */
 package ac.shard.monitor.hud
 
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.LocaleManager
 import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.player.PlayerDataManager
 import java.util.UUID
-import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 
 internal class MonitorAutoTargets(
   private val playerDataManager: PlayerDataManager,
   private val index: MonitorTargetIndex,
+  private val server: org.bukkit.Server,
 ) {
   fun resolve(
     session: MonitorHudSession,
@@ -52,7 +51,7 @@ internal class MonitorAutoTargets(
   }
 
   private fun watched(session: MonitorHudSession): List<Player> =
-    session.targets.ids().mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }
+    session.targets.ids().mapNotNull { server.getPlayer(it) }.filter { it.isOnline }
 
   private fun pick(session: MonitorHudSession): List<Player> {
     val capacity = effectiveCapacity(session.outputs, session.config)
@@ -66,7 +65,7 @@ internal class MonitorAutoTargets(
         if (!player.isOnline) return@mapNotNull null
         Candidate(
           player = player,
-          buffer = shardPlayer.checkManager.getCheck(AiCheck::class.java)?.buffer ?: 0.0,
+          buffer = shardPlayer.detection.buffer,
           inCombat =
             shardPlayer.combat.hasAttacked &&
               shardPlayer.combat.ticksSinceAttack <= auto.combatTicks,

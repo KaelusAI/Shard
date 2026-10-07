@@ -40,9 +40,15 @@ class MonitorCommandTreeTest {
 
   private fun registerAll(): TestManager {
     val manager = TestManager()
-    MonitorCommand(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+    MonitorCommand(
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+      )
       .register(manager)
     MonitorSettingsCommand(
+        mockk(relaxed = true),
         mockk<MonitorSettingsService>(relaxed = true),
         mockk<MonitorHudService>(relaxed = true),
         mockk<MonitorOutputRegistry>(relaxed = true),
@@ -51,6 +57,7 @@ class MonitorCommandTreeTest {
       )
       .register(manager)
     MonitorInfoCommand(
+        mockk(relaxed = true),
         mockk<MonitorSettingsService>(relaxed = true),
         mockk<MonitorHudService>(relaxed = true),
         mockk<MonitorOutputRegistry>(relaxed = true),

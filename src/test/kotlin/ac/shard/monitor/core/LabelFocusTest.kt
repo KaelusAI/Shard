@@ -17,30 +17,25 @@
  */
 package ac.shard.monitor.core
 
-import java.util.Locale
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import org.junit.jupiter.api.Test
 
-enum class MonitorToken(val key: String) {
-  NAME("name"),
-  PROB("prob"),
-  TREND("trend"),
-  BUFFER("buffer"),
-  MODELS("models"),
-  LABEL("label"),
-  LABELS("labels"),
-  PING("ping"),
-  DMG("dmg"),
-  PROB90("prob90"),
-  COLLECT("collect"),
-  INFERENCE("inference"),
-  INFERENCE_ERRORS("inference-errors"),
-  TIER("tier"),
-  SCORE("score"),
-  RULE("rule");
+class LabelFocusTest {
 
-  companion object {
-    private val BY_KEY = entries.associateBy { it.key }
+  @Test
+  fun `a bare label is canonicalised as before`() {
+    assertEquals("x_y", LabelFocus.parse("X Y"))
+  }
 
-    fun fromConfig(value: String?): MonitorToken? =
-      value?.trim()?.lowercase(Locale.ROOT)?.let { BY_KEY[it] }
+  @Test
+  fun `an address keeps its model and canonicalises the label`() {
+    assertEquals("c/x_y", LabelFocus.parse("C/X Y"))
+  }
+
+  @Test
+  fun `an address with an impossible model or an empty label is rejected`() {
+    assertNull(LabelFocus.parse("bad-model/x"))
+    assertNull(LabelFocus.parse("c/!!!"))
   }
 }

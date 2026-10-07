@@ -28,6 +28,23 @@ fun interface MonitorOutputFailureSink {
   fun onOutputFailed(viewerId: UUID, kind: MonitorOutputKind, phase: String, error: Throwable)
 }
 
+class MonitorOutputFailures : MonitorOutputFailureSink {
+  @Volatile private var listener: MonitorOutputFailureSink? = null
+
+  fun listen(listener: MonitorOutputFailureSink) {
+    this.listener = listener
+  }
+
+  override fun onOutputFailed(
+    viewerId: UUID,
+    kind: MonitorOutputKind,
+    phase: String,
+    error: Throwable,
+  ) {
+    listener?.onOutputFailed(viewerId, kind, phase, error)
+  }
+}
+
 @Suppress("TooGenericExceptionCaught")
 class MonitorOutputGuard(
   private val delegate: MonitorOutput,

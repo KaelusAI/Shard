@@ -17,7 +17,7 @@
  */
 package ac.shard.monitor.core
 
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.MiniText
 import java.util.concurrent.ConcurrentHashMap
 import net.kyori.adventure.text.Component
 
@@ -34,7 +34,7 @@ class ComponentCache(private val maxSize: Int = DEFAULT_MAX_SIZE) {
       cache.clear()
     }
 
-    val parsed = MessageUtil.deserializeRaw(raw)
+    val parsed = MiniText.deserializeRaw(raw)
     val existing = cache.putIfAbsent(raw, parsed)
     return existing ?: parsed
   }

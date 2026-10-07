@@ -18,8 +18,8 @@
 package ac.shard.monitor.hud
 
 import ac.shard.ai.label.LabelCatalog
-import ac.shard.api.event.AiPredictionEvent
 import ac.shard.config.ConfigView
+import ac.shard.detection.Prediction
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
@@ -29,6 +29,7 @@ import ac.shard.monitor.core.MonitorSettingsService
 import ac.shard.monitor.core.MonitorTheme
 import ac.shard.monitor.hud.output.ChatOutput
 import ac.shard.monitor.hud.output.LiveSignal
+import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import io.mockk.every
 import io.mockk.mockk
@@ -63,7 +64,7 @@ class MonitorLiveChatListenerTest {
       settingsService,
       MonitorFrameBuilder(LabelCatalog(local = { emptyMap() })),
       scheduler,
-      mockk(relaxed = true),
+      mockk<PlayerDataManager> { every { getPlayer(any<UUID>()) } returns null },
       Logger.getLogger("live-chat-listener"),
     )
 
@@ -115,10 +116,9 @@ class MonitorLiveChatListenerTest {
   }
 
   private fun event(flagged: Boolean = false) =
-    AiPredictionEvent(
+    Prediction(
       playerId = targetId,
       playerName = "Steve",
-      checkName = "AI",
       probability = 0.87,
       bufferBefore = 1.0,
       bufferAfter = 2.0,

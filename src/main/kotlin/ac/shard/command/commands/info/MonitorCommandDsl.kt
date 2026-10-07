@@ -19,13 +19,13 @@ package ac.shard.command.commands.info
 
 import ac.shard.command.CommandRegister
 import ac.shard.command.requirements.PlayerSenderRequirement
+import ac.shard.command.shardCommand
 import ac.shard.monitor.core.MonitorTargetMode
 import ac.shard.sender.Sender
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.kotlin.MutableCommandBuilder
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.kotlin.extension.suggestionProvider
 import org.incendo.cloud.parser.standard.StringParser
 import org.incendo.cloud.suggestion.SuggestionProvider
@@ -40,7 +40,7 @@ internal fun monitorCommand(
   playerOnly: Boolean = true,
   configure: MutableCommandBuilder<Sender>.() -> Unit,
 ) {
-  manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+  manager.shardCommand {
     literal("monitor").permission(permission)
     if (playerOnly) {
       mutate { it.apply(CommandRegister.REQUIREMENT_FACTORY.create(PlayerSenderRequirement)) }
@@ -54,7 +54,7 @@ internal fun probCommand(
   manager: CommandManager<Sender>,
   configure: MutableCommandBuilder<Sender>.() -> Unit,
 ) {
-  manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+  manager.shardCommand {
     literal("prob").permission(MONITOR_SELF_PERMISSION)
     configure.invoke(this)
   }
