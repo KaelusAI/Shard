@@ -19,24 +19,70 @@ package ac.shard.data
 
 import ac.shard.player.ShardPlayer
 
+@Suppress("TooManyFunctions")
 class TickBuffer(private val capacity: Int) {
 
   private val buffer = Array(capacity) { TickData() }
+  private val seqs = LongArray(capacity)
   private var writeIndex = 0
   private var ticksWritten = 0L
   private var attackBufferIndex = -1
+  private var nextSeq = 1L
 
   fun capacity(): Int = capacity
 
   fun currentSlot(): TickData = buffer[writeIndex]
 
   fun capture(player: ShardPlayer) {
+    seqs[writeIndex] = nextSeq
     currentSlot().capture(player)
   }
 
+  internal fun captureRaw(fill: (TickData) -> Unit) {
+    seqs[writeIndex] = nextSeq
+    fill(currentSlot())
+  }
+
   fun advance() {
+    nextSeq++
     ticksWritten++
     writeIndex = (writeIndex + 1) % capacity
+  }
+
+  fun currentSeq(): Long = nextSeq
+
+  fun oldestSeq(): Long = maxOf(1L, nextSeq - capacity + 1)
+
+  private fun slotOf(seq: Long): Int =
+    Math.floorMod(writeIndex - (nextSeq - seq), capacity.toLong()).toInt()
+
+  fun holds(from: Long, to: Long): Boolean =
+    from in 1..to &&
+      to <= nextSeq &&
+      from >= oldestSeq() &&
+      seqs[slotOf(from)] == from &&
+      seqs[slotOf(to)] == to
+
+  fun rowAt(seq: Long): TickData {
+    val slot = slotOf(seq)
+    require(seq in oldestSeq()..nextSeq && seqs[slot] == seq) { "row $seq is not resident" }
+    return buffer[slot]
+  }
+
+  fun resizedTo(newCapacity: Int): TickBuffer {
+    val resized = TickBuffer(newCapacity)
+    val keep = minOf(capacity.toLong(), newCapacity.toLong(), nextSeq).toInt()
+    for (back in keep - 1 downTo 0) {
+      val src = Math.floorMod(writeIndex - back, capacity)
+      val dst = Math.floorMod(-back, newCapacity)
+      copyTickData(buffer[src], resized.buffer[dst])
+      resized.seqs[dst] = seqs[src]
+      if (src == attackBufferIndex) resized.attackBufferIndex = dst
+    }
+    resized.writeIndex = 0
+    resized.ticksWritten = ticksWritten
+    resized.nextSeq = nextSeq
+    return resized
   }
 
   fun resetForSession() {

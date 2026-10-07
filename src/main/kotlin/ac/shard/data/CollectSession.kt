@@ -17,7 +17,6 @@
  */
 package ac.shard.data
 
-import ac.shard.ai.TickSerializer
 import java.io.File
 import java.io.IOException
 import java.nio.charset.StandardCharsets
@@ -88,7 +87,7 @@ class CollectSession(
         w.append("player_name=").append(playerName).append('\n')
         w.append("label=").append(label).append('\n')
         w.append("format_version=1").append('\n')
-        w.append("schema_version=").append(TickSerializer.SCHEMA_VERSION.toString()).append('\n')
+        w.append("schema_version=").append(SCHEMA_VERSION.toString()).append('\n')
         w.append("collection_timestamp=").append(startTime.toEpochMilli().toString()).append('\n')
         w.append("server_version=").append(serverVersion).append('\n')
         w.append("client_version=").append(clientVersion.toString()).append('\n')
@@ -111,6 +110,7 @@ class CollectSession(
   }
 
   companion object {
+    private const val SCHEMA_VERSION = 1
     private const val COLLECT_DIR = "collect"
     private const val STAGING_DIR = ".staging"
 

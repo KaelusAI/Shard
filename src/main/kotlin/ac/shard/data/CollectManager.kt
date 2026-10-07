@@ -93,7 +93,7 @@ class CollectManager(
 
   fun getCurrentProgress(uuid: UUID): Int = windows[uuid]?.ticksSinceAttack ?: -1
 
-  fun getPostWindow(): Int = configManager.collectPostWindow
+  fun getPostWindow(): Int = configManager.settings.collect.post
 
   fun onTick(shardPlayer: ShardPlayer) {
     val uuid = shardPlayer.uuid
@@ -104,16 +104,18 @@ class CollectManager(
     }
 
     val tracker = windows.getOrPut(uuid) { AttackWindowTracker() }
+    val collect = configManager.settings.collect
     tracker.onTick(
       shardPlayer.tickBuffer,
-      shardPlayer.tracking.windowStartThisTick,
+      shardPlayer.tracking.windowStartThisTick &&
+        shardPlayer.tracking.windowStartKind == TickData.START_MELEE_PLAYER,
       shardPlayer.tracking.windowStartKind,
-      configManager.collectPostWindow,
+      collect.post,
     ) { ticks, attackIndex, kind ->
       val window =
         shardPlayer.tickBuffer.extractWindow(
-          configManager.collectPreWindow,
-          configManager.collectPostWindow,
+          collect.pre,
+          collect.post,
           ticks,
           attackIndex,
           kind,

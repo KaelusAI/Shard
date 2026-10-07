@@ -17,7 +17,6 @@
  */
 package ac.shard.data
 
-import ac.shard.checks.impl.combat.AimProcessor
 import ac.shard.entity.PacketEntity
 import ac.shard.player.ShardPlayer
 import ac.shard.player.state.TrackingState
@@ -185,7 +184,7 @@ class TickData {
   fun capture(player: ShardPlayer) {
     val m = player.movement
     val tracking = player.tracking
-    val aim = player.checkManager.getCheck(AimProcessor::class.java)
+    val aim = player.aim
 
     sequenceId = tracking.sequenceId
     tickIndex = tracking.tickIndex
@@ -210,7 +209,7 @@ class TickData {
       deltaY = 0.0
       tracking.firstTickProcessed = true
       tracking.fallDistance = 0f
-      aim?.reset()
+      aim.reset()
     }
     tracking.lastY = m.y
 
@@ -280,22 +279,13 @@ class TickData {
     ticksSinceExplosion = tracking.ticksSinceExplosion
     ticksSinceUseItem = tracking.ticksSinceUseItem
 
-    if (aim != null) {
-      modeYaw = aim.modeX.toFloat()
-      modePitch = aim.modeY.toFloat()
-      modeYawValid = aim.modeYawValid
-      modePitchValid = aim.modePitchValid
-      val dots = aim.consumeDots()
-      deltaDotsYaw = if (aim.modeYawValid) dots.yaw else 0f
-      deltaDotsPitch = if (aim.modePitchValid) dots.pitch else 0f
-    } else {
-      modeYaw = 0f
-      modePitch = 0f
-      modeYawValid = false
-      modePitchValid = false
-      deltaDotsYaw = 0f
-      deltaDotsPitch = 0f
-    }
+    modeYaw = aim.modeX.toFloat()
+    modePitch = aim.modeY.toFloat()
+    modeYawValid = aim.modeYawValid
+    modePitchValid = aim.modePitchValid
+    val dots = aim.consumeDots()
+    deltaDotsYaw = if (aim.modeYawValid) dots.yaw else 0f
+    deltaDotsPitch = if (aim.modePitchValid) dots.pitch else 0f
 
     activeFireworkCount = player.compensatedFireworks.count()
 

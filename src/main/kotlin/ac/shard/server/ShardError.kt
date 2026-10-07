@@ -17,13 +17,14 @@
  */
 package ac.shard.server
 
+import ac.shard.ai.stream.Retry
+import ac.shard.http.Json
 import ac.shard.server.AIServer.RequestException
 import ac.shard.server.AIServer.ResponseCode
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.JsonNode
 
 object ShardError {
-  private val MAPPER = ObjectMapper()
+  private val MAPPER = Json.mapper
 
   private data class Meta(val code: ResponseCode, val retryable: Boolean, val backoff: Boolean)
 
@@ -42,10 +43,11 @@ object ShardError {
   }
 
   fun fromError(errorNode: JsonNode, fallbackStatus: Int, body: String? = null): RequestException {
-    val serverCode = errorNode.get("code")?.takeIf { it.isTextual }?.asText()
-    val status = errorNode.get("status")?.takeIf { it.isInt }?.asInt() ?: fallbackStatus
-    val message = errorNode.get("message")?.takeIf { it.isTextual }?.asText()
-    val serverRetryable = errorNode.get("retryable")?.takeIf { it.isBoolean }?.asBoolean() ?: false
+    val serverCode = errorNode.get("code")?.takeIf { it.isTextual }?.asString("")
+    val status = errorNode.get("status")?.takeIf { it.isInt }?.asInt(0) ?: fallbackStatus
+    val message = errorNode.get("message")?.takeIf { it.isTextual }?.asString("")
+    val serverRetryable =
+      errorNode.get("retryable")?.takeIf { it.isBoolean }?.asBoolean(false) ?: false
     val meta = TAXONOMY[serverCode]
     val resolved = meta?.code ?: ResponseCode.fromStatusCode(status)
     return RequestException(
@@ -58,6 +60,12 @@ object ShardError {
       retryable = meta?.retryable ?: serverRetryable,
       backoff = meta?.backoff ?: policyFor(resolved).second,
       responseBody = body ?: errorNode.toString(),
+      retry = errorNode.get("retry")?.takeIf { it.isTextual }?.let { Retry.of(it.asString("")) },
+      retryAfterMs =
+        errorNode
+          .get("retry_after_ms")
+          ?.takeIf { it.canConvertToLong() && it.asLong(0L) >= 0 }
+          ?.asLong(0L),
     )
   }
 

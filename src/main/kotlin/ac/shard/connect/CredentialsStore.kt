@@ -18,11 +18,8 @@
 package ac.shard.connect
 
 import ac.shard.Shard
+import ac.shard.utils.AtomicFiles
 import java.io.File
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.nio.file.attribute.PosixFilePermissions
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
 data class Credentials(
@@ -98,63 +95,24 @@ class CredentialsStore(private val plugin: Shard) {
   }
 
   fun write(credentials: Credentials) {
-    val tmp = File(plugin.dataFolder, "$FILE_NAME.tmp")
     try {
-      if (!plugin.dataFolder.exists()) {
-        plugin.dataFolder.mkdirs()
+      AtomicFiles.replace(file.toPath(), ownerOnly = true) { tmp ->
+        val loader = YamlConfigurationLoader.builder().path(tmp).build()
+        val node = loader.createNode()
+        node.node("_note").set("Managed by /shard connect. Do not edit by hand.")
+        node.node("secret-key").set(credentials.secretKey)
+        node.node("server-id").set(credentials.serverId)
+        node.node("server-name").set(credentials.serverName)
+        node.node("allowlisted-ip").set(credentials.allowlistedIp)
+        node.node("inference-url").set(credentials.inferenceUrl)
+        loader.save(node)
       }
-      createPrivateFile(tmp)
-      val loader = YamlConfigurationLoader.builder().path(tmp.toPath()).build()
-      val node = loader.createNode()
-      node.node("_note").set("Managed by /shard connect. Do not edit by hand.")
-      node.node("secret-key").set(credentials.secretKey)
-      node.node("server-id").set(credentials.serverId)
-      node.node("server-name").set(credentials.serverName)
-      node.node("allowlisted-ip").set(credentials.allowlistedIp)
-      node.node("inference-url").set(credentials.inferenceUrl)
-      loader.save(node)
-      restrictPermissions(tmp)
-      moveIntoPlace(tmp)
-      restrictPermissions(file)
     } catch (e: Exception) {
       plugin.logger.warning("[Connect] Failed to write $FILE_NAME: ${e.message}")
-    } finally {
-      tmp.delete()
     }
   }
 
   fun clear(): Boolean = (!file.exists()) || file.delete()
-
-  private fun createPrivateFile(tmp: File) {
-    Files.deleteIfExists(tmp.toPath())
-    try {
-      Files.createFile(
-        tmp.toPath(),
-        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")),
-      )
-    } catch (_: UnsupportedOperationException) {
-      Files.createFile(tmp.toPath())
-    }
-  }
-
-  private fun moveIntoPlace(tmp: File) {
-    try {
-      Files.move(
-        tmp.toPath(),
-        file.toPath(),
-        StandardCopyOption.ATOMIC_MOVE,
-        StandardCopyOption.REPLACE_EXISTING,
-      )
-    } catch (_: AtomicMoveNotSupportedException) {
-      Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
-    }
-  }
-
-  private fun restrictPermissions(target: File) {
-    try {
-      Files.setPosixFilePermissions(target.toPath(), PosixFilePermissions.fromString("rw-------"))
-    } catch (_: Exception) {}
-  }
 
   private companion object {
     const val FILE_NAME = "credentials.yml"

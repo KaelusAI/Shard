@@ -17,86 +17,179 @@
  */
 package ac.shard.server
 
-import ac.shard.Shard
-import ac.shard.ai.AiTransport
-import ac.shard.ai.BatchingAiTransport
-import ac.shard.ai.RetryExecutor
-import ac.shard.ai.RetryingAiBatchTransport
-import ac.shard.ai.RetryingAiTransport
+import ac.shard.ai.stream.ChunkWriter
+import ac.shard.ai.stream.ProbeBackoff
+import ac.shard.ai.stream.StreamErrorLog
+import ac.shard.ai.stream.StreamTransport
+import ac.shard.config.AiConnection
 import ac.shard.config.ConfigManager
 import ac.shard.connect.CredentialsStore
+import ac.shard.http.ShardHttp
+import ac.shard.platform.Lifecycle
+import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.scheduler.SchedulerService
-import java.util.function.Supplier
+import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.logging.Logger
+
+internal fun cooldownFor(
+  previous: AiConnection?,
+  next: AiConnection,
+  current: ApiCooldown?,
+  clock: () -> Long,
+): ApiCooldown {
+  val sameEndpoint = previous?.url == next.url && previous.key == next.key
+  if (current == null || !sameEndpoint) return ApiCooldown(next.backoff, clock)
+  if (previous.backoff != next.backoff) current.retune(next.backoff)
+  return current
+}
 
 class AIServerProvider(
-  private val plugin: Shard,
+  private val logger: Logger,
+  private val http: ShardHttp,
   private val configManager: ConfigManager,
   private val scheduler: SchedulerService,
   private val credentialsStore: CredentialsStore,
-) : Supplier<AiTransport?> {
-  @Volatile private var currentTransport: AiTransport? = null
-  @Volatile private var batchingTransport: BatchingAiTransport? = null
+) : Lifecycle {
+  private val origin = System.nanoTime()
   @Volatile private var apiCooldown: ApiCooldown? = null
-
-  init {
-    reload()
+  @Volatile private var stream: StreamTransport? = null
+  @Volatile private var streamTimer: TaskHandle? = null
+  private val probes = ProbeBackoff(::nowMs)
+  private val verdictThread: ExecutorService = Executors.newSingleThreadExecutor { r ->
+    Thread(r, "Shard-Verdicts").apply { isDaemon = true }
   }
 
+  private val sendThread: ExecutorService = Executors.newSingleThreadExecutor { r ->
+    Thread(r, "Shard-Stream").apply { isDaemon = true }
+  }
+
+  val verdicts: Executor
+    get() = verdictThread
+
+  val isEnabled: Boolean
+    get() = stream != null
+
+  @Volatile private var connection: AiConnection? = null
+
+  override fun start() = reload()
+
   fun reload() {
+    val next = configManager.settings.ai
+    if (next == connection && stream != null) return
     shutdown()
-    apiCooldown = buildCooldown()
-    currentTransport = buildTransport()
+    apiCooldown = cooldownFor(connection, next, apiCooldown, ::nowMs)
+    connection = next
+    stream = buildServer(next)?.let { buildStream(it, next) }
   }
 
   fun shutdown() {
-    batchingTransport?.stop()
-    batchingTransport = null
-    currentTransport = null
+    streamTimer?.cancel()
+    streamTimer = null
+    stream?.stop()
+    stream = null
   }
 
-  fun shutdownTransport() {
+  fun streamTransport(): StreamTransport? = stream
+
+  private fun buildStream(server: AIServer, ai: AiConnection): StreamTransport {
+    val cooldown = apiCooldown!!
+    val transport =
+      StreamTransport(
+        sender = server::sendStream,
+        profiles = { configManager.streamProfile },
+        profileFor = configManager.profiles::recent,
+        onProfile = { node, crc ->
+          val profiles = configManager.profiles
+          when {
+            profiles.accept(node, crc) -> cooldown.profileAccepted()
+            profiles.isRejected(node) -> cooldown.holdForRejectedProfile()
+          }
+        },
+        onManifestRequired = { probe() },
+        backingOff = cooldown::isWaiting,
+        clock = ::nowMs,
+        maxBatch = ai.batchMaxSize.coerceIn(1, AIServer.BATCH_MAX_ITEMS),
+        errors = StreamErrorLog({ level, message -> logger.log(level, message) }, ::nowMs),
+        sendOn = sendThread,
+      )
+    probes.reset()
+    val period = ai.batchMaxDelayMs.coerceAtLeast(MIN_STREAM_PERIOD_MS)
+    streamTimer =
+      scheduler.runTimerAsync(
+        {
+          bootstrap(transport, cooldown)
+          sendThread.execute(transport::drain)
+        },
+        period,
+        period,
+      )
+    return transport
+  }
+
+  private fun bootstrap(transport: StreamTransport, cooldown: ApiCooldown) {
+    if (configManager.streamProfile != null) {
+      probes.settled()
+      return
+    }
+    if (!cooldown.isWaiting()) probe(transport)
+  }
+
+  fun probe(transport: StreamTransport? = stream) {
+    val target = transport ?: return
+    if (!probes.tryStart()) return
+    target.probe(ChunkWriter.probe()).whenComplete { _, _ ->
+      probes.finished(configManager.streamProfile != null)
+    }
+  }
+
+  private fun nowMs(): Long = (System.nanoTime() - origin) / NANOS_PER_MILLI
+
+  override fun stop() {
     shutdown()
-    AIServer.shutdownHttpClient()
+    sendThread.shutdownNow()
+    verdictThread.shutdownNow()
   }
 
-  override fun get(): AiTransport? = currentTransport
-
-  private fun buildTransport(): AiTransport? {
-    val server = buildServer() ?: return null
-    return if (configManager.batchEnabled) wrapWithBatching(server) else wrapWithRetry(server)
-  }
-
-  private fun buildServer(): AIServer? {
-    val url = configManager.aiServerUrl
-    val key = configManager.aiApiKey
+  private fun buildServer(ai: AiConnection): AIServer? {
+    val url = ai.url
+    val key = ai.key
     val state =
       when {
-        !configManager.isAiEnabled() -> ServerState.DISABLED
+        !ai.enabled -> ServerState.DISABLED
         url.isBlank() || url == LEGACY_PLACEHOLDER_URL || key == "API-KEY" ->
           ServerState.NOT_CONFIGURED
         else -> ServerState.READY
       }
     return when (state) {
       ServerState.DISABLED -> {
-        plugin.logger.info("[AiCheck] AI Check disabled.")
+        logger.info("[AI] Detection is disabled.")
         null
       }
       ServerState.NOT_CONFIGURED -> {
-        plugin.logger.warning("[AiCheck] AI is enabled but not configured.")
+        logger.warning("[AI] AI is enabled but not configured.")
         null
       }
-      ServerState.READY -> {
-        plugin.logger.info("[AiCheck] AI Check loaded.")
-        AIServer(
-          plugin,
-          url,
-          key,
-          apiCooldown!!,
-          credentialsStore.instanceId(),
-          configManager.aiGzipEnabled,
-          configManager::modelConfigFingerprint,
-        )
-      }
+      ServerState.READY ->
+        runCatching {
+            AIServer(
+                http,
+                url,
+                key,
+                apiCooldown!!,
+                credentialsStore.instanceId(),
+                ai.gzip,
+              )
+              .also { it.validateHeaders() }
+          }
+          .onSuccess { logger.info("[AI] Detection is ready.") }
+          .onFailure {
+            logger.severe(
+              "[AI] AI is disabled: ai.server or the API key is invalid (${it.message})"
+            )
+          }
+          .getOrNull()
     }
   }
 
@@ -107,48 +200,9 @@ class AIServerProvider(
   }
 
   private companion object {
+    const val NANOS_PER_MILLI = 1_000_000L
+    const val MIN_STREAM_PERIOD_MS = 5L
     // Old config.yml placeholder URL - treat as not-configured.
     const val LEGACY_PLACEHOLDER_URL = "https://url/v1/inference"
   }
-
-  private fun wrapWithRetry(server: AIServer): AiTransport =
-    RetryingAiTransport(server, newRetryExecutor())
-
-  private fun wrapWithBatching(server: AIServer): AiTransport {
-    val retriedBatch = RetryingAiBatchTransport(server, newRetryExecutor())
-    val retriedSingle = RetryingAiTransport(server, newRetryExecutor())
-    val batching =
-      BatchingAiTransport(
-        batchTransport = retriedBatch,
-        singleTransport = retriedSingle,
-        scheduler = scheduler,
-        logger = plugin.logger,
-        config =
-          BatchingAiTransport.BatchConfig(
-            maxBatchSize = configManager.batchMaxSize.coerceIn(1, AIServer.BATCH_MAX_ITEMS),
-            maxDelayMs = configManager.batchMaxDelayMs.coerceAtLeast(1L),
-          ),
-      )
-    batching.start()
-    batchingTransport = batching
-    return batching
-  }
-
-  private fun newRetryExecutor(): RetryExecutor = RetryExecutor(scheduler, buildRetryConfig())
-
-  private fun buildCooldown(): ApiCooldown {
-    val initialDuration = configManager.config.getLong("ai.backoff.initial-duration", 5)
-    val maxDuration = configManager.config.getLong("ai.backoff.max-duration", 60)
-    val multiplier = configManager.config.getDouble("ai.backoff.multiplier", 2.0)
-    return ApiCooldown(initialDuration, maxDuration, multiplier)
-  }
-
-  private fun buildRetryConfig(): RetryExecutor.RetryConfig =
-    RetryExecutor.RetryConfig(
-      maxAttempts = configManager.retryMaxAttempts.coerceAtLeast(1),
-      initialDelayMs = configManager.retryInitialDelayMs.coerceAtLeast(0L),
-      maxDelayMs = configManager.retryMaxDelayMs.coerceAtLeast(0L),
-      multiplier = configManager.retryMultiplier.coerceAtLeast(1.0),
-      jitter = configManager.retryJitter.coerceIn(0.0, 1.0),
-    )
 }

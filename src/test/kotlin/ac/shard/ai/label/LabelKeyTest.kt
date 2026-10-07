@@ -34,8 +34,8 @@ class LabelKeyTest {
     assertEquals(
       once,
       twice,
-      "the plugin canonicalises model.yml again on every reload, and a key that shifts there " +
-        "drops the live buffer without decay and moves the config fingerprint",
+      "the plugin canonicalises the stored profile again on every reload, and a key that " +
+        "shifts there drops the live buffer without decay",
     )
   }
 

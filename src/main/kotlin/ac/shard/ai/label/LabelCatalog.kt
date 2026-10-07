@@ -17,12 +17,54 @@
  */
 package ac.shard.ai.label
 
+import ac.shard.ai.stream.ModelSpec
+import ac.shard.ai.stream.StreamProfile
+
+@Suppress("TooManyFunctions")
 class LabelCatalog(
   private val local: () -> Map<String, String>,
   private val fromServer: () -> Map<String, String> = ::emptyMap,
+  private val profile: () -> StreamProfile? = { null },
 ) {
 
   fun displayName(key: String): String {
+    val address = DetectionKey.parseAddress(key) ?: return primaryName(key)
+    val current = profile()
+    val model = current?.model(address.model)
+    return when {
+      model == null -> key
+      model.id == current.primary.id -> primaryName(address.label)
+      LabelKey.isReserved(address.label) -> model.displayTitle
+      else -> model.displayTitle + " " + secondaryName(model, address.label)
+    }
+  }
+
+  fun ownerTitle(key: String): String? {
+    val address = DetectionKey.parseAddress(key) ?: return null
+    val current = profile()
+    val model = current?.model(address.model)?.takeIf { it.id != current.primary.id }
+    return model?.displayTitle
+  }
+
+  fun ownName(key: String): String {
+    val address = DetectionKey.parseAddress(key) ?: return primaryName(key)
+    return profile()?.model(address.model)?.let { secondaryName(it, address.label) }
+      ?: address.label
+  }
+
+  fun hidden(key: String): Boolean {
+    val address = DetectionKey.parseAddress(key) ?: return LabelKey.isReserved(key)
+    val current = profile()
+    val model = current?.model(address.model)
+    return LabelKey.isReserved(address.label) && (model == null || model.id == current.primary.id)
+  }
+
+  private fun secondaryName(model: ModelSpec, raw: String): String {
+    val label = LabelKey.canonical(raw) ?: raw
+    return named(model.labelTitles, label) ?: label
+  }
+
+  private fun primaryName(key: String): String {
     val canonical = LabelKey.canonical(key) ?: key
     return named(local(), canonical) ?: named(fromServer(), canonical) ?: canonical
   }
@@ -31,20 +73,17 @@ class LabelCatalog(
     source[key]?.takeIf { it.isNotBlank() }
 
   fun visible(buffers: Map<String, Double>): List<String> =
-    buffers.entries
-      .filterNot { LabelKey.isReserved(it.key) }
-      .sortedByDescending { it.value }
-      .map { it.key }
+    buffers.entries.filterNot { hidden(it.key) }.sortedByDescending { it.value }.map { it.key }
 
   fun leading(buffers: Map<String, Double>): String? =
     buffers.entries
-      .filterNot { LabelKey.isReserved(it.key) }
+      .filterNot { hidden(it.key) }
       .maxByOrNull { it.value }
       ?.takeIf { it.value > 0.0 }
       ?.key
 
   fun format(keys: Collection<String>): String =
-    keys.filterNot(LabelKey::isReserved).joinToString(", ", transform = ::displayName)
+    keys.filterNot(::hidden).joinToString(", ", transform = ::displayName)
 
   fun decorate(checkName: String, keys: Collection<String>): String {
     val labels = format(keys)

@@ -66,15 +66,16 @@ class AttackWindowTrackerTest {
     tracking.raiseWindowStart(TickData.START_ATTACK_END_CRYSTAL)
     assertEquals(false, tracking.windowStartThisTick)
 
-    tracking.enabledWindowStarts =
+    tracking.enabledWindowStarts = {
       TrackingState.MELEE_PLAYER_ONLY or (1 shl TickData.START_ATTACK_END_CRYSTAL.toInt())
+    }
     tracking.raiseWindowStart(TickData.START_ATTACK_END_CRYSTAL)
     assertEquals(TickData.START_ATTACK_END_CRYSTAL, tracking.windowStartKind)
   }
 
   @Test
   fun `a melee hit on a player outranks a weaker event in the same tick`() {
-    val tracking = TrackingState().apply { enabledWindowStarts = ALL_ANCHORS }
+    val tracking = TrackingState().apply { enabledWindowStarts = { ALL_ANCHORS } }
 
     tracking.raiseWindowStart(TickData.START_EXPLOSION_RECEIVED)
     tracking.raiseWindowStart(TickData.START_MELEE_PLAYER)

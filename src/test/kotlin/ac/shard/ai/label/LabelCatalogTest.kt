@@ -17,6 +17,11 @@
  */
 package ac.shard.ai.label
 
+import ac.shard.ai.stream.ModelSpec
+import ac.shard.ai.stream.Schedule
+import ac.shard.ai.stream.StreamProfile
+import ac.shard.ai.stream.TEST_BUFFER
+import ac.shard.ai.stream.roles
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
@@ -26,7 +31,76 @@ class LabelCatalogTest {
   private fun catalog(
     local: Map<String, String> = emptyMap(),
     fromServer: Map<String, String> = emptyMap(),
-  ) = LabelCatalog(local = { local }, fromServer = { fromServer })
+    profile: StreamProfile? = null,
+  ) = LabelCatalog(local = { local }, fromServer = { fromServer }, profile = { profile })
+
+  private fun model(id: String, short: String?, titles: Map<String, String>) =
+    ModelSpec(
+      id,
+      "Model " + id.uppercase(),
+      short,
+      Schedule.ATTACK,
+      10,
+      10,
+      10,
+      0,
+      0,
+      setOf(0),
+      titles.keys.toList(),
+      LabelMode.MULTI_LABEL,
+      emptySet(),
+      titles,
+      emptyMap(),
+      TEST_BUFFER,
+      1.0,
+      roles(),
+    )
+
+  private val primary = model("a", null, mapOf("x" to "Ex"))
+  private val second = model("c", "C", mapOf("x" to "Ex", "y" to "Why"))
+  private val profile =
+    StreamProfile(1, emptyList(), 1, 512, listOf(primary, second), primary, 0, "")
+
+  @Test
+  fun `a label of a second model reads as the model and the label`() {
+    val catalog = catalog(fromServer = primary.labelTitles, profile = profile)
+
+    assertEquals("C Ex", catalog.displayName("c/x"))
+    assertEquals("C Why", catalog.displayName("c/y"))
+    assertEquals("C z", catalog.displayName("c/z"), "an unnamed label keeps its key")
+  }
+
+  @Test
+  fun `the fallback bucket of a second model reads as the model itself`() {
+    val catalog = catalog(profile = profile)
+
+    assertEquals("C", catalog.displayName("c/" + LabelKey.UNATTRIBUTED))
+  }
+
+  @Test
+  fun `an address of the primary reads like a bare label`() {
+    val catalog =
+      catalog(local = mapOf("x" to "Mine"), fromServer = primary.labelTitles, profile = profile)
+
+    assertEquals("Mine", catalog.displayName("a/x"))
+    assertEquals("AI (Mine, C Why)", catalog.decorate("AI", listOf("a/x", "c/y")))
+  }
+
+  @Test
+  fun `the fallback bucket hides under the primary address and shows under a second model`() {
+    val catalog = catalog(profile = profile)
+    val bucket = LabelKey.UNATTRIBUTED
+
+    assertEquals("AI", catalog.decorate("AI", listOf("a/$bucket")))
+    assertEquals("AI (C)", catalog.decorate("AI", listOf("c/$bucket")))
+    assertEquals("AI", catalog.decorate("AI", listOf("q/$bucket")), "a model that left the profile")
+  }
+
+  @Test
+  fun `an address of a model the profile no longer lists is shown as stored`() {
+    assertEquals("q/x", catalog(profile = profile).displayName("q/x"))
+    assertEquals("c/x", catalog().displayName("c/x"))
+  }
 
   @Test
   fun `the model names its own heads and the plugin shows exactly that`() {

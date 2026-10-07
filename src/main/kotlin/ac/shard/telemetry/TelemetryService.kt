@@ -17,38 +17,45 @@
  */
 package ac.shard.telemetry
 
-import ac.shard.Shard
-import ac.shard.api.event.PunishmentTriggeredEvent
-import ac.shard.api.event.ShardEventBus
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.api.event.punishment.PunishmentEvent
+import ac.shard.api.impl.event.ShardEvents
 import ac.shard.config.ConfigManager
+import ac.shard.config.ShardSettings
 import ac.shard.connect.CredentialsStore
+import ac.shard.detection.SuspicionPolicy
+import ac.shard.http.HttpBodies
+import ac.shard.http.HttpOutcome
+import ac.shard.http.Json
+import ac.shard.http.ShardHttp
 import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.PlayerDataManager
+import ac.shard.punishment.cloud.PunishmentSync
 import ac.shard.scheduler.SchedulerService
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.net.URI
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.LongAdder
-import org.bukkit.Bukkit
+import java.util.logging.Logger
+import tools.jackson.databind.JsonNode
 
-@Suppress("TooGenericExceptionCaught", "TooManyFunctions")
+@Suppress("TooGenericExceptionCaught", "TooManyFunctions", "LongParameterList")
 class TelemetryService(
-  private val plugin: Shard,
+  private val logger: Logger,
+  private val http: ShardHttp,
   private val configManager: ConfigManager,
   private val credentialsStore: CredentialsStore,
   private val scheduler: SchedulerService,
   private val playerDataManager: PlayerDataManager,
-  private val eventBus: ShardEventBus,
+  private val events: ShardEvents,
+  private val plugin: ac.shard.Shard,
+  private val punishmentSync: PunishmentSync,
+  private val suspicion: SuspicionPolicy,
 ) {
-  private val mapper = ObjectMapper()
-  private val client: HttpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build()
+  private val mapper = Json.mapper
+  private val client = http.client
   private val punishmentDelta = LongAdder()
 
   private var handle: TaskHandle? = null
@@ -72,87 +79,90 @@ class TelemetryService(
   fun start() {
     startedAtMs = System.currentTimeMillis()
     instanceId = credentialsStore.instanceId()
-    eventBus.subscribe(this, PunishmentTriggeredEvent::class.java) { punishmentDelta.increment() }
+    events
+      .subscription(plugin, PunishmentEvent::class.java)
+      .monitor()
+      .ignoreCancelled(true)
+      .subscribe {
+        punishmentDelta.increment()
+      }
     val jitter = ThreadLocalRandom.current().nextLong(PERIOD_TICKS)
     handle = scheduler.runTimer({ tick() }, jitter, PERIOD_TICKS)
   }
 
   fun stop() {
     stopping = true
-    runCatching { eventBus.unregisterAll(this) }
+    runCatching { events.unsubscribeAll(plugin) }
     runCatching { handle?.cancel() }
     handle = null
   }
 
   fun sendFarewell() {
-    val key = configManager.aiApiKey
-    if (!configManager.isTelemetryEnabled() || !keyValid(key) || instanceId.isEmpty()) {
+    val settings = configManager.settings
+    if (!settings.telemetry.enabled || !keyValid(settings.ai.key) || instanceId.isEmpty()) {
       return
     }
-    val url = deviceUrl("heartbeat") ?: return
+    val url = settings.ai.deviceUrl("heartbeat") ?: return
     val beat = Beat(online = 0, suspicious = 0, tps = null, punishments = punishmentDelta.sum())
     try {
       client
         .sendAsync(
-          buildRequest(url, key, beat, stopping = true, FAREWELL_TIMEOUT),
+          buildRequest(url, settings, beat, stopping = true, FAREWELL_TIMEOUT),
           HttpResponse.BodyHandlers.discarding(),
         )
         .get(FAREWELL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
     } catch (e: Exception) {
-      plugin.logger.fine("[Telemetry] farewell beat failed: ${e.message}")
+      logger.fine("[Telemetry] farewell beat failed: ${e.message}")
     }
   }
 
   private fun tick() {
-    val key = configManager.aiApiKey
-    if (!configManager.isTelemetryEnabled() || !keyValid(key) || deviceUrl("heartbeat") == null) {
+    val settings = configManager.settings
+    val url = settings.ai.deviceUrl("heartbeat")
+    if (!settings.telemetry.enabled || !keyValid(settings.ai.key) || url == null) {
       return
     }
     val beat =
       Beat(
-        online = Bukkit.getOnlinePlayers().size,
+        online = plugin.server.onlinePlayers.size,
         suspicious = suspiciousCount(),
-        tps = runCatching { Bukkit.getServer().getTPS()[0] }.getOrNull(),
+        tps = runCatching { plugin.server.tps[0] }.getOrNull(),
         punishments = punishmentDelta.sumThenReset(),
       )
-    scheduler.runAsync { send(key, beat) }
+    scheduler.runAsync { send(url, settings, beat) }
   }
 
   private fun keyValid(key: String): Boolean = key.isNotBlank() && key != PLACEHOLDER_KEY
 
   fun fetchQuota(): Int? {
-    val key = configManager.aiApiKey
-    val url = deviceUrl("quota")
+    val ai = configManager.settings.ai
+    val key = ai.key
+    val url = ai.deviceUrl("quota")
     if (!keyValid(key) || url == null) return null
     return runCatching {
         val request =
-          HttpRequest.newBuilder(URI.create(url))
+          http
+            .keyed(URI.create(url), key)
             .header("Accept", "application/json")
-            .header("X-API-Key", key)
-            .header("User-Agent", "Shard/" + plugin.description.version)
             .timeout(REQUEST_TIMEOUT)
             .GET()
             .build()
-        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        if (response.statusCode() !in HTTP_OK_MIN..HTTP_OK_MAX) {
+        val response = client.send(request, HttpBodies.text(HttpBodies.PANEL_LIMIT))
+        if (HttpOutcome.of(response.statusCode()) != HttpOutcome.OK) {
           null
         } else {
           applyServerState(response.body(), applyParams = false)
         }
       }
-      .onFailure { plugin.logger.fine("[Telemetry] quota fetch failed: ${it.message}") }
+      .onFailure { logger.fine("[Telemetry] quota fetch failed: ${it.message}") }
       .getOrNull()
   }
 
-  private fun suspiciousCount(): Int =
-    playerDataManager.getPlayers().count { player ->
-      val check = player.checkManager.getCheck(AiCheck::class.java)
-      check != null && check.buffer > SUSPICIOUS_BUFFER
-    }
+  private fun suspiciousCount(): Int = playerDataManager.getPlayers().count(suspicion::isSuspicious)
 
   private fun buildRequest(
     url: String,
-    key: String,
+    settings: ShardSettings,
     beat: Beat,
     stopping: Boolean,
     timeout: Duration,
@@ -160,33 +170,32 @@ class TelemetryService(
     val body =
       buildMap<String, Any?> {
         put("instance_id", instanceId)
-        configManager.telemetryGroupId?.let { put("group_id", it) }
+        settings.telemetry.groupId?.let { put("group_id", it) }
         put("online", beat.online)
         put("suspicious", beat.suspicious)
         put("tps", beat.tps)
-        put("plugin_version", plugin.description.version)
+        put("plugin_version", http.pluginVersion)
         put("uptime_seconds", (System.currentTimeMillis() - startedAtMs) / MILLIS_PER_SECOND)
         put("model_config", configManager.modelConfigFingerprint())
+        put("local", settings.localAi.narrowing())
         if (beat.punishments > 0) put("punishments", beat.punishments)
-        if (stopping) put("stopping", true)
+        if (stopping) put("stopping", true) else punishmentSync.beat()?.let { put("punishrev", it) }
       }
-    return HttpRequest.newBuilder(URI.create(url))
+    return http
+      .keyed(URI.create(url), settings.ai.key)
       .header("Content-Type", "application/json")
       .header("Accept", "application/json")
-      .header("X-API-Key", key)
-      .header("User-Agent", "Shard/" + plugin.description.version)
       .timeout(timeout)
       .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
       .build()
   }
 
-  private fun send(key: String, beat: Beat) {
+  private fun send(url: String, settings: ShardSettings, beat: Beat) {
     if (stopping) return
-    val url = deviceUrl("heartbeat") ?: return
     try {
-      val request = buildRequest(url, key, beat, stopping = false, REQUEST_TIMEOUT)
-      val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-      val ok = response.statusCode() in HTTP_OK_MIN..HTTP_OK_MAX
+      val request = buildRequest(url, settings, beat, stopping = false, REQUEST_TIMEOUT)
+      val response = client.send(request, HttpBodies.text(HttpBodies.PANEL_LIMIT))
+      val ok = HttpOutcome.of(response.statusCode()) == HttpOutcome.OK
       if (ok) {
         applyServerState(response.body(), applyParams = true)
       }
@@ -202,27 +211,25 @@ class TelemetryService(
     if (root == null) return null
     fun field(name: String): JsonNode? =
       root.path(name).takeUnless { it.isMissingNode || it.isNull }
-    val used = field("quota_used_percent")?.asInt()
+    val used = field("quota_used_percent")?.asInt(0)
     if (used != null) quota = QuotaSnapshot(used)
     if (applyParams) {
-      field("model")?.asText()?.takeIf(String::isNotBlank)?.let(configManager::notePanelModelName)
+      field("model")
+        ?.asString("")
+        ?.takeIf(String::isNotBlank)
+        ?.let(configManager::notePanelModelName)
+      field("punishrev")?.takeIf { it.canConvertToLong() }?.asLong(0L)?.let(punishmentSync::onBeat)
     }
     return used
-  }
-
-  private fun deviceUrl(path: String): String? {
-    val inference = configManager.aiServerUrl.trim().trimEnd('/')
-    val base = inference.substringBeforeLast('/', "")
-    return if (base.isBlank()) null else "$base/device/$path"
   }
 
   private fun mark(ok: Boolean, error: String? = null) {
     if (lastOk == ok) return
     lastOk = ok
     if (ok) {
-      plugin.logger.fine("[Telemetry] reporting online")
+      logger.fine("[Telemetry] reporting online")
     } else {
-      plugin.logger.fine("[Telemetry] heartbeat unavailable: ${error ?: "non-2xx"}")
+      logger.fine("[Telemetry] heartbeat unavailable: ${error ?: "non-2xx"}")
     }
   }
 
@@ -230,10 +237,6 @@ class TelemetryService(
     const val PLACEHOLDER_KEY = "API-KEY"
     const val PERIOD_TICKS = 600L
     const val MILLIS_PER_SECOND = 1000L
-    const val SUSPICIOUS_BUFFER = 10.0
-    const val HTTP_OK_MIN = 200
-    const val HTTP_OK_MAX = 299
-    val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(10)
     val REQUEST_TIMEOUT: Duration = Duration.ofSeconds(15)
     val FAREWELL_TIMEOUT: Duration = Duration.ofSeconds(2)
   }

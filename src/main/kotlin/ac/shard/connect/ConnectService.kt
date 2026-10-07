@@ -17,45 +17,18 @@
  */
 package ac.shard.connect
 
-import ac.shard.Shard
 import ac.shard.config.ConfigManager
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
+import ac.shard.http.HttpBodies
+import ac.shard.http.HttpOutcome
+import ac.shard.http.Json
+import ac.shard.http.PanelReplies
+import ac.shard.http.ShardHttp
+import ac.shard.http.isSecureEndpoint
 import java.net.URI
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.time.Duration
-
-private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "::1")
-
-internal const val MAX_RESPONSE_BYTES = 1024 * 1024
-private const val READ_CHUNK_BYTES = 8 * 1024
-
-internal fun readCapped(stream: InputStream): String {
-  val out = ByteArrayOutputStream()
-  val chunk = ByteArray(READ_CHUNK_BYTES)
-  while (out.size() < MAX_RESPONSE_BYTES) {
-    val read = stream.read(chunk, 0, minOf(chunk.size, MAX_RESPONSE_BYTES - out.size()))
-    if (read < 0) break
-    out.write(chunk, 0, read)
-  }
-  return out.toString(Charsets.UTF_8)
-}
-
-internal fun isSecurePanelUrl(url: String): Boolean =
-  try {
-    val uri = URI.create(url.trim())
-    when (uri.scheme?.lowercase()) {
-      "https" -> true
-      "http" -> uri.host?.lowercase()?.removeSurrounding("[", "]") in LOOPBACK_HOSTS
-      else -> false
-    }
-  } catch (_: IllegalArgumentException) {
-    false
-  }
+import java.util.logging.Logger
+import tools.jackson.databind.JsonNode
 
 sealed interface StartResult {
   data class Started(
@@ -75,13 +48,7 @@ sealed interface PollResult {
 
   data class SlowDown(val intervalSeconds: Long) : PollResult
 
-  data class Approved(
-    val secretKey: String,
-    val serverId: String?,
-    val serverName: String?,
-    val allowlistedIp: String?,
-    val inferenceUrl: String?,
-  ) : PollResult
+  data class Approved(val credentials: Credentials) : PollResult
 
   data object Denied : PollResult
 
@@ -97,13 +64,7 @@ sealed interface RevokeResult {
 }
 
 sealed interface LinkResult {
-  data class Linked(
-    val secretKey: String,
-    val serverId: String?,
-    val serverName: String?,
-    val allowlistedIp: String?,
-    val inferenceUrl: String?,
-  ) : LinkResult
+  data class Linked(val credentials: Credentials) : LinkResult
 
   data object InvalidOrExpired : LinkResult
 
@@ -116,9 +77,12 @@ enum class LinkIntent(val wire: String) {
 }
 
 @Suppress("TooGenericExceptionCaught", "ReturnCount")
-class ConnectService(private val plugin: Shard, private val configManager: ConfigManager) {
-  private val mapper = ObjectMapper()
-  private val client: HttpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build()
+class ConnectService(
+  private val logger: Logger,
+  private val http: ShardHttp,
+  private val configManager: ConfigManager,
+) {
+  private val mapper = Json.mapper
 
   fun start(
     instanceId: String? = null,
@@ -130,23 +94,23 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
           "/api/v1/device/start",
           mapOf(
             "client_id" to CLIENT_ID,
-            "plugin_version" to plugin.description.version,
+            "plugin_version" to http.pluginVersion,
             "instance_id" to instanceId,
             "intent" to intent.wire,
           ),
         ) ?: return StartResult.Error("Panel URL is not configured.")
-      when (code) {
-        HTTP_OK -> {
-          val deviceCode = node.path("device_code").asText("")
-          val userCode = node.path("user_code").asText("")
+      when (HttpOutcome.of(code)) {
+        HttpOutcome.OK -> {
+          val deviceCode = node.path("device_code").asString("")
+          val userCode = node.path("user_code").asString("")
           if (deviceCode.isBlank() || userCode.isBlank()) {
             StartResult.Error("Panel returned an invalid response.")
           } else {
             StartResult.Started(
               deviceCode = deviceCode,
               userCode = userCode,
-              verificationUri = node.path("verification_uri").asText(""),
-              verificationUriComplete = node.path("verification_uri_complete").asText(""),
+              verificationUri = node.path("verification_uri").asString(""),
+              verificationUriComplete = node.path("verification_uri_complete").asString(""),
               expiresInSeconds =
                 node
                   .path("expires_in")
@@ -160,8 +124,8 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
             )
           }
         }
-        TOO_MANY_REQUESTS -> StartResult.Error("Too many attempts. Please wait a few minutes.")
-        else -> StartResult.Error("Panel returned HTTP $code.")
+        HttpOutcome.RATE_LIMITED -> StartResult.Error(PanelReplies.RATE_LIMITED)
+        else -> StartResult.Error(PanelReplies.failed(code))
       }
     } catch (e: Exception) {
       StartResult.Error("Could not reach the panel: ${e.message}")
@@ -173,21 +137,16 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
       val (code, node) =
         post("/api/v1/device/token", mapOf("device_code" to deviceCode))
           ?: return PollResult.Error("Panel URL is not configured.")
-      if (code == HTTP_OK && node.path("status").asText("") == "approved") {
-        val secret = node.path("secret_key").asText("")
+      if (
+        HttpOutcome.of(code) == HttpOutcome.OK && node.path("status").asString("") == "approved"
+      ) {
+        val secret = node.path("secret_key").asString("")
         if (secret.isBlank()) {
           return PollResult.Error("Panel approved but returned no key.")
         }
-        val server = node.path("server")
-        PollResult.Approved(
-          secretKey = secret,
-          serverId = server.path("id").asText("").ifBlank { null },
-          serverName = server.path("name").asText("").ifBlank { null },
-          allowlistedIp = node.path("allowlisted_ip").asText("").ifBlank { null },
-          inferenceUrl = node.path("inference_url").asText("").ifBlank { null },
-        )
+        PollResult.Approved(credentialsOf(secret, node))
       } else {
-        when (node.path("error").asText("")) {
+        when (node.path("error").asString("")) {
           "authorization_pending" -> PollResult.Pending
           "slow_down" ->
             PollResult.SlowDown(
@@ -206,29 +165,36 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
     }
   }
 
+  private fun credentialsOf(secret: String, node: JsonNode): Credentials {
+    val server = node.path("server")
+    return Credentials(
+      secretKey = secret,
+      serverId = server.path("id").asString("").ifBlank { null },
+      serverName = server.path("name").asString("").ifBlank { null },
+      allowlistedIp = node.path("allowlisted_ip").asString("").ifBlank { null },
+      inferenceUrl = node.path("inference_url").asString("").ifBlank { null },
+    )
+  }
+
   fun revoke(secretKey: String): RevokeResult {
     return try {
       val (code, node) =
         post("/api/v1/device/revoke", mapOf("secret_key" to secretKey))
           ?: return RevokeResult.Error("Panel URL is not configured.")
-      val status = node.path("status").asText("")
+      val status = node.path("status").asString("")
       when {
-        code == HTTP_OK && (status == "revoked" || status == "not_found") -> RevokeResult.Revoked
-        code == TOO_MANY_REQUESTS ->
-          RevokeResult.Error("Too many attempts. Please wait a few minutes.")
-        else -> RevokeResult.Error("Panel returned HTTP $code.")
+        HttpOutcome.of(code) == HttpOutcome.OK && (status == "revoked" || status == "not_found") ->
+          RevokeResult.Revoked
+        HttpOutcome.of(code) == HttpOutcome.RATE_LIMITED ->
+          RevokeResult.Error(PanelReplies.RATE_LIMITED)
+        else -> RevokeResult.Error(PanelReplies.failed(code))
       }
     } catch (e: Exception) {
       RevokeResult.Error("Network error: ${e.message}")
     }
   }
 
-  fun redeem(
-    userCode: String,
-    instanceId: String,
-    hostname: String?,
-    pluginVersion: String?,
-  ): LinkResult {
+  fun redeem(userCode: String, instanceId: String, hostname: String?): LinkResult {
     return try {
       val (code, node) =
         post(
@@ -237,31 +203,24 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
             "user_code" to userCode,
             "instance_id" to instanceId,
             "hostname" to hostname,
-            "plugin_version" to pluginVersion,
+            "plugin_version" to http.pluginVersion,
           ),
         ) ?: return LinkResult.Error("Panel URL is not configured.")
       when {
-        code == HTTP_OK && node.path("status").asText("") == "linked" -> {
-          val secret = node.path("secret_key").asText("")
+        HttpOutcome.of(code) == HttpOutcome.OK && node.path("status").asString("") == "linked" -> {
+          val secret = node.path("secret_key").asString("")
           if (secret.isBlank()) {
             LinkResult.Error("Panel linked but returned no key.")
           } else {
-            val server = node.path("server")
-            LinkResult.Linked(
-              secretKey = secret,
-              serverId = server.path("id").asText("").ifBlank { null },
-              serverName = server.path("name").asText("").ifBlank { null },
-              allowlistedIp = node.path("allowlisted_ip").asText("").ifBlank { null },
-              inferenceUrl = node.path("inference_url").asText("").ifBlank { null },
-            )
+            LinkResult.Linked(credentialsOf(secret, node))
           }
         }
-        code == TOO_MANY_REQUESTS ->
-          LinkResult.Error("Too many attempts. Please wait a few minutes.")
-        code == GONE || node.path("error").asText("") == "expired_token" ->
-          LinkResult.InvalidOrExpired
-        node.path("error").asText("") == "invalid_request" -> LinkResult.Error("Invalid code.")
-        else -> LinkResult.Error("Panel returned HTTP $code.")
+        HttpOutcome.of(code) == HttpOutcome.RATE_LIMITED ->
+          LinkResult.Error(PanelReplies.RATE_LIMITED)
+        HttpOutcome.of(code) == HttpOutcome.GONE ||
+          node.path("error").asString("") == "expired_token" -> LinkResult.InvalidOrExpired
+        node.path("error").asString("") == "invalid_request" -> LinkResult.Error("Invalid code.")
+        else -> LinkResult.Error(PanelReplies.failed(code))
       }
     } catch (e: Exception) {
       LinkResult.Error("Network error: ${e.message}")
@@ -272,23 +231,23 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
     try {
       post("/api/v1/device/cancel", mapOf("device_code" to deviceCode))
     } catch (e: Exception) {
-      plugin.logger.fine("[Connect] cancel failed: ${e.message}")
+      logger.fine("[Connect] cancel failed: ${e.message}")
     }
   }
 
   private fun post(path: String, body: Map<String, Any?>): Pair<Int, JsonNode>? {
-    val base = configManager.connectPanelUrl.trim().trimEnd('/')
+    val base = configManager.settings.panelUrl.trim().trimEnd('/')
     if (!isUsablePanelUrl(base)) return null
     val request =
       HttpRequest.newBuilder(URI.create("$base$path"))
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
-        .header("User-Agent", "Shard/" + plugin.description.version)
+        .header("User-Agent", http.userAgent)
         .timeout(REQUEST_TIMEOUT)
         .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
         .build()
-    val response = client.send(request, HttpResponse.BodyHandlers.ofInputStream())
-    val payload = response.body().use(::readCapped)
+    val response = http.client.send(request, HttpBodies.text(HttpBodies.PANEL_LIMIT))
+    val payload = response.body()
     val node =
       if (payload.isBlank()) mapper.createObjectNode()
       else runCatching { mapper.readTree(payload) }.getOrElse { mapper.createObjectNode() }
@@ -298,8 +257,8 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
   private fun isUsablePanelUrl(base: String): Boolean =
     when {
       base.isBlank() -> false
-      !isSecurePanelUrl(base) -> {
-        plugin.logger.warning("[Connect] Refusing to contact the panel over an insecure URL: $base")
+      !isSecureEndpoint(base) -> {
+        logger.warning("[Connect] Refusing to contact the panel over an insecure URL: $base")
         false
       }
       else -> true
@@ -307,9 +266,6 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
 
   private companion object {
     const val CLIENT_ID = "shard-plugin"
-    const val HTTP_OK = 200
-    const val TOO_MANY_REQUESTS = 429
-    const val GONE = 410
     const val DEFAULT_EXPIRES = 600L
     const val DEFAULT_INTERVAL = 5L
     const val MIN_EXPIRES_SECONDS = 60L
@@ -317,7 +273,6 @@ class ConnectService(private val plugin: Shard, private val configManager: Confi
     const val MIN_INTERVAL_SECONDS = 1L
     const val MAX_INTERVAL_SECONDS = 300L
     const val SLOW_DOWN_EXTRA_SECONDS = 5L
-    val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(10)
     val REQUEST_TIMEOUT: Duration = Duration.ofSeconds(15)
   }
 }

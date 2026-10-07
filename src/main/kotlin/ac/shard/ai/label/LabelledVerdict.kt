@@ -208,11 +208,11 @@ class VerdictResolver(
     }
 
   private inline fun report(signature: String, message: () -> String) {
-    if (reported.add(signature)) warn("[AiCheck] ${message()}")
+    if (reported.add(signature)) warn("[AI] ${message()}")
   }
 
   private inline fun reportSevere(signature: String, message: () -> String) {
-    if (reported.add(signature)) severe("[AiCheck] ${message()}")
+    if (reported.add(signature)) severe("[AI] ${message()}")
   }
 
   companion object {

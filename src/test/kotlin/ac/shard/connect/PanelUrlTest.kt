@@ -17,6 +17,7 @@
  */
 package ac.shard.connect
 
+import ac.shard.http.isSecureEndpoint
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
@@ -25,30 +26,30 @@ class PanelUrlTest {
 
   @Test
   fun `https is accepted for any host`() {
-    assertTrue(isSecurePanelUrl("https://app.shard.ac"))
-    assertTrue(isSecurePanelUrl("  https://panel.example.com:8443/base  "))
+    assertTrue(isSecureEndpoint("https://app.shard.ac"))
+    assertTrue(isSecureEndpoint("  https://panel.example.com:8443/base  "))
   }
 
   @Test
   fun `plain http is accepted only on the loopback`() {
-    assertTrue(isSecurePanelUrl("http://localhost:8080"))
-    assertTrue(isSecurePanelUrl("http://127.0.0.1"))
-    assertTrue(isSecurePanelUrl("http://[::1]:3000"))
-    assertFalse(isSecurePanelUrl("http://app.shard.ac"))
-    assertFalse(isSecurePanelUrl("http://192.168.1.10:8080"))
+    assertTrue(isSecureEndpoint("http://localhost:8080"))
+    assertTrue(isSecureEndpoint("http://127.0.0.1"))
+    assertTrue(isSecureEndpoint("http://[::1]:3000"))
+    assertFalse(isSecureEndpoint("http://app.shard.ac"))
+    assertFalse(isSecureEndpoint("http://192.168.1.10:8080"))
   }
 
   @Test
   fun `a host that merely looks like the loopback is rejected`() {
-    assertFalse(isSecurePanelUrl("http://localhost.evil.com"))
-    assertFalse(isSecurePanelUrl("http://127.0.0.1.evil.com"))
+    assertFalse(isSecureEndpoint("http://localhost.evil.com"))
+    assertFalse(isSecureEndpoint("http://127.0.0.1.evil.com"))
   }
 
   @Test
   fun `other schemes and unparseable values are rejected`() {
-    assertFalse(isSecurePanelUrl("ftp://app.shard.ac"))
-    assertFalse(isSecurePanelUrl("app.shard.ac"))
-    assertFalse(isSecurePanelUrl(""))
-    assertFalse(isSecurePanelUrl("http://"))
+    assertFalse(isSecureEndpoint("ftp://app.shard.ac"))
+    assertFalse(isSecureEndpoint("app.shard.ac"))
+    assertFalse(isSecureEndpoint(""))
+    assertFalse(isSecureEndpoint("http://"))
   }
 }

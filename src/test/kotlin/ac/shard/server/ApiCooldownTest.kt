@@ -17,6 +17,7 @@
  */
 package ac.shard.server
 
+import ac.shard.config.Backoff
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
@@ -25,20 +26,20 @@ class ApiCooldownTest {
 
   @Test
   fun `initially not waiting`() {
-    val cooldown = ApiCooldown(5, 60, 2.0)
+    val cooldown = ApiCooldown(Backoff(5, 60, 2.0), System::currentTimeMillis)
     assertFalse(cooldown.isWaiting())
   }
 
   @Test
   fun `after failure enters waiting state`() {
-    val cooldown = ApiCooldown(5, 60, 2.0)
+    val cooldown = ApiCooldown(Backoff(5, 60, 2.0), System::currentTimeMillis)
     cooldown.recordFailure()
     assertTrue(cooldown.isWaiting())
   }
 
   @Test
   fun `after success resets waiting state`() {
-    val cooldown = ApiCooldown(5, 60, 2.0)
+    val cooldown = ApiCooldown(Backoff(5, 60, 2.0), System::currentTimeMillis)
     cooldown.recordFailure()
     assertTrue(cooldown.isWaiting())
 
@@ -49,7 +50,7 @@ class ApiCooldownTest {
   @Test
   fun `backoff increases with each failure`() {
     // initialDuration = 1 * 1000 = 1000ms, max = 10 * 1000 = 10000ms, multiplier = 2.0
-    val cooldown = ApiCooldown(1, 10, 2.0)
+    val cooldown = ApiCooldown(Backoff(1, 10, 2.0), System::currentTimeMillis)
 
     cooldown.recordFailure() // backoff becomes 2000ms, next attempt = now + 1000ms
     assertTrue(cooldown.isWaiting())
@@ -67,7 +68,7 @@ class ApiCooldownTest {
   @Test
   fun `backoff does not exceed max duration`() {
     // initialDuration = 1s, max = 2s, multiplier = 10.0
-    val cooldown = ApiCooldown(1, 2, 10.0)
+    val cooldown = ApiCooldown(Backoff(1, 2, 10.0), System::currentTimeMillis)
 
     cooldown
       .recordFailure() // backoff was 1000, sets next = now+1000, new backoff = min(10000, 2000) =
@@ -83,7 +84,7 @@ class ApiCooldownTest {
 
   @Test
   fun `success after multiple failures fully resets`() {
-    val cooldown = ApiCooldown(1, 60, 2.0)
+    val cooldown = ApiCooldown(Backoff(1, 60, 2.0), System::currentTimeMillis)
     cooldown.recordFailure()
     cooldown.recordFailure()
     cooldown.recordFailure()

@@ -17,7 +17,6 @@
  */
 package ac.shard.data
 
-import ac.shard.ai.TickSerializer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.assertEquals
@@ -154,58 +153,19 @@ class TickSchemaByteIdentityTest {
   }
 
   @Test
-  fun soaRawIsByteIdentical() {
+  fun everyFieldWritesRawBytesIdentically() {
     val ticks = samples()
-    val ref =
-      ByteBuffer.allocate(RAW_HEADER + referenceRowBytes * ticks.size)
-        .order(ByteOrder.LITTLE_ENDIAN)
-    ref.put(TickSerializer.RAW_MAGIC)
-    ref.put(TickSerializer.SCHEMA_VERSION.toByte())
-    ref.putShort(ticks.size.toShort())
-    ref.putShort(MASKED_NCOLS_MARKER.toShort())
-    ref.putShort(TEST_CLIENT_PROTOCOL.toShort())
-    ref.putShort(TEST_SERVER_PROTOCOL.toShort())
-    ref.putLong(FULL_MASK_LOW)
-    ref.putLong(FULL_MASK_HIGH)
-    for (field in 0 until FIELD_COUNT) {
-      for (tick in ticks) referenceWriteRaw(ref, tick, field)
+    for ((index, field) in TickSchema.fields.withIndex()) {
+      assertEquals(referenceFieldSize(index), field.wireType.size, field.name)
+      val size = referenceFieldSize(index) * ticks.size
+      val ref = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN)
+      val actual = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN)
+      for (tick in ticks) {
+        referenceWriteRaw(ref, tick, index)
+        field.writeRaw(tick, actual)
+      }
+      assertEquals(ref.array().toList(), actual.array().toList(), field.name)
     }
-    assertEquals(
-      ref.array().toList(),
-      TickSerializer.serialize(ticks, TEST_CLIENT_PROTOCOL, TEST_SERVER_PROTOCOL).toList(),
-    )
-  }
-
-  @Test
-  fun maskedRawKeepsSelectedColumnsByteIdentical() {
-    val ticks = samples()
-    val selected = listOf(0, 4, 5, 63, 64, 99)
-    val names = selected.map { TickSchema.fieldNames[it] }
-    val mask = requireNotNull(TickSchema.maskOf(names))
-    val rowBytes = selected.sumOf { referenceFieldSize(it) }
-    val ref = ByteBuffer.allocate(RAW_HEADER + rowBytes * ticks.size).order(ByteOrder.LITTLE_ENDIAN)
-    ref.put(TickSerializer.RAW_MAGIC)
-    ref.put(TickSerializer.SCHEMA_VERSION.toByte())
-    ref.putShort(ticks.size.toShort())
-    ref.putShort(MASKED_NCOLS_MARKER.toShort())
-    ref.putShort(TEST_CLIENT_PROTOCOL.toShort())
-    ref.putShort(TEST_SERVER_PROTOCOL.toShort())
-    ref.putLong((1L shl 0) or (1L shl 4) or (1L shl 5) or (1L shl 63))
-    ref.putLong((1L shl 0) or (1L shl 35))
-    for (field in selected) {
-      for (tick in ticks) referenceWriteRaw(ref, tick, field)
-    }
-    assertEquals(
-      ref.array().toList(),
-      TickSerializer.serialize(ticks, TEST_CLIENT_PROTOCOL, TEST_SERVER_PROTOCOL, mask).toList(),
-    )
-    assertEquals(names, TickSchema.namesOf(mask))
-    assertEquals(rowBytes, TickSchema.rowSizeFor(mask))
-  }
-
-  @Test
-  fun maskOfRejectsUnknownColumn() {
-    assertEquals(null, TickSchema.maskOf(listOf("yaw", "definitely_not_a_column")))
   }
 
   @Test
@@ -225,17 +185,18 @@ class TickSchemaByteIdentityTest {
     assertEquals(FIELD_COUNT, TickSchema.csvHeader.split(',').size)
   }
 
-  // Wire types (B=bool1, S=i16, I=i32, L=i64, F=f32, D=f64), spelled out on purpose: this is the
+  // Wire types (B=bool1, C=i8, U=u8, S=i16, I=i32, L=i64, F=f32, D=f64), spelled out on purpose:
+  // this is the
   // second source the test compares TickSchema against.
   private val referenceTypes =
-    "IIFIFFDDDBBBSBBBBBBIBBBBBBBIIFFFIBIIIIIFFFFFBFFFFFSBFBIBBBFBFFFIBFFBBFFFIBIIBFFBBFFIFFFBBBBIFBBFFFFI" +
-      "SSSBISSSSIIIFFFBSSSSFFFIFFSB"
-
-  private val referenceRowBytes = referenceTypes.indices.sumOf { referenceFieldSize(it) }
+    "IIFIFFDDDBBBSBBBBBBCBBBBBBBCUFFFIBIIIIIFFFFFBFFFFFSBFBUBBBFBFFFUBFFBBFFFUBUUBFFBBFFUFFFBBBBIFBBFFFFU" +
+      "SSSBUSSSSIIIFFFBSSSSFFFUFFSB"
 
   private fun referenceFieldSize(field: Int) =
     when (referenceTypes[field]) {
-      'B' -> 1
+      'B',
+      'C',
+      'U' -> 1
       'S' -> 2
       'D',
       'L' -> 8
@@ -245,6 +206,8 @@ class TickSchemaByteIdentityTest {
   private fun referenceWriteRaw(b: ByteBuffer, t: TickData, field: Int) {
     when (referenceTypes[field]) {
       'B' -> b.put(if (referenceRawFloat(t, field) != 0f) 1 else 0)
+      'C' -> b.put(referenceRawFloat(t, field).toInt().coerceIn(-128, 127).toByte())
+      'U' -> b.put(referenceRawFloat(t, field).toInt().coerceIn(0, 255).toByte())
       'S' -> b.putShort(referenceRawFloat(t, field).toInt().toShort())
       'I' -> b.putInt(if (field == 1) t.tickIndex.toInt() else referenceRawFloat(t, field).toInt())
       'L' -> b.putLong(referenceRawFloat(t, field).toLong())
@@ -661,11 +624,5 @@ class TickSchemaByteIdentityTest {
 
   private companion object {
     const val FIELD_COUNT = 128
-    const val RAW_HEADER = 26
-    const val MASKED_NCOLS_MARKER = 0
-    const val FULL_MASK_LOW = -1L
-    const val FULL_MASK_HIGH = -1L
-    const val TEST_CLIENT_PROTOCOL = 769
-    const val TEST_SERVER_PROTOCOL = 769
   }
 }

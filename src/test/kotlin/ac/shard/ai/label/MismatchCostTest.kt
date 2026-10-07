@@ -17,7 +17,7 @@
  */
 package ac.shard.ai.label
 
-import ac.shard.checks.impl.ai.ViolationBuffer
+import ac.shard.detection.ViolationBuffer
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach

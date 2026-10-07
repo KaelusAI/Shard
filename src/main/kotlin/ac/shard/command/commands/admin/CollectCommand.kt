@@ -18,11 +18,12 @@
 package ac.shard.command.commands.admin
 
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.data.CollectManager
 import ac.shard.player.PlayerDataManager
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import java.time.Duration
 import java.time.Instant
 import java.util.Locale
@@ -32,13 +33,13 @@ import org.incendo.cloud.CommandManager
 import org.incendo.cloud.bukkit.parser.PlayerParser
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.description.Description
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.kotlin.extension.suggestionProvider
 import org.incendo.cloud.parser.standard.StringParser
 import org.incendo.cloud.suggestion.Suggestion
 import org.incendo.cloud.suggestion.SuggestionProvider
 
 class CollectCommand(
+  private val messages: Messages,
   private val collectManager: CollectManager,
   private val playerDataManager: PlayerDataManager,
 ) : ShardCommand {
@@ -47,38 +48,38 @@ class CollectCommand(
 
     val typeProvider = SuggestionProvider.suggesting<Sender>(typeSuggestions)
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("collect", Description.empty(), "dc")
         .literal("start")
         .permission("shard.collect.start")
         .required("target", PlayerParser.playerParser())
         .required("type", StringParser.stringParser()) { suggestionProvider = typeProvider }
         .optional("details", StringParser.greedyStringParser())
-        .handler(this@CollectCommand::start)
+        .handler { start(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("collect", Description.empty(), "dc")
         .literal("stop")
         .permission("shard.collect.stop")
         .required("target", PlayerParser.playerParser())
-        .handler(this@CollectCommand::stop)
+        .handler { stop(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("collect", Description.empty(), "dc")
         .literal("cancel")
         .permission("shard.collect.cancel")
         .required("target", PlayerParser.playerParser())
-        .handler(this@CollectCommand::cancel)
+        .handler { cancel(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("collect", Description.empty(), "dc")
         .literal("status")
         .permission("shard.collect.status")
         .optional("target", PlayerParser.playerParser())
-        .handler(this@CollectCommand::status)
+        .handler { status(it) }
     }
   }
 
@@ -92,11 +93,11 @@ class CollectCommand(
 
     val shardPlayer = playerDataManager.getPlayer(target)
     if (shardPlayer == null) {
-      MessageUtil.sendMessage(sender, Message.COLLECT_STATUS_NO_SESSION, "player", target.name)
+      messages.sendMessage(sender, Message.COLLECT_STATUS_NO_SESSION, "player", target.name)
       return
     }
     if (collectManager.startCollecting(shardPlayer, label)) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender,
         Message.COLLECT_START_SUCCESS,
         "player",
@@ -107,7 +108,7 @@ class CollectCommand(
     } else {
       collectManager.stopCollecting(shardPlayer.uuid)
       collectManager.startCollecting(shardPlayer, label)
-      MessageUtil.sendMessage(sender, Message.COLLECT_START_RESTARTED, "player", target.name)
+      messages.sendMessage(sender, Message.COLLECT_START_RESTARTED, "player", target.name)
     }
   }
 
@@ -116,9 +117,9 @@ class CollectCommand(
     val target: Player = context["target"]
 
     if (collectManager.stopCollecting(target.uniqueId)) {
-      MessageUtil.sendMessage(sender, Message.COLLECT_STOP_SUCCESS, "player", target.name)
+      messages.sendMessage(sender, Message.COLLECT_STOP_SUCCESS, "player", target.name)
     } else {
-      MessageUtil.sendMessage(sender, Message.COLLECT_STOP_FAIL, "player", target.name)
+      messages.sendMessage(sender, Message.COLLECT_STOP_FAIL, "player", target.name)
     }
   }
 
@@ -127,9 +128,9 @@ class CollectCommand(
     val target: Player = context["target"]
 
     if (collectManager.cancelCollecting(target.uniqueId)) {
-      MessageUtil.sendMessage(sender, Message.COLLECT_CANCEL_SUCCESS, "player", target.name)
+      messages.sendMessage(sender, Message.COLLECT_CANCEL_SUCCESS, "player", target.name)
     } else {
-      MessageUtil.sendMessage(sender, Message.COLLECT_STOP_FAIL, "player", target.name)
+      messages.sendMessage(sender, Message.COLLECT_STOP_FAIL, "player", target.name)
     }
   }
 
@@ -141,7 +142,7 @@ class CollectCommand(
       val session = collectManager.getSession(target.uniqueId)
       if (session != null) {
         val seconds = Duration.between(session.startTime, Instant.now()).toSeconds()
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender,
           Message.COLLECT_STATUS_PLAYER,
           "player",
@@ -154,7 +155,7 @@ class CollectCommand(
           session.windowCount().toString(),
         )
       } else {
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender,
           Message.COLLECT_STATUS_NO_SESSION,
           "player",
@@ -164,15 +165,15 @@ class CollectCommand(
       return
     }
 
-    MessageUtil.sendMessage(sender, Message.COLLECT_STATUS_HEADER)
+    messages.sendMessage(sender, Message.COLLECT_STATUS_HEADER)
     if (collectManager.activeSessions.isEmpty()) {
-      MessageUtil.sendMessage(sender, Message.COLLECT_STATUS_NONE)
+      messages.sendMessage(sender, Message.COLLECT_STATUS_NONE)
       return
     }
 
     for (session in collectManager.activeSessions.values) {
       val seconds = Duration.between(session.startTime, Instant.now()).toSeconds()
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender,
         Message.COLLECT_STATUS_PLAYER,
         "player",
@@ -192,14 +193,14 @@ class CollectCommand(
       "LEGIT",
       "CHEAT" -> {
         if (details.isEmpty()) {
-          MessageUtil.sendMessage(sender, Message.COLLECT_DETAILS_REQUIRED)
+          messages.sendMessage(sender, Message.COLLECT_DETAILS_REQUIRED)
           null
         } else {
           "$type $details"
         }
       }
       else -> {
-        MessageUtil.sendMessage(sender, Message.COLLECT_INVALID_TYPE)
+        messages.sendMessage(sender, Message.COLLECT_INVALID_TYPE)
         null
       }
     }
