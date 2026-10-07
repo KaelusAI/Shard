@@ -15,16 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.alert
 
-import com.fasterxml.jackson.annotation.JsonCreator
-import com.fasterxml.jackson.annotation.JsonProperty
+import net.kyori.adventure.text.Component
 
-data class CrossServerAlert
-@JsonCreator
-constructor(
-  @param:JsonProperty("origin") val origin: String,
-  @param:JsonProperty("server") val server: String,
-  @param:JsonProperty("type") val type: String,
-  @param:JsonProperty("component") val component: String,
-)
+interface NetworkPublisher {
+  val name: String
+
+  fun publish(type: AlertType, component: Component)
+
+  fun onRemote(listener: (Component, AlertType, String) -> Unit)
+}

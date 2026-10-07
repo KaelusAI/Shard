@@ -19,26 +19,26 @@ package ac.shard.command.commands.admin
 
 import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.command.CommandRegister
 import ac.shard.command.ShardCommand
 import ac.shard.command.requirements.PlayerSenderRequirement
+import ac.shard.command.shardCommand
 import ac.shard.database.DatabaseManager
+import ac.shard.detection.SuspicionPolicy
+import ac.shard.network.NetworkSuspiciousService
+import ac.shard.network.SuspiciousSnapshot
 import ac.shard.player.PlayerDataManager
-import ac.shard.redis.CrossServerSuspiciousService
-import ac.shard.redis.SuspiciousSnapshot
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.MiniText
 import java.util.Locale
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
-import org.bukkit.Bukkit
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 internal fun dedupeByPlayer(entries: List<SuspiciousSnapshot>): List<SuspiciousSnapshot> =
   entries
@@ -46,47 +46,51 @@ internal fun dedupeByPlayer(entries: List<SuspiciousSnapshot>): List<SuspiciousS
     .values
     .map { group -> group.reduce { a, b -> if (b.updatedAt >= a.updatedAt) b else a } }
 
+@Suppress("LongParameterList")
 class SuspiciousCommand(
+  private val messages: Messages,
   private val playerDataManager: PlayerDataManager,
   private val alertManager: AlertManager,
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
-  private val crossServerSuspiciousService: CrossServerSuspiciousService,
+  private val networkSuspiciousService: NetworkSuspiciousService,
+  private val suspicion: SuspicionPolicy,
+  private val server: org.bukkit.Server,
 ) : ShardCommand {
   private data class FlaggedPlayerEntry(val playerName: String, val flags: Int)
 
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("suspicious")
         .permission("shard.suspicious")
         .literal("alerts")
         .permission("shard.suspicious.alerts")
         .mutate { it.apply(CommandRegister.REQUIREMENT_FACTORY.create(PlayerSenderRequirement)) }
-        .handler(this@SuspiciousCommand::executeAlerts)
+        .handler { executeAlerts(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("suspicious")
         .permission("shard.suspicious")
         .literal("list")
         .permission("shard.suspicious.list")
-        .handler(this@SuspiciousCommand::executeList)
+        .handler { executeList(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("suspicious")
         .permission("shard.suspicious")
         .literal("top")
         .permission("shard.suspicious.top")
-        .handler(this@SuspiciousCommand::executeTop)
+        .handler { executeTop(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("suspicious")
         .permission("shard.suspicious")
         .literal("flagged")
         .permission("shard.suspicious.flagged")
-        .handler(this@SuspiciousCommand::executeFlagged)
+        .handler { executeFlagged(it) }
     }
   }
 
@@ -99,7 +103,7 @@ class SuspiciousCommand(
     val sender = context.sender()
     val local = collectLocalSuspicious()
 
-    if (!crossServerSuspiciousService.isActive) {
+    if (!networkSuspiciousService.isActive) {
       renderList(sender, local.sortedByDescending { it.buffer }, tagged = false)
       return
     }
@@ -114,7 +118,7 @@ class SuspiciousCommand(
     val sender = context.sender()
     val local = collectLocalSuspicious()
 
-    if (!crossServerSuspiciousService.isActive) {
+    if (!networkSuspiciousService.isActive) {
       renderTop(sender, local.maxByOrNull { it.buffer }, tagged = false)
       return
     }
@@ -126,12 +130,12 @@ class SuspiciousCommand(
   }
 
   private fun collectLocalSuspicious(): List<SuspiciousSnapshot> {
-    val server = crossServerSuspiciousService.serverName
+    val server = networkSuspiciousService.serverName
     val entries = ArrayList<SuspiciousSnapshot>()
     for (sp in playerDataManager.getPlayers()) {
-      val check = sp.checkManager.getCheck(AiCheck::class.java) ?: continue
+      val check = sp.detection
       val mitigation = sp.mitigation
-      if (check.buffer > 0.0 || mitigation.matched != null) {
+      if (suspicion.isWatched(sp)) {
         entries.add(
           SuspiciousSnapshot(
             server,
@@ -150,21 +154,22 @@ class SuspiciousCommand(
   }
 
   private fun fetchRemoteEntries(): List<SuspiciousSnapshot> =
-    crossServerSuspiciousService.fetchRemote()
+    runCatching { networkSuspiciousService.fetchRemote() }.getOrDefault(emptyList())
 
   private fun renderList(sender: Sender, entries: List<SuspiciousSnapshot>, tagged: Boolean) {
     if (entries.isEmpty()) {
-      sender.sendMessage(MessageUtil.getMessage(Message.SUSPICIOUS_LIST_EMPTY))
+      sender.sendMessage(messages.getMessage(Message.SUSPICIOUS_LIST_EMPTY))
       return
     }
 
     sender.sendMessage(
-      MessageUtil.getMessage(Message.SUSPICIOUS_LIST_HEADER, "count", entries.size.toString())
+      messages.getMessage(Message.SUSPICIOUS_LIST_HEADER, "count", entries.size.toString())
     )
 
     for (entry in entries) {
       val line =
-        MessageUtil.getMessage(
+        messages
+          .getMessage(
             Message.SUSPICIOUS_LIST_ENTRY,
             "player",
             entry.name,
@@ -177,9 +182,7 @@ class SuspiciousCommand(
             "score",
             String.format(Locale.US, "%.1f", entry.score),
           )
-          .hoverEvent(
-            HoverEvent.showText(MessageUtil.getMessage(Message.SUSPICIOUS_LIST_ENTRY_HOVER))
-          )
+          .hoverEvent(HoverEvent.showText(messages.getMessage(Message.SUSPICIOUS_LIST_ENTRY_HOVER)))
           .clickEvent(ClickEvent.runCommand("/shard profile ${entry.name}"))
 
       sender.sendMessage(withServerTag(entry.server, line, tagged))
@@ -188,21 +191,20 @@ class SuspiciousCommand(
 
   private fun renderTop(sender: Sender, top: SuspiciousSnapshot?, tagged: Boolean) {
     if (top == null) {
-      sender.sendMessage(MessageUtil.getMessage(Message.SUSPICIOUS_TOP_NONE))
+      sender.sendMessage(messages.getMessage(Message.SUSPICIOUS_TOP_NONE))
       return
     }
 
     val line =
-      MessageUtil.getMessage(
+      messages
+        .getMessage(
           Message.SUSPICIOUS_TOP_PLAYER,
           "player",
           top.name,
           "buffer",
           String.format(Locale.US, "%.1f", top.buffer),
         )
-        .hoverEvent(
-          HoverEvent.showText(MessageUtil.getMessage(Message.SUSPICIOUS_TOP_PLAYER_HOVER))
-        )
+        .hoverEvent(HoverEvent.showText(messages.getMessage(Message.SUSPICIOUS_TOP_PLAYER_HOVER)))
         .clickEvent(ClickEvent.runCommand("/shard monitor ${top.name}"))
 
     sender.sendMessage(withServerTag(top.server, line, tagged))
@@ -210,7 +212,8 @@ class SuspiciousCommand(
 
   private fun withServerTag(server: String, line: Component, tagged: Boolean): Component =
     if (tagged) {
-      MessageUtil.getMessage(Message.CROSS_SERVER_SERVER_TAG, "server", server)
+      messages
+        .getMessage(Message.NETWORK_SERVER_TAG, "server", MiniText.escape(server))
         .append(Component.space())
         .append(line)
     } else {
@@ -220,12 +223,10 @@ class SuspiciousCommand(
   private fun executeFlagged(context: CommandContext<Sender>) {
     val sender = context.sender()
     val onlinePlayers =
-      Bukkit.getOnlinePlayers()
-        .map { player -> player.uniqueId to player.name }
-        .toMap(LinkedHashMap())
+      server.onlinePlayers.map { player -> player.uniqueId to player.name }.toMap(LinkedHashMap())
 
     if (onlinePlayers.isEmpty()) {
-      sender.sendMessage(MessageUtil.getMessage(Message.SUSPICIOUS_FLAGGED_EMPTY))
+      sender.sendMessage(messages.getMessage(Message.SUSPICIOUS_FLAGGED_EMPTY))
       return
     }
 
@@ -243,12 +244,12 @@ class SuspiciousCommand(
 
       scheduler.runSync {
         if (flaggedPlayers.isEmpty()) {
-          sender.sendMessage(MessageUtil.getMessage(Message.SUSPICIOUS_FLAGGED_EMPTY))
+          sender.sendMessage(messages.getMessage(Message.SUSPICIOUS_FLAGGED_EMPTY))
           return@runSync
         }
 
         sender.sendMessage(
-          MessageUtil.getMessage(
+          messages.getMessage(
             Message.SUSPICIOUS_FLAGGED_HEADER,
             "count",
             flaggedPlayers.size.toString(),
@@ -257,7 +258,8 @@ class SuspiciousCommand(
 
         for (entry in flaggedPlayers) {
           sender.sendMessage(
-            MessageUtil.getMessage(
+            messages
+              .getMessage(
                 Message.SUSPICIOUS_FLAGGED_ENTRY,
                 "player",
                 entry.playerName,
@@ -265,7 +267,7 @@ class SuspiciousCommand(
                 entry.flags.toString(),
               )
               .hoverEvent(
-                HoverEvent.showText(MessageUtil.getMessage(Message.SUSPICIOUS_LIST_ENTRY_HOVER))
+                HoverEvent.showText(messages.getMessage(Message.SUSPICIOUS_LIST_ENTRY_HOVER))
               )
               .clickEvent(ClickEvent.runCommand("/shard profile ${entry.playerName}"))
           )

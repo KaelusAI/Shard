@@ -15,27 +15,27 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.network
 
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
+import ac.shard.detection.SuspicionPolicy
+import ac.shard.http.Json
 import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.logging.Level
 import java.util.logging.Logger
 
-class CrossServerSuspiciousService(
+class NetworkSuspiciousService(
   private val configManager: ConfigManager,
   private val redisManager: RedisManager,
   private val playerDataManager: PlayerDataManager,
   private val scheduler: SchedulerService,
   private val logger: Logger,
+  private val suspicion: SuspicionPolicy,
 ) {
-  private val mapper = ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+  private val mapper = Json.lenient
 
   @Volatile private var enabled = false
   @Volatile private var refreshTask: TaskHandle? = null
@@ -71,7 +71,7 @@ class CrossServerSuspiciousService(
     redisManager.start()
     if (!redisManager.isAvailable) {
       logger.warning(
-        "[CrossServer] suspicious-sync is enabled but Redis is unavailable; the list stays local."
+        "[Network] suspicious-sync is enabled but Redis is unavailable; the list stays local."
       )
       return
     }
@@ -80,7 +80,7 @@ class CrossServerSuspiciousService(
     val periodTicks = refreshSeconds * TICKS_PER_SECOND
     refreshTask = scheduler.runTimer(::publishLocalSuspicious, periodTicks, periodTicks)
     logger.info(
-      "[CrossServer] Sharing suspicious players as \"$serverName\" " +
+      "[Network] Sharing suspicious players as \"$serverName\" " +
         "(refresh ${refreshSeconds}s, ttl ${ttlSeconds}s)."
     )
   }
@@ -91,8 +91,8 @@ class CrossServerSuspiciousService(
   }
 
   private fun publishPlayer(shardPlayer: ShardPlayer) {
-    val check = shardPlayer.checkManager.getCheck(AiCheck::class.java)
-    if (check == null || check.buffer <= 0.0) return
+    if (!suspicion.isWatched(shardPlayer)) return
+    val check = shardPlayer.detection
     val player = shardPlayer.player
     val payload =
       runCatching {
@@ -120,7 +120,7 @@ class CrossServerSuspiciousService(
       .mapNotNull { raw ->
         runCatching { mapper.readValue(raw, SuspiciousSnapshot::class.java) }
           .onFailure { error ->
-            logger.log(Level.FINE, "[CrossServer] Bad suspect payload.", error)
+            logger.log(Level.FINE, "[Network] Bad suspect payload.", error)
           }
           .getOrNull()
       }

@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.network
 
 import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
@@ -35,7 +35,7 @@ import org.testcontainers.utility.DockerImageName
 
 @Tag("container")
 @Testcontainers(disabledWithoutDocker = true)
-class RedisCrossServerContainerTest {
+class RedisNetworkContainerTest {
 
   @Test
   fun `a message published on one manager is received by another over redis`() {
@@ -62,6 +62,36 @@ class RedisCrossServerContainerTest {
     }
   }
 
+  @Test
+  fun `a subscriber reconnects after redis drops its connection`() {
+    GenericContainer(DockerImageName.parse(REDIS_IMAGE)).withExposedPorts(REDIS_PORT).use {
+      container ->
+      container.start()
+      val publisher = manager(container)
+      val subscriber = manager(container)
+      try {
+        publisher.start()
+        subscriber.start()
+        val received = LinkedBlockingQueue<String>()
+        subscriber.subscribe(CHANNEL) { message -> received.add(message) }
+
+        val killed = container.execInContainer("redis-cli", "CLIENT", "KILL", "TYPE", "pubsub")
+        assertEquals("1", killed.stdout.trim())
+
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AWAIT_TIMEOUT_SECONDS)
+        var delivered: String? = null
+        while (delivered == null && System.nanoTime() < deadline) {
+          publisher.publishAsync(CHANNEL, PAYLOAD)
+          delivered = received.poll(POLL_MILLIS, TimeUnit.MILLISECONDS)
+        }
+        assertEquals(PAYLOAD, delivered)
+      } finally {
+        publisher.shutdown()
+        subscriber.shutdown()
+      }
+    }
+  }
+
   private fun manager(container: GenericContainer<*>): RedisManager {
     val yaml =
       """
@@ -81,7 +111,8 @@ class RedisCrossServerContainerTest {
     const val REDIS_IMAGE = "redis:7-alpine"
     const val REDIS_PORT = 6379
     const val CHANNEL = "shard:it-alerts"
-    const val PAYLOAD = "cross-server-payload"
+    const val PAYLOAD = "network-payload"
     const val AWAIT_TIMEOUT_SECONDS = 5L
+    const val POLL_MILLIS = 200L
   }
 }

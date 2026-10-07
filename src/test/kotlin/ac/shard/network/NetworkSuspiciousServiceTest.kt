@@ -15,17 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.network
 
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
 import ac.shard.config.ConfigView
+import ac.shard.detection.DetectionState
+import ac.shard.detection.SuspicionPolicy
+import ac.shard.http.Json
 import ac.shard.mitigation.MitigationState
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -41,8 +41,8 @@ import org.bukkit.entity.Player
 import org.junit.jupiter.api.Test
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader
 
-class CrossServerSuspiciousServiceTest {
-  private val mapper = ObjectMapper()
+class NetworkSuspiciousServiceTest {
+  private val mapper = Json.lenient
 
   private val enabledYaml =
     """
@@ -132,15 +132,13 @@ class CrossServerSuspiciousServiceTest {
   }
 
   private fun player(uuid: UUID, name: String, buffer: Double, ping: Int): ShardPlayer {
-    val check = mockk<AiCheck>()
+    val check = mockk<DetectionState>()
     every { check.buffer } returns buffer
     val bukkitPlayer = mockk<Player>()
     every { bukkitPlayer.name } returns name
     every { bukkitPlayer.ping } returns ping
-    val checkManager = mockk<CheckManager>()
-    every { checkManager.getCheck(AiCheck::class.java) } returns check
     val shardPlayer = mockk<ShardPlayer>()
-    every { shardPlayer.checkManager } returns checkManager
+    every { shardPlayer.detection } returns check
     every { shardPlayer.uuid } returns uuid
     every { shardPlayer.player } returns bukkitPlayer
     every { shardPlayer.mitigation } returns MitigationState()
@@ -152,16 +150,17 @@ class CrossServerSuspiciousServiceTest {
     redis: RedisManager,
     scheduler: SchedulerService,
     playerData: PlayerDataManager,
-  ): CrossServerSuspiciousService {
+  ): NetworkSuspiciousService {
     val configManager = mockk<ConfigManager>()
     val loader = YamlConfigurationLoader.builder().source { yaml.reader().buffered() }.build()
     every { configManager.config } returns ConfigView(loader.load())
-    return CrossServerSuspiciousService(
+    return NetworkSuspiciousService(
       configManager,
       redis,
       playerData,
       scheduler,
       Logger.getLogger("suspicious-test"),
+      SuspicionPolicy(configManager),
     )
   }
 }

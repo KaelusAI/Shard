@@ -15,17 +15,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.network
 
-import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
-import ac.shard.alert.CrossServerPublisher
+import ac.shard.alert.NetworkPublisher
 import ac.shard.config.ConfigManager
+import ac.shard.http.Json
 import ac.shard.scheduler.SchedulerService
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
+import ac.shard.utils.Messages
+import ac.shard.utils.MiniText
 import java.util.EnumSet
 import java.util.UUID
 import java.util.logging.Level
@@ -33,21 +32,28 @@ import java.util.logging.Logger
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer
 
-class CrossServerAlertService(
+class NetworkAlertService(
+  private val messages: Messages,
   private val configManager: ConfigManager,
   private val redisManager: RedisManager,
-  private val alertManager: AlertManager,
   private val scheduler: SchedulerService,
   private val logger: Logger,
-) {
+) : NetworkPublisher {
   private val origin: String = UUID.randomUUID().toString()
-  private val mapper = ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+  private val mapper = Json.lenient
   private val componentSerializer = GsonComponentSerializer.gson()
 
+  @Volatile private var remote: ((Component, AlertType, String) -> Unit)? = null
   @Volatile private var enabled = false
   @Volatile private var mirroredTypes: Set<AlertType> = emptySet()
   @Volatile private var serverName = DEFAULT_SERVER_NAME
   @Volatile private var channel = DEFAULT_CHANNEL
+
+  val isEnabled: Boolean
+    get() = enabled
+
+  override val name: String
+    get() = serverName
 
   fun start() {
     val config = configManager.config
@@ -63,28 +69,29 @@ class CrossServerAlertService(
     redisManager.start()
     if (!redisManager.isAvailable) {
       logger.warning(
-        "[CrossServer] network.enabled is true but Redis is unavailable; alerts stay local."
+        "[Network] network.enabled is true but Redis is unavailable; alerts stay local."
       )
       return
     }
 
     redisManager.subscribe(channel, ::onMessage)
-    alertManager.crossServerPublisher = CrossServerPublisher { type, component ->
-      publish(type, component)
-    }
     enabled = true
     logger.info(
-      "[CrossServer] Mirroring ${mirroredTypes.joinToString(", ")} alerts as " +
+      "[Network] Mirroring ${mirroredTypes.joinToString(", ")} alerts as " +
         "\"$serverName\" on channel \"$channel\"."
     )
   }
 
-  fun publish(type: AlertType, component: Component) {
-    if (!enabled || type !in mirroredTypes) return
+  override fun onRemote(listener: (Component, AlertType, String) -> Unit) {
+    remote = listener
+  }
+
+  override fun publish(type: AlertType, component: Component) {
+    if (!enabled || !mirrors(type)) return
     val payload =
       runCatching {
           val alert =
-            CrossServerAlert(
+            NetworkAlert(
               origin,
               serverName,
               type.name,
@@ -93,7 +100,7 @@ class CrossServerAlertService(
           mapper.writeValueAsString(alert)
         }
         .getOrElse { error ->
-          logger.log(Level.FINE, "[CrossServer] Failed to serialize alert.", error)
+          logger.log(Level.FINE, "[Network] Failed to serialize alert.", error)
           return
         }
     redisManager.publishAsync(channel, payload)
@@ -102,22 +109,26 @@ class CrossServerAlertService(
   private fun onMessage(raw: String) {
     runCatching { handleMessage(raw) }
       .onFailure { error ->
-        logger.log(Level.FINE, "[CrossServer] Failed to handle incoming alert.", error)
+        logger.log(Level.FINE, "[Network] Failed to handle incoming alert.", error)
       }
   }
 
   @Suppress("ReturnCount")
   private fun handleMessage(raw: String) {
     if (!enabled) return
-    val alert = mapper.readValue(raw, CrossServerAlert::class.java)
+    val alert = mapper.readValue(raw, NetworkAlert::class.java)
     if (alert.origin == origin) return
     val type = runCatching { AlertType.valueOf(alert.type) }.getOrNull() ?: return
-    if (type !in mirroredTypes) return
+    if (!mirrors(type)) return
     val body = stripClickEvents(componentSerializer.deserialize(alert.component))
-    val prefix = MessageUtil.getMessage(Message.CROSS_SERVER_ALERT_PREFIX, "server", alert.server)
+    val prefix =
+      messages.getMessage(Message.NETWORK_ALERT_PREFIX, "server", MiniText.escape(alert.server))
     val message = prefix.append(Component.space()).append(body)
-    scheduler.runSync { alertManager.deliver(message, type) }
+    val listener = remote ?: return
+    scheduler.runSync { listener(message, type, alert.server) }
   }
+
+  private fun mirrors(type: AlertType): Boolean = type == AlertType.CUSTOM || type in mirroredTypes
 
   private fun stripClickEvents(component: Component): Component {
     val stripped = component.clickEvent(null)
@@ -130,7 +141,6 @@ class CrossServerAlertService(
 
   fun shutdown() {
     enabled = false
-    alertManager.crossServerPublisher = null
   }
 
   private companion object {

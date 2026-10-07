@@ -15,12 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.network
 
-class CrossServerServices(
+class NetworkServices(
   val redis: RedisManager,
-  val alerts: CrossServerAlertService,
-  val suspicious: CrossServerSuspiciousService,
+  val alerts: NetworkAlertService,
+  val suspicious: NetworkSuspiciousService,
 ) {
   fun start() {
     alerts.start()
@@ -35,5 +35,10 @@ class CrossServerServices(
   fun shutdown() {
     stopMirrors()
     redis.shutdown()
+  }
+
+  fun restart() {
+    redis.shutdown()
+    start()
   }
 }

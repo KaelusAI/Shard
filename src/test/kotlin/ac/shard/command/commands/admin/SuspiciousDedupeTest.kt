@@ -17,7 +17,7 @@
  */
 package ac.shard.command.commands.admin
 
-import ac.shard.redis.SuspiciousSnapshot
+import ac.shard.network.SuspiciousSnapshot
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 

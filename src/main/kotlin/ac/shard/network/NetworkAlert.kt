@@ -15,22 +15,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.redis
+package ac.shard.network
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import kotlin.test.assertEquals
-import org.junit.jupiter.api.Test
+import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonProperty
 
-class CrossServerAlertTest {
-  private val mapper = ObjectMapper()
-
-  @Test
-  fun `payload round-trips through jackson`() {
-    val original = CrossServerAlert("origin-1", "Lobby", "REGULAR", """{"text":"hi"}""")
-
-    val json = mapper.writeValueAsString(original)
-    val restored = mapper.readValue(json, CrossServerAlert::class.java)
-
-    assertEquals(original, restored)
-  }
-}
+data class NetworkAlert
+@JsonCreator
+constructor(
+  @param:JsonProperty("origin") val origin: String,
+  @param:JsonProperty("server") val server: String,
+  @param:JsonProperty("type") val type: String,
+  @param:JsonProperty("component") val component: String,
+)
