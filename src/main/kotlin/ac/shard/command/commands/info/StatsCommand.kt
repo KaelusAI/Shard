@@ -17,31 +17,34 @@
  */
 package ac.shard.command.commands.info
 
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.ai.stream.StreamTransport
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.database.DatabaseManager
 import ac.shard.database.ViolationDatabase
+import ac.shard.detection.SuspicionPolicy
 import ac.shard.player.PlayerDataManager
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
+import ac.shard.server.AIServerProvider
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
-import org.bukkit.Bukkit
+import org.bukkit.command.CommandSender
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.kotlin.extension.suggestionProvider
 import org.incendo.cloud.parser.standard.StringParser
 import org.incendo.cloud.suggestion.Suggestion
 import org.incendo.cloud.suggestion.SuggestionProvider
 
 private const val PERCENT_MULTIPLIER = 100.0
+private const val BYTES_PER_MB = 1024.0 * 1024.0
 private const val WHOLE_PERCENT_DISPLAY_THRESHOLD = 10.0
 private const val WHOLE_NUMBER_REMAINDER = 1.0
 
@@ -82,12 +85,16 @@ private fun formatThreshold(value: Double): String {
   }
 }
 
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class StatsCommand(
+  private val messages: Messages,
   private val databaseManager: DatabaseManager,
   private val scheduler: SchedulerService,
   private val playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
+  private val aiServerProvider: AIServerProvider,
+  private val suspicion: SuspicionPolicy,
+  private val server: org.bukkit.Server,
 ) : ShardCommand {
   private data class StatsSnapshot(
     val period: StatsPeriod,
@@ -108,13 +115,19 @@ class StatsCommand(
         StatsPeriod.entries.map { Suggestion.suggestion(it.label) }
       )
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
+      literal("stats").literal("inference").permission("shard.stats").handler { context ->
+        inference(context.sender().nativeSender)
+      }
+    }
+
+    manager.shardCommand {
       literal("stats").permission("shard.stats").handler { context ->
         execute(context, StatsPeriod.DEFAULT)
       }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("stats")
         .permission("shard.stats")
         .required("period", StringParser.stringParser()) { suggestionProvider = periodSuggestions }
@@ -122,7 +135,7 @@ class StatsCommand(
           val raw: String = context["period"]
           val period = StatsPeriod.parse(raw)
           if (period == null) {
-            MessageUtil.sendMessage(
+            messages.sendMessage(
               context.sender().nativeSender,
               Message.STATS_INVALID_PERIOD,
               "options",
@@ -139,11 +152,11 @@ class StatsCommand(
     val sender = context.sender()
     val db: ViolationDatabase = databaseManager.database
     val since = System.currentTimeMillis() - period.millis()
-    val onlinePlayers = Bukkit.getOnlinePlayers().size
+    val onlinePlayers = server.onlinePlayers.size
     val suspiciousNow = getSuspiciousCount()
 
     if (!databaseManager.isAvailable) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
+      messages.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
     }
 
     scheduler.runAsync {
@@ -171,11 +184,11 @@ class StatsCommand(
 
   private fun buildStatsLines(snapshot: StatsSnapshot): List<Component> {
     return listOf(
-      MessageUtil.getMessage(Message.STATS_HEADER),
+      messages.getMessage(Message.STATS_HEADER),
       buildFlagsLine(snapshot),
       buildPlayersLine(snapshot),
       buildViolatorsLine(snapshot),
-      MessageUtil.getMessage(
+      messages.getMessage(
         Message.STATS_ONLINE,
         "online_players",
         snapshot.onlinePlayers.toString(),
@@ -186,16 +199,17 @@ class StatsCommand(
   }
 
   private fun buildModelLine(): Component =
-    MessageUtil.getMessage(
+    messages
+      .getMessage(
         Message.STATS_MODEL,
         "model",
         configManager.modelTitle(),
         "labels",
-        configManager.labelCatalog.format(configManager.aiLabels).ifEmpty { "-" },
+        configManager.labelCatalog.format(configManager.declaredDetections()).ifEmpty { "-" },
       )
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(
+          messages.getMessage(
             Message.STATS_MODEL_HOVER,
             "config",
             configManager.describeModelConfig(),
@@ -204,7 +218,8 @@ class StatsCommand(
       )
 
   private fun buildFlagsLine(snapshot: StatsSnapshot): Component =
-    MessageUtil.getMessage(
+    messages
+      .getMessage(
         Message.STATS_FLAGS,
         "flags",
         snapshot.totalFlags.toString(),
@@ -215,13 +230,14 @@ class StatsCommand(
       )
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(Message.STATS_FLAGS_HOVER, "flags_per_hour", snapshot.flagsPerHour)
+          messages.getMessage(Message.STATS_FLAGS_HOVER, "flags_per_hour", snapshot.flagsPerHour)
         )
       )
       .clickEvent(ClickEvent.runCommand("/shard logs"))
 
   private fun buildPlayersLine(snapshot: StatsSnapshot): Component =
-    MessageUtil.getMessage(
+    messages
+      .getMessage(
         Message.STATS_PLAYERS,
         "players",
         snapshot.uniquePlayers.toString(),
@@ -232,7 +248,7 @@ class StatsCommand(
       )
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(
+          messages.getMessage(
             Message.STATS_PLAYERS_HOVER,
             "players",
             snapshot.uniquePlayers.toString(),
@@ -245,7 +261,8 @@ class StatsCommand(
       )
 
   private fun buildViolatorsLine(snapshot: StatsSnapshot): Component =
-    MessageUtil.getMessage(
+    messages
+      .getMessage(
         Message.STATS_VIOLATORS,
         "violators",
         snapshot.uniqueViolators.toString(),
@@ -256,7 +273,7 @@ class StatsCommand(
       )
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(
+          messages.getMessage(
             Message.STATS_VIOLATORS_HOVER,
             "violators_percent",
             snapshot.violatorPercent,
@@ -269,7 +286,8 @@ class StatsCommand(
       )
 
   private fun buildSuspiciousLine(snapshot: StatsSnapshot): Component =
-    MessageUtil.getMessage(
+    messages
+      .getMessage(
         Message.STATS_SUSPICIOUS,
         "suspicious_now",
         snapshot.suspiciousNow.toString(),
@@ -278,29 +296,58 @@ class StatsCommand(
       )
       .hoverEvent(
         HoverEvent.showText(
-          MessageUtil.getMessage(
+          messages.getMessage(
             Message.STATS_SUSPICIOUS_HOVER,
             "suspicious_now",
             snapshot.suspiciousNow.toString(),
             "online_players",
             snapshot.onlinePlayers.toString(),
             "suspicious_threshold",
-            formatThreshold(configManager.suspiciousAlertsBuffer),
+            formatThreshold(suspicion.threshold),
           )
         )
       )
       .clickEvent(ClickEvent.runCommand("/shard suspicious list"))
 
   private fun getSuspiciousCount(): Long {
-    return playerDataManager
-      .getPlayers()
-      .asSequence()
-      .filter { sp ->
-        val check = sp.checkManager.getCheck(AiCheck::class.java)
-        check != null && check.buffer > configManager.suspiciousAlertsBuffer
-      }
-      .count()
-      .toLong()
+    return playerDataManager.getPlayers().count(suspicion::isSuspicious).toLong()
+  }
+
+  private fun inference(sender: CommandSender) {
+    val transport = aiServerProvider.streamTransport()
+    if (transport == null) {
+      messages.sendMessage(sender, Message.STATS_INFERENCE_OFF)
+      return
+    }
+    val stats = transport.stats.snapshot()
+    messages.sendMessageList(
+      sender,
+      Message.STATS_INFERENCE,
+      "windows_per_second",
+      String.format(Locale.US, "%.1f", stats.windowsPerSecond),
+      "peak_windows",
+      stats.peakWindowsPerSecond.toString(),
+      "average_batch",
+      String.format(Locale.US, "%.1f", stats.averageBatch),
+      "largest_batch",
+      stats.largestBatch.toString(),
+      "concurrent",
+      transport.concurrentRequests.toString(),
+      "concurrent_limit",
+      StreamTransport.MAX_CONCURRENT_REQUESTS.toString(),
+      "peak_concurrent",
+      stats.peakConcurrent.toString(),
+      "queued",
+      transport.queued.toString(),
+      "peak_queued",
+      stats.peakQueued.toString(),
+      "peak_queued_mb",
+      String.format(Locale.US, "%.1f", stats.peakQueuedBytes / BYTES_PER_MB),
+      "rtt",
+      stats.averageRttMs.toString(),
+      "failures",
+      stats.failures.toString(),
+    )
   }
 
   private fun formatPerHour(totalFlags: Int, hours: Long): String {
