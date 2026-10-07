@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [next/2.0]
+    branches: ['2.0']
   pull_request:
   workflow_dispatch:
 
@@ -80,7 +80,7 @@ jobs:
 
   release-candidate:
     name: Release candidate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/next/2.0'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/2.0'
     needs: [check, build]
     runs-on: ubuntu-latest
     permissions:
