@@ -18,46 +18,47 @@
 package ac.shard.command.commands.admin
 
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.config.LocaleManager
 import ac.shard.player.ExemptManager
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import ac.shard.utils.TimeUtil
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.bukkit.parser.PlayerParser
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.StringParser
 
 class ExemptCommand(
+  private val messages: Messages,
   private val exemptManager: ExemptManager,
   private val localeManager: LocaleManager,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("exempt")
         .permission("shard.exempt.manage")
         .required("target", PlayerParser.playerParser())
         .optional("duration", StringParser.stringParser())
-        .handler(this@ExemptCommand::handleExempt)
+        .handler { handleExempt(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("exempt")
         .permission("shard.exempt.manage")
         .literal("remove")
         .required("target", PlayerParser.playerParser())
-        .handler(this@ExemptCommand::handleRemoveExempt)
+        .handler { handleRemoveExempt(it) }
     }
 
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("exempt")
         .permission("shard.exempt.manage")
         .literal("status")
         .required("target", PlayerParser.playerParser())
-        .handler(this@ExemptCommand::handleStatus)
+        .handler { handleStatus(it) }
     }
   }
 
@@ -68,21 +69,21 @@ class ExemptCommand(
 
     val durationMillis = TimeUtil.parseDuration(durationStr)
     if (durationMillis == 0L) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.EXEMPT_INVALID_DURATION)
+      messages.sendMessage(sender.nativeSender, Message.EXEMPT_INVALID_DURATION)
       return
     }
 
-    exemptManager.addExemption(target.uniqueId, durationMillis)
+    exemptManager.addExemption(target.uniqueId, durationMillis, sender.nativeSender.name)
 
     if (durationMillis == -1L) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_SUCCESS_PERM,
         "player",
         target.name,
       )
     } else {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_SUCCESS_TEMP,
         "player",
@@ -98,14 +99,14 @@ class ExemptCommand(
     val target: Player = context["target"]
 
     if (exemptManager.removeExemption(target.uniqueId)) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_REMOVE_SUCCESS,
         "player",
         target.name,
       )
     } else {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_REMOVE_FAIL,
         "player",
@@ -119,7 +120,7 @@ class ExemptCommand(
     val target: Player = context["target"]
 
     if (target.hasPermission("shard.exempt")) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_STATUS_PERM_PERMISSION,
         "player",
@@ -130,14 +131,14 @@ class ExemptCommand(
 
     val expiryTime = exemptManager.getExpiryTime(target.uniqueId)
     if (expiryTime == null) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_STATUS_NOT_EXEMPT,
         "player",
         target.name,
       )
     } else if (expiryTime == -1L) {
-      MessageUtil.sendMessage(
+      messages.sendMessage(
         sender.nativeSender,
         Message.EXEMPT_STATUS_PERM_COMMAND,
         "player",
@@ -146,7 +147,7 @@ class ExemptCommand(
     } else {
       val remaining = expiryTime - System.currentTimeMillis()
       if (remaining <= 0) {
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender.nativeSender,
           Message.EXEMPT_STATUS_EXPIRED,
           "player",
@@ -155,7 +156,7 @@ class ExemptCommand(
         exemptManager.removeExemption(target.uniqueId)
       } else {
         val remainingStr = TimeUtil.formatDuration(remaining, localeManager)
-        MessageUtil.sendMessage(
+        messages.sendMessage(
           sender.nativeSender,
           Message.EXEMPT_STATUS_TEMP,
           "player",

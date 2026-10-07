@@ -19,7 +19,17 @@ package ac.shard.command
 
 import ac.shard.sender.Sender
 import org.incendo.cloud.CommandManager
+import org.incendo.cloud.kotlin.MutableCommandBuilder
+import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 interface ShardCommand {
   fun register(manager: CommandManager<Sender>)
+
+  fun start() = Unit
+}
+
+private val ROOT_ALIASES = arrayOf("shardac", "sloth", "slothac")
+
+fun CommandManager<Sender>.shardCommand(configure: MutableCommandBuilder<Sender>.() -> Unit) {
+  buildAndRegister("shard", aliases = ROOT_ALIASES, lambda = configure)
 }

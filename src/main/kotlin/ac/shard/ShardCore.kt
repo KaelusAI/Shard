@@ -17,26 +17,24 @@
  */
 package ac.shard
 
-import ac.shard.ai.label.VerdictResolver
-import ac.shard.alert.AlertManager
-import ac.shard.api.ShardApi
+import ac.shard.api.impl.ShardImpl
+import ac.shard.api.impl.event.ShardEvents
 import ac.shard.command.CommandManager
-import ac.shard.config.ConfigManager
-import ac.shard.config.LocaleManager
-import ac.shard.coroutines.ShardCoroutines
 import ac.shard.data.CollectManager
 import ac.shard.data.CollectSession
 import ac.shard.database.DatabaseManager
-import ac.shard.debug.DebugManager
+import ac.shard.http.ShardHttp
 import ac.shard.mitigation.MitigationRuntime
 import ac.shard.monitor.MonitorServices
+import ac.shard.network.NetworkServices
 import ac.shard.packet.PacketListener
+import ac.shard.packet.PacketSendListener
+import ac.shard.player.ExemptManager
 import ac.shard.player.PlayerDataManager
-import ac.shard.redis.CrossServerServices
+import ac.shard.player.PlayerThreadRefreshListener
 import ac.shard.scheduler.SchedulerService
 import ac.shard.server.AIServerProvider
 import ac.shard.telemetry.TelemetryService
-import ac.shard.utils.MessageUtil
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.netty.channel.ChannelHelper
 import java.util.logging.Level
@@ -49,87 +47,81 @@ class ShardCore
 constructor(
   private val plugin: Shard,
   private val playerDataManager: PlayerDataManager,
-  private val configManager: ConfigManager,
-  private val localeManager: LocaleManager,
   private val aiServerProvider: AIServerProvider,
   private val commandManager: CommandManager,
-  private val alertManager: AlertManager,
   private val databaseManager: DatabaseManager,
-  private val crossServer: CrossServerServices,
-  private val debugManager: DebugManager,
+  private val network: NetworkServices,
+  private val packetEvents: PacketEventsLoader,
   private val packetListener: PacketListener,
+  private val sendListener: PacketSendListener,
   private val monitor: MonitorServices,
   private val mitigationRuntime: MitigationRuntime,
-  private val shardApi: ShardApi,
+  private val shardApi: ShardImpl,
+  private val events: ShardEvents,
+  private val exemptions: ExemptManager,
   private val adventure: BukkitAudiences,
-  private val coroutines: ShardCoroutines,
   private val scheduler: SchedulerService,
   private val telemetryService: TelemetryService,
   private val collectManager: CollectManager,
+  private val http: ShardHttp,
   private val logger: Logger,
+  private val refreshListener: PlayerThreadRefreshListener,
 ) {
   fun enable() {
-    CollectSession.sweepStaging(plugin.dataFolder)
-    commandManager.registerCommands()
-
-    MessageUtil.init(localeManager, adventure, plugin.logger)
-
-    initializePacketRuntime()
-    mitigationRuntime.enable()
-    monitor.runtime.enable()
+    databaseManager.start()
+    aiServerProvider.start()
     plugin.server.servicesManager.register(
-      ShardApi::class.java,
+      ac.shard.api.Shard::class.java,
       shardApi,
       plugin,
       ServicePriority.Normal,
     )
-    scheduler.runAsync { crossServer.start() }
+    plugin.server.pluginManager.registerEvents(events, plugin)
+    plugin.server.pluginManager.registerEvents(exemptions, plugin)
+    scheduler.runTimerAsync({ exemptions.sweep() }, SWEEP_MILLIS, SWEEP_MILLIS)
+    CollectSession.sweepStaging(plugin.dataFolder)
+    commandManager.registerCommands()
+    initializePacketRuntime()
+    plugin.server.pluginManager.registerEvents(refreshListener, plugin)
+    mitigationRuntime.enable()
+    monitor.runtime.enable()
+    scheduler.runAsync { network.start() }
     telemetryService.start()
+    commandManager.startCommands()
   }
 
   fun disable() {
     runCatching { PacketEvents.getAPI().eventManager.unregisterListener(packetListener) }
+    runCatching { PacketEvents.getAPI().eventManager.unregisterListener(sendListener) }
+    runCatching { PacketEvents.getAPI().eventManager.unregisterListener(monitor.slotObserver) }
+    runCatching { monitor.runtime.disable() }
     // Saves must finish before the scheduler stops running queued work.
     runCatching { collectManager.saveAll() }
     runCatching { playerDataManager.saveAllBuffersSync() }
     runCatching { scheduler.cancelTasks() }
     runCatching { telemetryService.stop() }
-    plugin.server.servicesManager.unregister(ShardApi::class.java, shardApi)
-    runCatching { mitigationRuntime.disable() }
-    runCatching { aiServerProvider.shutdownTransport() }
-    runCatching { crossServer.shutdown() }
-    adventure.close()
-    coroutines.close()
-    databaseManager.shutdown()
-    monitor.runtime.disable()
-    runCatching { telemetryService.sendFarewell() }
-  }
-
-  fun reload() {
-    configManager.reloadConfig()
-    VerdictResolver.forgetReports()
-    localeManager.reload()
-    debugManager.reload()
-    alertManager.reload()
-    aiServerProvider.reload()
-    playerDataManager.reloadAllPlayers()
-    mitigationRuntime.reload()
-    monitor.runtime.reload()
-    monitor.view.reload()
-    crossServer.stopMirrors()
-    scheduler.runAsync {
-      crossServer.redis.shutdown()
-      crossServer.start()
+    runCatching { events.shutdown() }
+    runCatching { shardApi.close() }
+    runCatching {
+      plugin.server.servicesManager.unregister(ac.shard.api.Shard::class.java, shardApi)
     }
+    runCatching { mitigationRuntime.disable() }
+    runCatching { aiServerProvider.stop() }
+    runCatching { network.shutdown() }
+    runCatching { adventure.close() }
+    runCatching { databaseManager.stop() }
+    runCatching { telemetryService.sendFarewell() }
+    runCatching { http.close() }
   }
 
   private fun initializePacketRuntime() {
     PacketEvents.getAPI().eventManager.registerListener(packetListener)
+    PacketEvents.getAPI().eventManager.registerListener(sendListener)
     PacketEvents.getAPI().eventManager.registerListener(monitor.slotObserver)
     monitor.view.start()
-    PacketEvents.getAPI().init()
+    packetEvents.init()
     trackAlreadyOnlinePlayers()
-    scheduler.runTimer({ pollAllPlayers() }, 0L, 1L)
+    scheduler.runTimer({ pollAllPlayers() }, 1L, 1L)
   }
 
   private fun trackAlreadyOnlinePlayers() {
@@ -156,5 +148,9 @@ constructor(
         logger.log(Level.WARNING, "Polling ${shardPlayer.name} failed", e)
       }
     }
+  }
+
+  private companion object {
+    const val SWEEP_MILLIS = 1_000L
   }
 }

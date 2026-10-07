@@ -50,7 +50,7 @@ class SchedulerService(private val plugin: Shard, private val scheduler: Platfor
       return ImmediateTaskHandle.sync()
     }
     val handle = scheduler.entityScheduler.run(player, plugin, task, null)
-    return handle ?: runSync(task)
+    return handle ?: ImmediateTaskHandle.notScheduled()
   }
 
   fun runLater(task: Runnable, delayTicks: Long): TaskHandle {
@@ -66,7 +66,7 @@ class SchedulerService(private val plugin: Shard, private val scheduler: Platfor
       return runLater(task, delayTicks)
     }
     val handle = scheduler.entityScheduler.runDelayed(player, plugin, task, null, delayTicks)
-    return handle ?: runLater(task, delayTicks)
+    return handle ?: ImmediateTaskHandle.notScheduled()
   }
 
   fun runTimer(task: Runnable, initialDelayTicks: Long, periodTicks: Long): TaskHandle {
@@ -106,7 +106,7 @@ class SchedulerService(private val plugin: Shard, private val scheduler: Platfor
         initialDelayTicks,
         periodTicks,
       )
-    return handle ?: runTimer(task, initialDelayTicks, periodTicks)
+    return handle ?: ImmediateTaskHandle.notScheduled()
   }
 
   fun cancelTasks() {

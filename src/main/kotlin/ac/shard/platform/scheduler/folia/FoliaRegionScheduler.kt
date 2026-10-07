@@ -59,7 +59,14 @@ class FoliaRegionScheduler : ShardRegionScheduler {
     delayTicks: Long,
   ): TaskHandle {
     return FoliaTaskHandle(
-      regionScheduler.runDelayed(plugin, world, chunkX, chunkZ, { task.run() }, delayTicks)
+      regionScheduler.runDelayed(
+        plugin,
+        world,
+        chunkX,
+        chunkZ,
+        { task.run() },
+        delayTicks.atLeastOneTick(),
+      )
     )
   }
 
@@ -95,8 +102,8 @@ class FoliaRegionScheduler : ShardRegionScheduler {
         chunkX,
         chunkZ,
         { task.run() },
-        initialDelayTicks,
-        periodTicks,
+        initialDelayTicks.atLeastOneTick(),
+        periodTicks.atLeastOneTick(),
       )
     )
   }

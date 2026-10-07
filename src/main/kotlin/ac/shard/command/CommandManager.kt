@@ -48,6 +48,10 @@ class CommandManager(
     cloudManager = manager
   }
 
+  fun startCommands() {
+    commandRegister.startCommands()
+  }
+
   private fun setupCloud(plugin: Shard): LegacyPaperCommandManager<Sender>? {
     val manager =
       try {

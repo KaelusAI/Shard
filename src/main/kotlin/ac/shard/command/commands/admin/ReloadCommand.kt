@@ -17,25 +17,33 @@
  */
 package ac.shard.command.commands.admin
 
-import ac.shard.Shard
+import ac.shard.ShardReloader
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
+import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 
-class ReloadCommand(private val plugin: Shard) : ShardCommand {
+class ReloadCommand(
+  private val messages: Messages,
+  private val reloader: ShardReloader,
+  private val scheduler: SchedulerService,
+) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("reload").permission("shard.reload").handler(this@ReloadCommand::execute)
+    manager.shardCommand {
+      literal("reload").permission("shard.reload").handler { execute(it) }
     }
   }
 
   private fun execute(context: CommandContext<Sender>) {
-    MessageUtil.sendMessage(context.sender().nativeSender, Message.RELOAD_START)
-    plugin.onReload()
-    MessageUtil.sendMessage(context.sender().nativeSender, Message.RELOAD_SUCCESS)
+    val sender = context.sender().nativeSender
+    messages.sendMessage(sender, Message.RELOAD_START)
+    scheduler.runSync {
+      reloader.reload()
+      messages.sendMessage(sender, Message.RELOAD_SUCCESS)
+    }
   }
 }

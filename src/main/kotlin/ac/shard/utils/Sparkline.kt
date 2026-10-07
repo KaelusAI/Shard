@@ -17,7 +17,7 @@
  */
 package ac.shard.utils
 
-import ac.shard.checks.impl.ai.ProbabilityTrail
+import ac.shard.detection.ProbabilityTrail
 import kotlin.math.roundToInt
 
 object Sparkline {

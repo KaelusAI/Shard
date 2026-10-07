@@ -18,27 +18,29 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package ac.shard.player
 
-import ac.shard.Shard
-import ac.shard.alert.AlertManager
-import ac.shard.api.event.ShardEventBus
-import ac.shard.checks.CheckManager
 import ac.shard.config.ConfigManager
+import ac.shard.config.PacketSettings
+import ac.shard.data.AimProcessor
 import ac.shard.data.CrystalTracker
 import ac.shard.data.TickBuffer
+import ac.shard.detection.DetectionState
+import ac.shard.detection.InferenceServices
+import ac.shard.detection.PlayerInference
 import ac.shard.entity.CompensatedEntities
 import ac.shard.entity.CompensatedFireworks
 import ac.shard.mitigation.MitigationState
+import ac.shard.mitigation.NO_MITIGATE_PERMISSION
+import ac.shard.platform.scheduler.TaskHandle
 import ac.shard.player.state.CombatState
 import ac.shard.player.state.MovementState
 import ac.shard.player.state.TrackingState
 import ac.shard.player.state.TransactionTracker
-import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
-import ac.shard.server.AIServerProvider
+import ac.shard.utils.Messages
 import ac.shard.utils.data.HeadRotation
 import ac.shard.utils.data.PacketStateData
 import ac.shard.utils.latency.ILatencyUtils
@@ -53,22 +55,21 @@ import com.github.retrooper.packetevents.util.Vector3d
 import java.util.Queue
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.logging.Logger
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.entity.Player
 
 class ShardPlayer
 @Suppress("LongParameterList")
 constructor(
   val user: User,
-  private val plugin: Shard,
+  private val logger: Logger,
   private val configManager: ConfigManager,
-  alertManager: AlertManager,
-  aiServerProvider: AIServerProvider,
   val exemptManager: ExemptManager,
   private val scheduler: SchedulerService,
-  checkManagerFactory: CheckManager.Factory,
-  punishmentManagerFactory: PunishmentManager.Factory,
-  val eventBus: ShardEventBus,
+  messages: Messages,
+  aiServices: InferenceServices,
 ) {
   val uuid: UUID = user.uuid
   val name: String = user.profile?.name ?: uuid.toString()
@@ -95,13 +96,51 @@ constructor(
   val rotationUpdate: RotationUpdate = RotationUpdate(HeadRotation(), HeadRotation(), 0f, 0f)
   val joinTime: Long = System.currentTimeMillis()
 
+  @Volatile var buffersRestored: Boolean = false
+
+  @Volatile var buffersLoaded: Boolean = false
+
+  @Volatile var scoreLoaded: Boolean = false
+
+  @Volatile var sessionEnded: Boolean = false
+
+  val sessionLock = Any()
+
+  var sessionStarted: Boolean = false
+
+  @Volatile
+  var disabledByPermission: Boolean = false
+    private set
+
+  @Volatile
+  var exemptByPermission: Boolean = false
+    private set
+
+  @Volatile
+  var noMitigateByPermission: Boolean = false
+    private set
+
+  var playerThreadRefresh: TaskHandle? = null
+
+  fun refreshOnPlayerThread() {
+    val bukkitPlayer = attachedPlayer ?: return
+    disabledByPermission = bukkitPlayer.hasPermission(ExemptManager.DISABLE_PERMISSION)
+    exemptByPermission = bukkitPlayer.hasPermission(ExemptManager.EXEMPT_PERMISSION)
+    noMitigateByPermission = bukkitPlayer.hasPermission(NO_MITIGATE_PERMISSION)
+    ai.onPlayerThread()
+  }
+
+  val detectionDisabled: Boolean
+    get() = exemptManager.isDisabled(this) || isBedrockExempt
+
   var entityId: Int = 0
   var gameMode: GameMode = GameMode.SURVIVAL
-  var brand: String = "vanilla"
+  @Volatile var brand: String = "vanilla"
+  @Volatile var brandReceived: Boolean = false
   var isBedrock: Boolean = false
 
   val isBedrockExempt: Boolean
-    get() = configManager.isBedrockExemptEnabled() && isBedrock
+    get() = configManager.settings.bedrockExempt && isBedrock
 
   val movement: MovementState = MovementState()
   val combat: CombatState = CombatState()
@@ -119,29 +158,25 @@ constructor(
   val compensatedEntities: CompensatedEntities = CompensatedEntities(this)
   val compensatedFireworks: CompensatedFireworks = CompensatedFireworks()
   val compensatedWorld: CompensatedWorld = CompensatedWorld(this)
-  val latencyUtils: ILatencyUtils = LatencyUtils(this, plugin)
-  val checkManager: CheckManager = checkManagerFactory.create(this)
-  val punishmentManager: PunishmentManager = punishmentManagerFactory.create(this)
+  val latencyUtils: ILatencyUtils = LatencyUtils(this, logger, messages)
+  val aim: AimProcessor = AimProcessor()
+  val ai: PlayerInference = PlayerInference(this, aiServices)
+  val detection: DetectionState
+    get() = ai.state
 
   private val hasDisconnected = java.util.concurrent.atomic.AtomicBoolean(false)
+  val persisted = java.util.concurrent.atomic.AtomicBoolean(false)
 
-  private var cancelDuplicatePacket = true
-  private var forceCancelDuplicatePacket = false
-  private var ignoreDuplicatePacketRotation = true
+  val packets: PacketSettings
+    get() = configManager.settings.packets
 
   init {
-    refreshDuplicatePacketSettings()
+    tracking.enabledWindowStarts = { configManager.enabledWindowStarts }
   }
 
   fun isPointThree(): Boolean = user.clientVersion.isOlderThan(ClientVersion.V_1_18_2)
 
   fun getMovementThreshold(): Double = if (isPointThree()) 0.03 else 0.0002
-
-  fun isCancelDuplicatePacket(): Boolean = cancelDuplicatePacket
-
-  fun isForceCancelDuplicatePacket(): Boolean = forceCancelDuplicatePacket
-
-  fun isIgnoreDuplicatePacketRotation(): Boolean = ignoreDuplicatePacketRotation
 
   fun sendTransaction() {
     transactions.sendTransaction(user)
@@ -171,38 +206,25 @@ constructor(
         com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(reason)
       )
     } catch (e: Exception) {
-      plugin.logger.warning("[Shard] Disconnect packet for $name failed: ${e.message}")
+      logger.warning("[Shard] Disconnect packet for $name failed: ${e.message}")
     }
     user.closeConnection()
 
     val bukkitPlayer = attachedPlayer ?: return
-    scheduler.runSync(bukkitPlayer) { bukkitPlayer.kick(reason) }
-  }
-
-  fun reload() {
-    refreshDuplicatePacketSettings()
-    ensureTickBufferCapacity()
-    punishmentManager.reload()
-    checkManager.reloadChecks()
+    val text = PlainTextComponentSerializer.plainText().serialize(reason)
+    @Suppress("DEPRECATION") scheduler.runSync(bukkitPlayer) { bukkitPlayer.kickPlayer(text) }
   }
 
   fun ensureTickBufferCapacity() {
     val required = requiredBufferCapacity()
     if (required > tickBuffer.capacity()) {
-      tickBuffer = TickBuffer(required)
+      tickBuffer = tickBuffer.resizedTo(required)
     }
   }
 
-  private fun requiredBufferCapacity(): Int =
-    maxOf(configManager.aiPreWindow, configManager.collectPreWindow) +
-      maxOf(configManager.aiPostWindow, configManager.collectPostWindow) +
-      1
-
-  private fun refreshDuplicatePacketSettings() {
-    tracking.enabledWindowStarts = configManager.enabledWindowStarts
-    cancelDuplicatePacket = configManager.cancelDuplicatePacket
-    forceCancelDuplicatePacket = configManager.forceCancelDuplicatePacket
-    ignoreDuplicatePacketRotation = configManager.ignoreDuplicatePacketRotation
+  private fun requiredBufferCapacity(): Int {
+    val window = configManager.settings.collect
+    return maxOf(window.pre + window.post + 1, configManager.streamProfile?.wire?.maxChunkRows ?: 0)
   }
 
   class TeleportData(

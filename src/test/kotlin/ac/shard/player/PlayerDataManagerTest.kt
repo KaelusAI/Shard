@@ -17,20 +17,13 @@
  */
 package ac.shard.player
 
-import ac.shard.Shard
 import ac.shard.alert.AlertManager
-import ac.shard.api.event.ShardEventBus
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiSnapshotStore
-import ac.shard.checks.impl.ai.PersistentBufferService
-import ac.shard.config.ConfigManager
 import ac.shard.data.CollectManager
-import ac.shard.database.DatabaseManager
+import ac.shard.detection.AiSnapshotStore
+import ac.shard.detection.PersistentBufferService
 import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationScoreStore
-import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
-import ac.shard.server.AIServerProvider
 import com.github.retrooper.packetevents.protocol.player.User
 import io.mockk.every
 import io.mockk.just
@@ -38,9 +31,7 @@ import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
 import java.util.UUID
-import org.bukkit.Server
 import org.bukkit.entity.Player
-import org.bukkit.plugin.PluginManager
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -78,22 +69,20 @@ class PlayerDataManagerTest {
     every { tracked.user } returns fixture.user
     every { tracked.uuid } returns fixture.player.uniqueId
     every { tracked.isAttached } returns true
+    every { tracked.persisted } returns java.util.concurrent.atomic.AtomicBoolean(false)
     every { fixture.user.uuid } returns fixture.player.uniqueId
     trackedPlayers(fixture.manager)[fixture.user] = tracked
 
     fixture.manager.handleUserDisconnect(fixture.user)
 
     verify(exactly = 1) { fixture.mitigationLogStore.saveOnQuit(tracked) }
+
+    fixture.manager.saveAllBuffersSync()
+
+    verify(exactly = 1) { fixture.mitigationLogStore.saveOnQuit(tracked) }
   }
 
   private fun createFixture(): Fixture {
-    val plugin = mockk<Shard>(relaxed = true)
-    val server = mockk<Server>(relaxed = true)
-    val pluginManager = mockk<PluginManager>(relaxed = true)
-    every { plugin.server } returns server
-    every { server.pluginManager } returns pluginManager
-    every { pluginManager.registerEvents(any(), plugin) } just runs
-
     val scheduler = mockk<SchedulerService>(relaxed = true)
     every { scheduler.runSync(any<Player>(), any<Runnable>()) } answers
       {
@@ -106,15 +95,6 @@ class PlayerDataManagerTest {
         mockk(relaxed = true)
       }
 
-    val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.aiPreWindow } returns 32
-    every { configManager.aiPostWindow } returns 32
-    every { configManager.collectPreWindow } returns 128
-    every { configManager.collectPostWindow } returns 128
-    every { configManager.cancelDuplicatePacket } returns true
-    every { configManager.forceCancelDuplicatePacket } returns false
-    every { configManager.ignoreDuplicatePacketRotation } returns true
-
     val mitigationLogStore = mockk<MitigationLogStore>(relaxed = true)
     val alertManager = mockk<AlertManager>(relaxed = true)
     every { alertManager.handlePlayerQuit(any()) } just runs
@@ -122,12 +102,6 @@ class PlayerDataManagerTest {
     val collectManager = mockk<CollectManager>(relaxed = true)
     every { collectManager.getSession(any()) } returns null
     every { collectManager.stopCollecting(any()) } returns false
-
-    val checkManagerFactory = mockk<CheckManager.Factory>()
-    every { checkManagerFactory.create(any()) } returns mockk(relaxed = true)
-
-    val punishmentManagerFactory = mockk<PunishmentManager.Factory>()
-    every { punishmentManagerFactory.create(any()) } returns mockk(relaxed = true)
 
     var disablePermission = false
     val player = mockk<Player>(relaxed = true)
@@ -140,21 +114,20 @@ class PlayerDataManagerTest {
 
     val manager =
       PlayerDataManager(
-        plugin = plugin,
+        playerFactory = mockk<ShardPlayerFactory>(relaxed = true),
+        scheduler = scheduler,
+        persistence =
+          PlayerPersistence(
+            mockk<PersistentBufferService>(relaxed = true),
+            mockk<MitigationScoreStore>(relaxed = true),
+            mitigationLogStore,
+            mockk<AiSnapshotStore>(relaxed = true),
+            mockk<PlayerDirectory>(relaxed = true),
+            scheduler,
+          ),
         alertManager = alertManager,
         collectManager = collectManager,
-        configManager = configManager,
-        aiServerProvider = mockk<AIServerProvider>(relaxed = true),
-        exemptManager = ExemptManager(),
-        scheduler = scheduler,
-        checkManagerFactory = checkManagerFactory,
-        punishmentManagerFactory = punishmentManagerFactory,
-        eventBus = mockk<ShardEventBus>(relaxed = true),
-        databaseManager = mockk<DatabaseManager>(relaxed = true),
-        persistentBufferService = mockk<PersistentBufferService>(relaxed = true),
-        mitigationScoreStore = mockk<MitigationScoreStore>(relaxed = true),
-        mitigationLogStore = mitigationLogStore,
-        aiSnapshotStore = mockk<AiSnapshotStore>(relaxed = true),
+        sessions = mockk(relaxed = true),
       )
 
     return Fixture(
@@ -163,7 +136,6 @@ class PlayerDataManagerTest {
       player = player,
       alertManager = alertManager,
       mitigationLogStore = mitigationLogStore,
-      checkManagerFactory = checkManagerFactory,
       disablePermissionAccessor = { disablePermission },
       disablePermissionMutator = { disablePermission = it },
     )
@@ -175,7 +147,6 @@ class PlayerDataManagerTest {
     val player: Player,
     val alertManager: AlertManager,
     val mitigationLogStore: MitigationLogStore,
-    val checkManagerFactory: CheckManager.Factory,
     private val disablePermissionAccessor: () -> Boolean,
     private val disablePermissionMutator: (Boolean) -> Unit,
   ) {

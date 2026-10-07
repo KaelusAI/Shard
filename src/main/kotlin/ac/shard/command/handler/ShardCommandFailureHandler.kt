@@ -19,11 +19,13 @@ package ac.shard.command.handler
 
 import ac.shard.command.SenderRequirement
 import ac.shard.sender.Sender
+import ac.shard.utils.Messages
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.processors.requirements.RequirementFailureHandler
 
-class ShardCommandFailureHandler : RequirementFailureHandler<Sender, SenderRequirement> {
+class ShardCommandFailureHandler(private val messages: Messages) :
+  RequirementFailureHandler<Sender, SenderRequirement> {
   override fun handleFailure(context: CommandContext<Sender>, requirement: SenderRequirement) {
-    context.sender().sendMessage(requirement.errorMessage(context.sender()))
+    context.sender().sendMessage(messages.getMessage(requirement.errorMessage))
   }
 }

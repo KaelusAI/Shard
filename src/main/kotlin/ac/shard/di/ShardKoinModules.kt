@@ -17,35 +17,37 @@
  */
 package ac.shard.di
 
+import ac.shard.PacketEventsLoader
 import ac.shard.Shard
 import ac.shard.ShardCore
-import ac.shard.ai.AiResponseParser
-import ac.shard.ai.AiService
-import ac.shard.ai.DefaultAiService
-import ac.shard.ai.JacksonAiResponseParser
+import ac.shard.ShardReloader
+import ac.shard.ai.label.LabelCatalog
 import ac.shard.alert.AlertManager
-import ac.shard.api.ShardApi
-import ac.shard.api.event.ShardEventBus
-import ac.shard.api.event.internal.ShardEventBusImpl
-import ac.shard.api.internal.AiApiImpl
-import ac.shard.api.internal.CheckApiImpl
-import ac.shard.api.internal.MonitorApiImpl
-import ac.shard.api.internal.PunishmentApiImpl
-import ac.shard.api.internal.ShardApiImpl
-import ac.shard.api.service.AiApi
-import ac.shard.api.service.CheckApi
-import ac.shard.api.service.MonitorApi
-import ac.shard.api.service.PunishmentApi
-import ac.shard.checks.CheckFactory
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiCheck
-import ac.shard.checks.impl.ai.AiSnapshotStore
-import ac.shard.checks.impl.ai.PersistentBufferService
-import ac.shard.checks.impl.combat.AimProcessor
-import ac.shard.checks.impl.misc.ClientBrand
+import ac.shard.alert.NetworkPublisher
+import ac.shard.api.alert.AlertService
+import ac.shard.api.detection.DetectionService
+import ac.shard.api.exemption.ExemptionService
+import ac.shard.api.history.HistoryService
+import ac.shard.api.impl.AlertServiceImpl
+import ac.shard.api.impl.ApiTasks
+import ac.shard.api.impl.DetectionServiceImpl
+import ac.shard.api.impl.ExemptionServiceImpl
+import ac.shard.api.impl.HistoryServiceImpl
+import ac.shard.api.impl.MitigationServiceImpl
+import ac.shard.api.impl.NetworkServiceImpl
+import ac.shard.api.impl.PlayerServiceImpl
+import ac.shard.api.impl.PunishmentServiceImpl
+import ac.shard.api.impl.Sessions
+import ac.shard.api.impl.ShardImpl
+import ac.shard.api.impl.event.ShardEvents
+import ac.shard.api.mitigation.MitigationService
+import ac.shard.api.network.NetworkService
+import ac.shard.api.player.PlayerService
+import ac.shard.api.punishment.PunishmentService
 import ac.shard.command.CommandManager
 import ac.shard.command.CommandRegister
 import ac.shard.command.ShardCommand
+import ac.shard.command.TargetResolver
 import ac.shard.command.commands.admin.AlertsCommand
 import ac.shard.command.commands.admin.BrandsCommand
 import ac.shard.command.commands.admin.BufferCommand
@@ -74,23 +76,28 @@ import ac.shard.config.LocaleManager
 import ac.shard.config.yaml.YamlFileStore
 import ac.shard.connect.ConnectService
 import ac.shard.connect.CredentialsStore
-import ac.shard.coroutines.ShardCoroutines
-import ac.shard.damage.DamageProcessor
+import ac.shard.connect.DeviceFlowPoller
 import ac.shard.data.CollectManager
 import ac.shard.database.DatabaseManager
 import ac.shard.debug.DebugManager
+import ac.shard.detection.AiSnapshotStore
+import ac.shard.detection.InferenceServices
+import ac.shard.detection.PersistentBufferService
+import ac.shard.detection.Predictions
+import ac.shard.detection.SuspicionPolicy
 import ac.shard.editor.EditorApply
 import ac.shard.editor.EditorSessionStore
 import ac.shard.editor.EditorSnapshotBuilder
 import ac.shard.editor.ResultGuard
 import ac.shard.editor.SessionKind
+import ac.shard.http.ShardHttp
 import ac.shard.integration.WorldGuardManager
 import ac.shard.mitigation.HitStamps
-import ac.shard.mitigation.MitigationDamageProcessor
 import ac.shard.mitigation.MitigationLogStore
 import ac.shard.mitigation.MitigationRuntime
 import ac.shard.mitigation.MitigationScoreStore
 import ac.shard.mitigation.MitigationScorer
+import ac.shard.mitigation.MitigationSettingsSource
 import ac.shard.mitigation.MitigationSkip
 import ac.shard.mitigation.RuleEngine
 import ac.shard.monitor.MonitorServices
@@ -105,6 +112,7 @@ import ac.shard.monitor.hud.MonitorHudService
 import ac.shard.monitor.hud.MonitorLiveChatListener
 import ac.shard.monitor.hud.MonitorOutput
 import ac.shard.monitor.hud.MonitorOutputFailureSink
+import ac.shard.monitor.hud.MonitorOutputFailures
 import ac.shard.monitor.hud.MonitorOutputGuard
 import ac.shard.monitor.hud.MonitorOutputRegistry
 import ac.shard.monitor.hud.MonitorRuntime
@@ -117,7 +125,15 @@ import ac.shard.monitor.hud.output.ChatSink
 import ac.shard.monitor.hud.output.SidebarOutput
 import ac.shard.monitor.hud.output.TabListOutput
 import ac.shard.monitor.view.MonitorViewService
+import ac.shard.network.NetworkAlertService
+import ac.shard.network.NetworkServices
+import ac.shard.network.NetworkSuspiciousService
+import ac.shard.network.RedisManager
+import ac.shard.packet.ClientActions
+import ac.shard.packet.ClientBrandHandler
+import ac.shard.packet.FlyingProcessor
 import ac.shard.packet.PacketListener
+import ac.shard.packet.PacketSendListener
 import ac.shard.panel.PanelClient
 import ac.shard.panel.PanelSessionService
 import ac.shard.panel.PendingLinkStore
@@ -127,32 +143,35 @@ import ac.shard.platform.scheduler.PlatformScheduler
 import ac.shard.platform.scheduler.PlatformSchedulerFactory
 import ac.shard.player.ExemptManager
 import ac.shard.player.PlayerDataManager
+import ac.shard.player.PlayerDirectory
+import ac.shard.player.PlayerPersistence
+import ac.shard.player.PlayerThreadRefreshListener
+import ac.shard.player.ShardPlayerFactory
 import ac.shard.punishment.PunishmentManager
-import ac.shard.redis.CrossServerAlertService
-import ac.shard.redis.CrossServerServices
-import ac.shard.redis.CrossServerSuspiciousService
-import ac.shard.redis.RedisManager
+import ac.shard.punishment.cloud.PunishmentSync
 import ac.shard.region.RegionProvider
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.sender.SenderFactory
 import ac.shard.server.AIServerProvider
 import ac.shard.telemetry.TelemetryService
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.WallClock
 import java.util.logging.Logger
+import kotlin.random.Random
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
+import org.bukkit.Server
 import org.bukkit.command.CommandSender
 import org.incendo.cloud.SenderMapper
 import org.koin.core.module.dsl.singleOf
-import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
-fun shardModules(plugin: Shard) =
+fun shardModules(plugin: Shard, packetEvents: PacketEventsLoader) =
   listOf(
+    module { single { packetEvents } },
     coreModule(plugin),
     monitorModule(),
-    aiModule(),
     apiModule(),
     commandModule(),
     checkModule(),
@@ -163,34 +182,40 @@ private fun coreModule(plugin: Shard) = module {
   single { plugin }
   single { BukkitAudiences.create(plugin) }
   single<Logger> { plugin.logger }
+  single<Server> { plugin.server }
   single<PlatformScheduler> { PlatformSchedulerFactory.create() }
-  single<ShardEventBus> { ShardEventBusImpl() }
+  singleOf(::ShardEvents)
+  singleOf(::Predictions)
+  singleOf(::ShardHttp)
+  singleOf(::Messages)
 
   singleOf(::SchedulerService)
-  singleOf(::ShardCoroutines)
   singleOf(::CredentialsStore)
   singleOf(::ConfigManager)
   singleOf(::ConnectService)
+  singleOf(::DeviceFlowPoller)
   singleOf(::PanelClient)
   singleOf(::PanelSessionService)
-  single { PendingLinkStore(get<Shard>().dataFolder) }
+  single { PendingLinkStore(plugin.dataFolder) }
   singleOf(::ServerLink)
   single {
-    val shard = get<Shard>()
-    val folder = shard.dataFolder
+    val folder = plugin.dataFolder
     SessionRunner(
-      shard,
-      get(),
-      EditorSnapshotBuilder(folder),
-      EditorApply(folder, YamlFileStore(folder, shard.logger)),
-      ResultGuard(),
-      get(),
-      mapOf(
-        SessionKind.SETUP to EditorSessionStore(folder, SessionKind.SETUP),
-        SessionKind.EDITOR to EditorSessionStore(folder, SessionKind.EDITOR),
-      ),
+      plugin = plugin,
+      reloader = get(),
+      sessions = get(),
+      snapshots = EditorSnapshotBuilder(folder),
+      apply = EditorApply(folder, YamlFileStore(folder, plugin.logger)),
+      guard = ResultGuard(),
+      scheduler = get(),
+      stores =
+        mapOf(
+          SessionKind.SETUP to EditorSessionStore(folder, SessionKind.SETUP),
+          SessionKind.EDITOR to EditorSessionStore(folder, SessionKind.EDITOR),
+        ),
     )
   }
+  singleOf(::PunishmentSync)
   singleOf(::TelemetryService)
   singleOf(::LocaleManager)
   singleOf(::DatabaseManager)
@@ -198,11 +223,12 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::AIServerProvider)
   singleOf(::AlertManager)
   singleOf(::RedisManager)
-  singleOf(::CrossServerAlertService)
-  singleOf(::CrossServerSuspiciousService)
+  singleOf(::NetworkAlertService) bind NetworkPublisher::class
+  singleOf(::NetworkSuspiciousService)
+  singleOf(::SuspicionPolicy)
   single { ComponentCache() }
   singleOf(::MonitorSampler)
-  single { ScoreboardPacketBridge(get()) }
+  singleOf(::ScoreboardPacketBridge)
   singleOf(::ScoreboardSlotRegistry)
   singleOf(::ScoreboardSlotObserver)
   singleOf(::MonitorSettingsService)
@@ -213,96 +239,90 @@ private fun coreModule(plugin: Shard) = module {
   singleOf(::WorldGuardManager)
   single<RegionProvider> { get<WorldGuardManager>() }
 
-  single { { get<ConfigManager>().mitigationSettings } }
-  single { HitStamps() }
-  single { MitigationScorer(get(), get()) }
-  single { MitigationSkip(get(), get(), get()) }
-  single { RuleEngine(get(), System::currentTimeMillis) }
-  single { MitigationDamageProcessor() }
-  single<DamageProcessor> { get<MitigationDamageProcessor>() }
-  single { MitigationScoreStore(get(), get(), get()) }
-  single { MitigationLogStore(get(), get(), get()) }
-  single { AiSnapshotStore(get()) }
+  single<WallClock> { WallClock.SYSTEM }
+  single<Random> { Random.Default }
   single {
-    MitigationRuntime(
-      plugin = get(),
-      playerDataManager = get(),
-      configManager = get(),
-      alertManager = get(),
-      skip = get(),
-      engine = get(),
-      damageProcessor = get(),
-      stamps = get(),
-      debugManager = get(),
-      scheduler = get(),
-      logStore = get(),
-      settings = get(),
-    )
+    val config = get<ConfigManager>()
+    MitigationSettingsSource { config.mitigationSettings }
   }
+  singleOf(::HitStamps)
+  singleOf(::MitigationScorer)
+  singleOf(::MitigationSkip)
+  singleOf(::RuleEngine)
+  singleOf(::MitigationScoreStore)
+  singleOf(::MitigationLogStore)
+  singleOf(::AiSnapshotStore)
+  singleOf(::MitigationRuntime)
 
   singleOf(::SenderFactory).bind<SenderMapper<CommandSender, Sender>>()
 
   singleOf(::ShardCommandFailureHandler)
 
+  singleOf(::PlayerPersistence)
   singleOf(::PlayerDataManager)
+  singleOf(::FlyingProcessor)
+  singleOf(::ClientActions)
   singleOf(::PacketListener)
+  singleOf(::PacketSendListener)
 
-  singleOf(::CrossServerServices)
+  singleOf(::NetworkServices)
+  singleOf(::ShardReloader)
   singleOf(::ShardCore)
 }
 
 private fun monitorModule() = module {
   singleOf(::MonitorServices)
-  single { MonitorFrameBuilder(get<ConfigManager>().labelCatalog) }
+  single<LabelCatalog> { get<ConfigManager>().labelCatalog }
+  singleOf(::MonitorFrameBuilder)
   singleOf(::MonitorTargetIndex)
   singleOf(::MonitorTargetsService)
   singleOf(::MonitorOutputSelector)
-  single<MonitorOutputFailureSink> {
-    val scope = this
-    MonitorOutputFailureSink { viewerId, kind, phase, error ->
-      scope.get<MonitorHudService>().onOutputFailed(viewerId, kind, phase, error)
-    }
-  }
+  single { MonitorOutputFailures() } bind MonitorOutputFailureSink::class
   single<ChatSink> {
-    ChatSink { viewer, raw -> MessageUtil.sendMessage(viewer, MessageUtil.format(raw)) }
+    val messages = get<Messages>()
+    ChatSink { viewer, raw -> messages.sendMessage(viewer, messages.format(raw)) }
   }
-  single<MonitorOutput>(named("actionbar")) {
-    MonitorOutputGuard(ActionBarOutput(get(), get()), get(), get())
+  singleOf(::ActionBarOutput)
+  singleOf(::BossBarOutput)
+  singleOf(::SidebarOutput)
+  singleOf(::ChatOutput)
+  singleOf(::TabListOutput)
+  single {
+    val logger = get<Logger>()
+    val failures = get<MonitorOutputFailureSink>()
+    val outputs =
+      listOf<MonitorOutput>(
+        get<ActionBarOutput>(),
+        get<BossBarOutput>(),
+        get<SidebarOutput>(),
+        get<ChatOutput>(),
+        get<TabListOutput>(),
+      )
+    MonitorOutputRegistry(outputs.map { MonitorOutputGuard(it, logger, failures) })
   }
-  single<MonitorOutput>(named("bossbar")) {
-    MonitorOutputGuard(BossBarOutput(get(), get()), get(), get())
-  }
-  single<MonitorOutput>(named("sidebar")) {
-    MonitorOutputGuard(SidebarOutput(get(), get()), get(), get())
-  }
-  single { ChatOutput(get()) }
-  single<MonitorOutput>(named("chat")) { MonitorOutputGuard(get<ChatOutput>(), get(), get()) }
-  single<MonitorOutput>(named("tablist")) {
-    MonitorOutputGuard(TabListOutput(get(), get()), get(), get())
-  }
-  single { MonitorOutputRegistry(getAll()) }
   singleOf(::MonitorHudService)
   singleOf(::MonitorLiveChatListener)
   singleOf(::MonitorRuntime)
 }
 
-private fun aiModule() = module {
-  singleOf(::JacksonAiResponseParser).bind<AiResponseParser>()
-  singleOf(::DefaultAiService).bind<AiService>()
-}
-
 private fun apiModule() = module {
-  singleOf(::AiApiImpl).bind<AiApi>()
-  singleOf(::CheckApiImpl).bind<CheckApi>()
-  singleOf(::MonitorApiImpl).bind<MonitorApi>()
-  singleOf(::PunishmentApiImpl).bind<PunishmentApi>()
-  singleOf(::ShardApiImpl).bind<ShardApi>()
+  singleOf(::Sessions)
+  singleOf(::ApiTasks)
+  singleOf(::PlayerServiceImpl).bind<PlayerService>()
+  singleOf(::DetectionServiceImpl).bind<DetectionService>()
+  singleOf(::PunishmentServiceImpl).bind<PunishmentService>()
+  singleOf(::MitigationServiceImpl).bind<MitigationService>()
+  singleOf(::ExemptionServiceImpl).bind<ExemptionService>()
+  singleOf(::AlertServiceImpl).bind<AlertService>()
+  singleOf(::HistoryServiceImpl).bind<HistoryService>()
+  singleOf(::NetworkServiceImpl).bind<NetworkService>()
+  singleOf(::ShardImpl)
 }
 
 private fun commandModule() = module {
   includes(adminCommandsModule(), infoCommandsModule())
 
-  single { CommandRegister(getAll(), get()) }
+  single { CommandRegister(get(), getAll(), get(), get()) }
   singleOf(::CommandManager)
 }
 
@@ -334,22 +354,11 @@ private fun infoCommandsModule() = module {
 }
 
 private fun checkModule() = module {
-  single<CheckFactory>(named("aim")) { CheckFactory { player -> AimProcessor(player) } }
-  single<CheckFactory>(named("ai")) {
-    CheckFactory { player ->
-      AiCheck(player, get(), get(), get(), get(), get(), get(), get(), get(), get())
-    }
-  }
-  single<CheckFactory>(named("brand")) {
-    CheckFactory { player -> ClientBrand(player, get(), get()) }
-  }
-
-  single<Set<CheckFactory>> { getAll<CheckFactory>().toSet() }
-
-  single<CheckManager.Factory> { CheckManager.Factory { player -> CheckManager(player, get()) } }
-  single<PunishmentManager.Factory> {
-    PunishmentManager.Factory { player ->
-      PunishmentManager(player, get(), get(), get(), get(), get(), get(), get())
-    }
-  }
+  singleOf(::PunishmentManager)
+  singleOf(::InferenceServices)
+  singleOf(::ClientBrandHandler)
+  singleOf(::ShardPlayerFactory)
+  singleOf(::PlayerThreadRefreshListener)
+  singleOf(::PlayerDirectory)
+  singleOf(::TargetResolver)
 }

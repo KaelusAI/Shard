@@ -18,27 +18,27 @@
 package ac.shard.command.commands.info
 
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 
-class HelpCommand : ShardCommand {
+class HelpCommand(private val messages: Messages) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       permission("shard.help")
-      handler(this@HelpCommand::help)
+      handler { help(it) }
     }
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       permission("shard.help")
-      literal("help").handler(this@HelpCommand::help)
+      literal("help").handler { help(it) }
     }
   }
 
   private fun help(context: CommandContext<Sender>) {
     val sender = context.sender()
-    MessageUtil.sendMessageList(sender.nativeSender, Message.HELP_MESSAGE, "command", "shard")
+    messages.sendMessageList(sender.nativeSender, Message.HELP_MESSAGE, "command", "shard")
   }
 }

@@ -25,14 +25,10 @@ package ac.shard.command.requirements
 import ac.shard.command.SenderRequirement
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
-import net.kyori.adventure.text.Component
 import org.incendo.cloud.context.CommandContext
 
 object PlayerSenderRequirement : SenderRequirement {
-  override fun errorMessage(sender: Sender): Component {
-    return MessageUtil.getMessage(Message.RUN_AS_PLAYER)
-  }
+  override val errorMessage = Message.RUN_AS_PLAYER
 
   override fun evaluateRequirement(commandContext: CommandContext<Sender>): Boolean {
     return commandContext.sender().isPlayer

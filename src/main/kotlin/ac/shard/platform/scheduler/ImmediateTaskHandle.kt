@@ -17,16 +17,18 @@
  */
 package ac.shard.platform.scheduler
 
-class ImmediateTaskHandle private constructor(private val sync: Boolean) : TaskHandle {
+class ImmediateTaskHandle
+private constructor(private val sync: Boolean, private val cancelled: Boolean) : TaskHandle {
   override fun isSync(): Boolean = sync
 
-  override fun isCancelled(): Boolean = false
+  override fun isCancelled(): Boolean = cancelled
 
-  override fun cancel() {
-    // no-op
-  }
+  override fun cancel() = Unit
 
   companion object {
-    @JvmStatic fun sync(): ImmediateTaskHandle = ImmediateTaskHandle(true)
+    @JvmStatic fun sync(): ImmediateTaskHandle = ImmediateTaskHandle(sync = true, cancelled = false)
+
+    @JvmStatic
+    fun notScheduled(): ImmediateTaskHandle = ImmediateTaskHandle(sync = true, cancelled = true)
   }
 }

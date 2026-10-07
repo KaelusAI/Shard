@@ -24,20 +24,28 @@ package ac.shard.command
 
 import ac.shard.command.handler.ShardCommandFailureHandler
 import ac.shard.sender.Sender
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Message
+import ac.shard.utils.Messages
 import io.leangen.geantyref.TypeToken
 import java.util.function.Function
+import java.util.logging.Logger
 import net.kyori.adventure.text.ComponentLike
 import net.kyori.adventure.text.format.NamedTextColor
+import org.incendo.cloud.exception.ArgumentParseException
+import org.incendo.cloud.exception.CommandExecutionException
+import org.incendo.cloud.exception.InvalidCommandSenderException
 import org.incendo.cloud.exception.InvalidSyntaxException
+import org.incendo.cloud.exception.NoPermissionException
 import org.incendo.cloud.key.CloudKey
 import org.incendo.cloud.processors.requirements.RequirementApplicable
 import org.incendo.cloud.processors.requirements.RequirementPostprocessor
 import org.incendo.cloud.processors.requirements.Requirements
 
 class CommandRegister(
+  private val messages: Messages,
   private val commands: Collection<ShardCommand>,
   private val failureHandler: ShardCommandFailureHandler,
+  private val logger: Logger,
 ) {
   private var commandsRegistered = false
 
@@ -55,10 +63,28 @@ class CommandRegister(
     commandManager.registerCommandPostProcessor(senderRequirementPostprocessor)
 
     registerExceptionHandler(commandManager, InvalidSyntaxException::class.java) { e ->
-      MessageUtil.format(e.correctSyntax())
+      messages.format(e.correctSyntax())
+    }
+    registerExceptionHandler(commandManager, NoPermissionException::class.java) {
+      messages.getMessage(Message.NO_PERMISSION)
+    }
+    registerExceptionHandler(commandManager, InvalidCommandSenderException::class.java) {
+      messages.getMessage(Message.RUN_AS_PLAYER)
+    }
+    registerExceptionHandler(commandManager, ArgumentParseException::class.java) { e ->
+      messages.getMessage(Message.INVALID_ARGUMENT, "reason", e.cause?.message.orEmpty())
+    }
+    registerExceptionHandler(commandManager, CommandExecutionException::class.java) { e ->
+      val cause = e.cause ?: e
+      logger.warning("[Command] ${cause.javaClass.simpleName}: ${cause.message}")
+      messages.getMessage(Message.COMMAND_FAILED)
     }
 
     commandsRegistered = true
+  }
+
+  fun startCommands() {
+    commands.forEach(ShardCommand::start)
   }
 
   private fun <E : Exception> registerExceptionHandler(

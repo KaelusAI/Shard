@@ -15,32 +15,32 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.debug
+package ac.shard.player
 
 import ac.shard.config.ConfigManager
-import java.util.EnumSet
+import ac.shard.detection.InferenceServices
+import ac.shard.scheduler.SchedulerService
+import ac.shard.utils.Messages
+import com.github.retrooper.packetevents.protocol.player.User
 import java.util.logging.Logger
 
-class DebugManager(private val logger: Logger, private val configManager: ConfigManager) {
-  private val enabledCategories: MutableSet<DebugCategory> =
-    EnumSet.noneOf(DebugCategory::class.java)
-
-  init {
-    reload()
-  }
-
-  fun reload() {
-    enabledCategories.clear()
-    enabledCategories.addAll(configManager.settings.debugCategories)
-  }
-
-  fun isEnabled(category: DebugCategory): Boolean {
-    return enabledCategories.contains(category)
-  }
-
-  fun log(category: DebugCategory, message: String) {
-    if (isEnabled(category)) {
-      logger.info("[DEBUG | ${category.name}] $message")
-    }
-  }
+@Suppress("LongParameterList")
+class ShardPlayerFactory(
+  private val logger: Logger,
+  private val configManager: ConfigManager,
+  private val exemptManager: ExemptManager,
+  private val scheduler: SchedulerService,
+  private val messages: Messages,
+  private val aiServices: InferenceServices,
+) {
+  fun create(user: User): ShardPlayer =
+    ShardPlayer(
+      user,
+      logger,
+      configManager,
+      exemptManager,
+      scheduler,
+      messages,
+      aiServices,
+    )
 }

@@ -3,10 +3,13 @@ prefix: "<gradient:#8e9eab:#eef2f3>Shard</gradient> <gray>|</gray>"
 alerts-enabled: "<prefix> <color:#eef2f3>Alerts</color> <color:#a8ff78>enabled</color>."
 alerts-disabled: "<prefix> <color:#eef2f3>Alerts</color> <color:#ff4b2b>disabled</color>."
 alerts-labels-line: "<newline><gray>Labels:</gray> <white><labels></white>"
-alerts-format: "<prefix> <hover:show_text:'<gray>Click to teleport to <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>flagged</gray> <hover:show_text:'<color:#ff416c><check_label></color><labels_line><newline><gray>Buffers at the flag:</gray> <white><verbose></white><newline><gray>Times this group has fired:</gray> <white><vl></white>'><color:#ff416c><check_label></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
+alerts-format: "<prefix> <hover:show_text:'<gray>Click to teleport to <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>flagged</gray> <hover:show_text:'<color:#ff416c><check_label></color><labels_line><newline><gray>Buffers at the flag:</gray><newline><white><verbose></white><newline><gray>Times this group has fired:</gray> <white><vl></white>'><color:#ff416c><check_label></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
 
-player-not-found: "<prefix> <color:#ff4b2b>Player is exempt or offline!</color>"
+player-not-found: "<prefix> <color:#ff4b2b>No player named <player> is known to Shard.</color>"
 run-as-player: "<prefix> <color:#ff4b2b>This command can only be used by players!</color>"
+no-permission: "<prefix> <color:#ff4b2b>You do not have permission to do that.</color>"
+invalid-argument: "<prefix> <color:#ff4b2b>Invalid argument:</color> <white><reason></white>"
+command-failed: "<prefix> <color:#ff4b2b>The command failed. The reason is in the server console.</color>"
 reload-start: "<prefix> <color:#f6d365>Reloading Shard configuration...</color>"
 reload-success: "<prefix> <color:#a8ff78>Shard configuration reloaded.</color>"
 storage:
@@ -107,6 +110,7 @@ editor:
   diff-line: " <gray><sign></gray> <white><key></white><newline>     <color:#ff4b2b><old></color> <gray>-></gray> <color:#a8ff78><new></color>"
   diff-more: " <gray>and <count> more</gray>"
   console-only: "<prefix> <color:#ff4b2b>This result runs console commands.</color> <gray>Apply it from the server console.</gray>"
+  needs-apply: "<prefix> <color:#ff4b2b>Applying changes needs the</color> <white>shard.editor.apply</white> <color:#ff4b2b>permission.</color>"
 
 setup:
   opened: "<prefix> <link><color:#74ebd5><u>Open the setup wizard in your browser</u></color></link><white>.</white>"
@@ -218,6 +222,9 @@ monitor:
 view:
   enabled: "<prefix> <color:#a8ff78>Observation mode is now enabled.</color>"
   disabled: "<prefix> <color:#f6d365>Observation mode is now disabled.</color>"
+  model-pinned: "<prefix> <color:#eef2f3>Shard View now shows only</color> <white><model></white>."
+  model-auto: "<prefix> <color:#eef2f3>Shard View now takes turns between models.</color>"
+  model-unknown: "<prefix> <color:#ff4b2b>No model</color> <white><model></white><color:#ff4b2b>. Known:</color> <white><models></white>"
 
 brand:
   alerts-enabled: "<prefix> <color:#eef2f3>Client Alerts</color> <color:#a8ff78>enabled</color>."
@@ -253,12 +260,12 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>History subsystem is disabled!</color>"
   header: "<prefix> <color:#00b4db>Showing logs for</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <server><color:#00b4db>Failed</color> <hover:show_text:'<gray>Details: <white><verbose></white><labels_line><newline><gray>Buffer: <white><buffer></white><newline><gray>Suspicion: <white><score></white><newline><gray>Windows: <white><windows></white><gray>, over 0.9: <white><high></white><newline><gray>Last minute: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <server><color:#00b4db>Failed</color> <hover:show_text:'<gray>Details:<newline><white><verbose></white><labels_line><newline><gray>Buffer: <white><buffer></white><newline><gray>Suspicion: <white><score></white><newline><gray>Windows: <white><windows></white><gray>, over 0.9: <white><high></white><newline><gray>Last minute: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>No violations found for this player.</gray>"
 
 logs:
   header: "<prefix> <color:#00b4db>Recent violations</color> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Details: <white><verbose></white><labels_line>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Details:<newline><white><verbose></white><labels_line>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>No violations found within this time period.</gray>"
 
 punish:
@@ -300,7 +307,7 @@ suspicious:
   top-player: "<prefix> <color:#00b4db>Most Suspicious:</color> <white><player></white> <gray>with buffer</gray> <color:#ff4b2b><buffer></color>"
   top-player-hover: "<gray>Enable monitor</gray>"
 
-cross-server:
+network:
   alert-prefix: "<dark_gray>[</dark_gray><color:#74ebd5><server></color><dark_gray>]</dark_gray>"
   server-tag: "<dark_gray>[</dark_gray><color:#74ebd5><server></color><dark_gray>]</dark_gray>"
 
@@ -318,6 +325,15 @@ stats:
   model-hover: "<white><config></white>"
   suspicious: " <color:#ff416c>Suspicious Now:</color> <white><suspicious_now></white> <gray>(<suspicious_percent_now>)</gray>"
   suspicious-hover: "<white><suspicious_now></white> <gray>out of</gray> <white><online_players></white> <gray>online players</gray><newline><gray>Threshold:</gray> <white>AI buffer > <suspicious_threshold></white>"
+  inference:
+    - "<hover:show_text:'<gray>Statistics for the last minute</gray>'><gradient:#8e9eab:#eef2f3>---- [ Shard Inference ] ----</gradient></hover>"
+    - " <color:#00b4db>Windows:</color> <white><windows_per_second>/s</white> <gray>(peak <peak_windows>/s)</gray>"
+    - " <color:#00b4db>Windows per request:</color> <white><average_batch></white> <gray>(max <largest_batch>)</gray>"
+    - " <color:#00b4db>Requests:</color> <white><concurrent></white><gray>/<concurrent_limit> now, peak <peak_concurrent></gray>"
+    - " <color:#00b4db>Queue:</color> <white><queued></white> <gray>now, peak <peak_queued> (<peak_queued_mb> MB)</gray>"
+    - " <color:#00b4db>Response time:</color> <white><rtt> ms</white> <gray>average</gray>"
+    - " <color:#00b4db>Failed requests:</color> <white><failures></white>"
+  inference-off: "<prefix> <gray>The AI connection is turned off.</gray>"
 
 help:
   - "<gradient:#8e9eab:#eef2f3>-------- [ Shard ] --------</gradient>"

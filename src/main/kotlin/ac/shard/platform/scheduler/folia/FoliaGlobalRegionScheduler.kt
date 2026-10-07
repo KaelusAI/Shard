@@ -35,7 +35,9 @@ class FoliaGlobalRegionScheduler : ShardGlobalRegionScheduler {
   }
 
   override fun runDelayed(plugin: Plugin, task: Runnable, delayTicks: Long): TaskHandle {
-    return FoliaTaskHandle(globalRegionScheduler.runDelayed(plugin, { task.run() }, delayTicks))
+    return FoliaTaskHandle(
+      globalRegionScheduler.runDelayed(plugin, { task.run() }, delayTicks.atLeastOneTick())
+    )
   }
 
   override fun runAtFixedRate(
@@ -45,7 +47,12 @@ class FoliaGlobalRegionScheduler : ShardGlobalRegionScheduler {
     periodTicks: Long,
   ): TaskHandle {
     return FoliaTaskHandle(
-      globalRegionScheduler.runAtFixedRate(plugin, { task.run() }, initialDelayTicks, periodTicks)
+      globalRegionScheduler.runAtFixedRate(
+        plugin,
+        { task.run() },
+        initialDelayTicks.atLeastOneTick(),
+        periodTicks.atLeastOneTick(),
+      )
     )
   }
 
@@ -53,3 +60,5 @@ class FoliaGlobalRegionScheduler : ShardGlobalRegionScheduler {
     globalRegionScheduler.cancelTasks(plugin)
   }
 }
+
+internal fun Long.atLeastOneTick(): Long = coerceAtLeast(1L)

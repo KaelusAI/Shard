@@ -53,16 +53,12 @@ class Shard : JavaPlugin() {
     shutdownRuntime()
   }
 
-  fun onReload() {
-    core?.reload()
-  }
-
   private companion object {
     const val BSTATS_PLUGIN_ID = 32301
   }
 
   private fun enableRuntime() {
-    val koinApp = startKoin { modules(shardModules(this@Shard)) }
+    val koinApp = startKoin { modules(shardModules(this@Shard, packetEventsLoader)) }
     core = koinApp.koin.get()
     core?.enable()
     Metrics(this, BSTATS_PLUGIN_ID)

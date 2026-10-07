@@ -17,7 +17,7 @@
  */
 package ac.shard.sender
 
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.MiniText
 import java.util.UUID
 import net.kyori.adventure.platform.bukkit.BukkitAudiences
 import net.kyori.adventure.text.Component
@@ -51,7 +51,7 @@ class SenderFactory(private val adventure: BukkitAudiences) : SenderMapper<Comma
       get() = bukkitPlayer.uniqueId
 
     override fun sendMessage(message: String) {
-      adventure.player(bukkitPlayer).sendMessage(MessageUtil.deserializeRaw(message))
+      adventure.player(bukkitPlayer).sendMessage(MiniText.deserializeRaw(message))
     }
 
     override fun sendMessage(message: Component) {
@@ -87,7 +87,7 @@ class SenderFactory(private val adventure: BukkitAudiences) : SenderMapper<Comma
       get() = Sender.CONSOLE_UUID
 
     override fun sendMessage(message: String) {
-      adventure.sender(sender).sendMessage(MessageUtil.deserializeRaw(message))
+      adventure.sender(sender).sendMessage(MiniText.deserializeRaw(message))
     }
 
     override fun sendMessage(message: Component) {

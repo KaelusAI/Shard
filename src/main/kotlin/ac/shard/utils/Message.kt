@@ -13,11 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package ac.shard.utils
 
-enum class Message(val path: String) {
+enum class Message(val path: String, val legacyPath: String? = null) {
   PREFIX("prefix"),
   ALERTS_ENABLED("alerts-enabled"),
   ALERTS_DISABLED("alerts-disabled"),
@@ -25,6 +25,9 @@ enum class Message(val path: String) {
   ALERTS_LABELS_LINE("alerts-labels-line"),
   PLAYER_NOT_FOUND("player-not-found"),
   RUN_AS_PLAYER("run-as-player"),
+  NO_PERMISSION("no-permission"),
+  INVALID_ARGUMENT("invalid-argument"),
+  COMMAND_FAILED("command-failed"),
   RELOAD_START("reload-start"),
   RELOAD_SUCCESS("reload-success"),
   STORAGE_DEGRADED("storage.degraded"),
@@ -101,6 +104,7 @@ enum class Message(val path: String) {
   SETUP_ERROR("setup.error"),
   SETUP_WAITING("setup.waiting"),
   EDITOR_CONSOLE_ONLY("editor.console-only"),
+  EDITOR_NEEDS_APPLY("editor.needs-apply"),
   SETUP_ALREADY_LINKED("setup.already-linked"),
   SETUP_CONFIRM("setup.confirm"),
   SETUP_NOTHING_TO_CONFIRM("setup.nothing-to-confirm"),
@@ -199,6 +203,9 @@ enum class Message(val path: String) {
   MONITOR_HELP("monitor.help"),
   VIEW_ENABLED("view.enabled"),
   VIEW_DISABLED("view.disabled"),
+  VIEW_MODEL_PINNED("view.model-pinned"),
+  VIEW_MODEL_AUTO("view.model-auto"),
+  VIEW_MODEL_UNKNOWN("view.model-unknown"),
 
   // Profile
   PROFILE_NO_DATA("profile.no-data"),
@@ -252,9 +259,9 @@ enum class Message(val path: String) {
   SUSPICIOUS_TOP_PLAYER("suspicious.top-player"),
   SUSPICIOUS_TOP_PLAYER_HOVER("suspicious.top-player-hover"),
 
-  // Cross-server
-  CROSS_SERVER_ALERT_PREFIX("cross-server.alert-prefix"),
-  CROSS_SERVER_SERVER_TAG("cross-server.server-tag"),
+  // Network
+  NETWORK_ALERT_PREFIX("network.alert-prefix", "cross-server.alert-prefix"),
+  NETWORK_SERVER_TAG("network.server-tag", "cross-server.server-tag"),
 
   // Stats
   STATS_INVALID_PERIOD("stats.invalid-period"),
@@ -270,6 +277,8 @@ enum class Message(val path: String) {
   STATS_MODEL_HOVER("stats.model-hover"),
   STATS_SUSPICIOUS("stats.suspicious"),
   STATS_SUSPICIOUS_HOVER("stats.suspicious-hover"),
+  STATS_INFERENCE("stats.inference"),
+  STATS_INFERENCE_OFF("stats.inference-off"),
 
   // Help
   HELP_MESSAGE("help"),

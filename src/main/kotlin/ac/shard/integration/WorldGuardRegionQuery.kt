@@ -38,10 +38,11 @@ internal class WorldGuardRegionQuery(private val configManager: ConfigManager) {
         BlockVector3.at(player.location.x, player.location.y, player.location.z)
       )
 
-    return if (configManager.aiWorldGuardFlagOverridesList) {
-      queryFlag(set) ?: matchLegacyDisabledList(player, set)
+    val settings = configManager.settings.regions
+    return if (settings.flagOverridesList) {
+      queryFlag(set) ?: matchLegacyDisabledList(player, set, settings.disabled)
     } else {
-      matchLegacyDisabledList(player, set) || queryFlag(set) == true
+      matchLegacyDisabledList(player, set, settings.disabled) || queryFlag(set) == true
     }
   }
 
@@ -54,8 +55,11 @@ internal class WorldGuardRegionQuery(private val configManager: ConfigManager) {
     }
   }
 
-  private fun matchLegacyDisabledList(player: Player, set: ApplicableRegionSet): Boolean {
-    val disabledRegions = configManager.aiDisabledRegions
+  private fun matchLegacyDisabledList(
+    player: Player,
+    set: ApplicableRegionSet,
+    disabledRegions: Map<String, List<String>>,
+  ): Boolean {
     if (disabledRegions.isEmpty()) {
       return false
     }

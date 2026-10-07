@@ -18,6 +18,7 @@
 package ac.shard.command.commands.info
 
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
 import ac.shard.database.DatabaseManager
@@ -25,26 +26,26 @@ import ac.shard.database.Violation
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import ac.shard.utils.TimeUtil
 import net.kyori.adventure.text.Component
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.IntegerParser
 
 class LogsCommand(
+  private val messages: Messages,
   private val databaseManager: DatabaseManager,
   private val configManager: ConfigManager,
   private val localeManager: LocaleManager,
   private val scheduler: SchedulerService,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
+    manager.shardCommand {
       literal("logs")
         .permission("shard.logs")
         .optional("page", IntegerParser.integerParser(1))
-        .handler(this@LogsCommand::handleLogs)
+        .handler { handleLogs(it) }
     }
   }
 
@@ -53,12 +54,12 @@ class LogsCommand(
     val page: Int = context.getOrDefault("page", 1)
 
     if (!configManager.config.getBoolean("history.enabled", false)) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.HISTORY_DISABLED)
+      messages.sendMessage(sender.nativeSender, Message.HISTORY_DISABLED)
       return
     }
 
     if (!databaseManager.isAvailable) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
+      messages.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
     }
 
     scheduler.runAsync {
@@ -70,7 +71,7 @@ class LogsCommand(
         kotlin.math.max(1, kotlin.math.ceil(totalLogs.toDouble() / entriesPerPage).toInt())
 
       val header =
-        MessageUtil.getMessage(
+        messages.getMessage(
           Message.LOGS_HEADER,
           "page",
           page.toString(),
@@ -84,7 +85,7 @@ class LogsCommand(
         sender.sendMessage(header)
 
         if (entries.isEmpty()) {
-          MessageUtil.sendMessage(sender.nativeSender, Message.LOGS_NO_VIOLATIONS)
+          messages.sendMessage(sender.nativeSender, Message.LOGS_NO_VIOLATIONS)
           return@runSync
         }
 
@@ -100,7 +101,7 @@ class LogsCommand(
       configManager.labelCatalog.format(
         violation.labels.split(',').map(String::trim).filter(String::isNotEmpty)
       )
-    return MessageUtil.getMessage(
+    return messages.getMessage(
       Message.LOGS_ENTRY,
       "server",
       violation.serverName,
@@ -117,7 +118,7 @@ class LogsCommand(
       "labels",
       shown,
       "labels_line",
-      MessageUtil.labelsLine(shown),
+      messages.labelsLine(shown),
     )
   }
 }

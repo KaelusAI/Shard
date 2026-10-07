@@ -3,10 +3,13 @@ prefix: "<gradient:#8e9eab:#eef2f3>Shard</gradient> <gray>|</gray>"
 alerts-enabled: "<prefix> <color:#eef2f3>Уведомления</color> <color:#a8ff78>включены</color>."
 alerts-disabled: "<prefix> <color:#eef2f3>Уведомления</color> <color:#ff4b2b>выключены</color>."
 alerts-labels-line: "<newline><gray>Метки:</gray> <white><labels></white>"
-alerts-format: "<prefix> <hover:show_text:'<gray>Нажми, чтобы телепортироваться к <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>подозревается в</gray> <hover:show_text:'<color:#ff416c><check_label></color><labels_line><newline><gray>Буферы на момент срабатывания:</gray> <white><verbose></white><newline><gray>Срабатываний группы:</gray> <white><vl></white>'><color:#ff416c><check_label></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
+alerts-format: "<prefix> <hover:show_text:'<gray>Нажми, чтобы телепортироваться к <white><player></white>'><click:run_command:'/tp <player>'><white><player></white></click></hover> <gray>подозревается в</gray> <hover:show_text:'<color:#ff416c><check_label></color><labels_line><newline><gray>Буферы на момент срабатывания:</gray><newline><white><verbose></white><newline><gray>Срабатываний группы:</gray> <white><vl></white>'><color:#ff416c><check_label></color></hover> <gray>[<color:#ff4b2b>x<vl></color>]</gray>"
 
-player-not-found: "<prefix> <color:#ff4b2b>Игрок исключен или находится вне сети!</color>"
+player-not-found: "<prefix> <color:#ff4b2b>Игрок <player> не известен Shard.</color>"
 run-as-player: "<prefix> <color:#ff4b2b>Эту команду могут использовать только игроки!</color>"
+no-permission: "<prefix> <color:#ff4b2b>Недостаточно прав.</color>"
+invalid-argument: "<prefix> <color:#ff4b2b>Неверный аргумент:</color> <white><reason></white>"
+command-failed: "<prefix> <color:#ff4b2b>Команда завершилась с ошибкой. Причина записана в консоль сервера.</color>"
 reload-start: "<prefix> <color:#f6d365>Перезагрузка конфигурации...</color>"
 reload-success: "<prefix> <color:#a8ff78>Конфигурация Shard перезагружена.</color>"
 storage:
@@ -107,6 +110,7 @@ editor:
   diff-line: " <gray><sign></gray> <white><key></white><newline>     <color:#ff4b2b><old></color> <gray>-></gray> <color:#a8ff78><new></color>"
   diff-more: " <gray>и ещё <count></gray>"
   console-only: "<prefix> <color:#ff4b2b>В этом результате есть консольные команды.</color> <gray>Применяйте его из консоли сервера.</gray>"
+  needs-apply: "<prefix> <color:#ff4b2b>Для применения изменений нужно право</color> <white>shard.editor.apply</white><color:#ff4b2b>.</color>"
 
 setup:
   opened: "<prefix> <link><color:#74ebd5><u>Настроить Shard в браузере</u></color></link><white>.</white>"
@@ -218,6 +222,9 @@ monitor:
 view:
   enabled: "<prefix> <color:#a8ff78>Режим наблюдения включен.</color>"
   disabled: "<prefix> <color:#f6d365>Режим наблюдения выключен.</color>"
+  model-pinned: "<prefix> <color:#eef2f3>Shard View теперь показывает только</color> <white><model></white>."
+  model-auto: "<prefix> <color:#eef2f3>Shard View теперь показывает модели по очереди.</color>"
+  model-unknown: "<prefix> <color:#ff4b2b>Нет модели</color> <white><model></white><color:#ff4b2b>. Есть:</color> <white><models></white>"
 
 brand:
   alerts-enabled: "<prefix> <color:#eef2f3>Оповещения о клиентах</color> <color:#a8ff78>включены</color>."
@@ -253,12 +260,12 @@ profile:
 history:
   disabled: "<prefix> <color:#ff4b2b>Подсистема истории отключена!</color>"
   header: "<prefix> <color:#00b4db>История нарушений игрока</color> <white><player></white> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <server><color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали: <white><verbose></white><labels_line><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white><newline><gray>Последняя минута: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <server><color:#00b4db>Провалил</color> <hover:show_text:'<gray>Детали:<newline><white><verbose></white><labels_line><newline><gray>Буфер: <white><buffer></white><newline><gray>Подозрение: <white><score></white><newline><gray>Окон: <white><windows></white><gray>, выше 0.9: <white><high></white><newline><gray>Последняя минута: <white><trail></white>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>У этого игрока нет найденных нарушений.</gray>"
 
 logs:
   header: "<prefix> <color:#00b4db>Последние нарушения</color> <gray>(<page>/<max_pages>)</gray>"
-  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Детали: <white><verbose></white><labels_line>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
+  entry: "<prefix> <white><player></white> <dark_gray>|</dark_gray> <hover:show_text:'<gray>Детали:<newline><white><verbose></white><labels_line>'><white><check></white> <dark_gray>[<color:#ff4b2b>x<vl></color>]</dark_gray></hover> <dark_gray>(<color:#a8ff78><timeago></color>)</dark_gray>"
   no-violations: "<prefix> <gray>Нарушения не найдены.</gray>"
 
 punish:
@@ -300,7 +307,7 @@ suspicious:
   top-player: "<prefix> <color:#00b4db>Самый подозрительный:</color> <white><player></white> <gray>с буфером</gray> <color:#ff4b2b><buffer></color>"
   top-player-hover: "<gray>Включить мониторинг</gray>"
 
-cross-server:
+network:
   alert-prefix: "<dark_gray>[</dark_gray><color:#74ebd5><server></color><dark_gray>]</dark_gray>"
   server-tag: "<dark_gray>[</dark_gray><color:#74ebd5><server></color><dark_gray>]</dark_gray>"
 
@@ -318,6 +325,15 @@ stats:
   model-hover: "<white><config></white>"
   suspicious: " <color:#ff416c>Подозрительных сейчас:</color> <white><suspicious_now></white> <gray>(<suspicious_percent_now>)</gray>"
   suspicious-hover: "<white><suspicious_now></white> <gray>из</gray> <white><online_players></white> <gray>онлайн-игроков</gray><newline><gray>Порог:</gray> <white>AI буфер > <suspicious_threshold></white>"
+  inference:
+    - "<hover:show_text:'<gray>Статистика за последнюю минуту</gray>'><gradient:#8e9eab:#eef2f3>---- [ Shard Inference ] ----</gradient></hover>"
+    - " <color:#00b4db>Окна:</color> <white><windows_per_second>/с</white> <gray>(пик <peak_windows>/с)</gray>"
+    - " <color:#00b4db>Окон в запросе:</color> <white><average_batch></white> <gray>(макс. <largest_batch>)</gray>"
+    - " <color:#00b4db>Запросы:</color> <white><concurrent></white><gray>/<concurrent_limit> сейчас, пик <peak_concurrent></gray>"
+    - " <color:#00b4db>Очередь:</color> <white><queued></white> <gray>сейчас, пик <peak_queued> (<peak_queued_mb> МБ)</gray>"
+    - " <color:#00b4db>Время ответа:</color> <white><rtt> мс</white> <gray>в среднем</gray>"
+    - " <color:#00b4db>Неудачные запросы:</color> <white><failures></white>"
+  inference-off: "<prefix> <gray>Подключение к AI выключено.</gray>"
 
 help:
   - "<gradient:#8e9eab:#eef2f3>-------- [ Shard ] --------</gradient>"

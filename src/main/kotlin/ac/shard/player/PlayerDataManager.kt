@@ -22,22 +22,11 @@
  */
 package ac.shard.player
 
-import ac.shard.Shard
 import ac.shard.alert.AlertManager
-import ac.shard.alert.AlertType
-import ac.shard.api.event.ShardEventBus
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiSnapshotStore
-import ac.shard.checks.impl.ai.PersistentBufferService
-import ac.shard.config.ConfigManager
+import ac.shard.api.impl.Sessions
 import ac.shard.data.CollectManager
-import ac.shard.database.DatabaseManager
 import ac.shard.integration.GeyserUtil
-import ac.shard.mitigation.MitigationLogStore
-import ac.shard.mitigation.MitigationScoreStore
-import ac.shard.punishment.PunishmentManager
 import ac.shard.scheduler.SchedulerService
-import ac.shard.server.AIServerProvider
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.protocol.player.User
 import java.util.UUID
@@ -45,33 +34,24 @@ import java.util.concurrent.ConcurrentHashMap
 import org.bukkit.entity.Player
 
 @Suppress("TooManyFunctions")
-class PlayerDataManager
-@Suppress("LongParameterList")
-constructor(
-  private val plugin: Shard,
+class PlayerDataManager(
+  private val playerFactory: ShardPlayerFactory,
+  private val scheduler: SchedulerService,
+  private val persistence: PlayerPersistence,
   private val alertManager: AlertManager,
   private val collectManager: CollectManager,
-  private val configManager: ConfigManager,
-  private val aiServerProvider: AIServerProvider,
-  private val exemptManager: ExemptManager,
-  private val scheduler: SchedulerService,
-  private val checkManagerFactory: CheckManager.Factory,
-  private val punishmentManagerFactory: PunishmentManager.Factory,
-  private val eventBus: ShardEventBus,
-  private val databaseManager: DatabaseManager,
-  private val persistentBufferService: PersistentBufferService,
-  private val mitigationScoreStore: MitigationScoreStore,
-  private val mitigationLogStore: MitigationLogStore,
-  private val aiSnapshotStore: AiSnapshotStore,
+  private val sessions: Sessions,
 ) {
   private val players = ConcurrentHashMap<User, ShardPlayer>()
-  private val unsavedBuffers = ConcurrentHashMap.newKeySet<ShardPlayer>()
 
   @Suppress("ReturnCount")
   private fun cleanupPlayer(tracked: ShardPlayer) {
     if (!players.remove(tracked.user, tracked)) {
       return
     }
+    synchronized(tracked.sessionLock) { tracked.sessionEnded = true }
+    tracked.ai.onQuit()
+    tracked.playerThreadRefresh?.cancel()
     val uuid = tracked.uuid
     if (players.values.any { it.uuid == uuid }) {
       return
@@ -80,43 +60,14 @@ constructor(
     if (collectManager.getSession(uuid) != null) {
       collectManager.stopCollecting(uuid)
     }
-    if (player != null) {
-      runCatching { alertManager.handlePlayerQuit(player) }
-        .onFailure {
-          plugin.logger.log(
-            java.util.logging.Level.WARNING,
-            "alertManager.handlePlayerQuit failed for ${player.name}",
-            it,
-          )
-        }
-    }
+    if (player != null) alertManager.handlePlayerQuit(player)
     if (!tracked.isAttached) return
-    // runAsync only starts on the next heartbeat, so the write is not guaranteed by shutdown.
-    unsavedBuffers.add(tracked)
-    scheduler.runAsync {
-      if (unsavedBuffers.remove(tracked)) {
-        persistentBufferService.saveOnQuit(tracked)
-        mitigationScoreStore.save(tracked)
-        mitigationLogStore.saveOnQuit(tracked)
-        aiSnapshotStore.saveOnQuit(tracked)
-      }
-    }
+    sessions.ended(tracked)
+    persistence.saveLater(tracked)
   }
 
   fun saveAllBuffersSync() {
-    for (shardPlayer in players.values) {
-      if (shardPlayer.isAttached) {
-        persistentBufferService.saveOnShutdown(shardPlayer)
-      }
-    }
-    val iterator = unsavedBuffers.iterator()
-    while (iterator.hasNext()) {
-      val shardPlayer = iterator.next()
-      iterator.remove()
-      persistentBufferService.saveOnShutdown(shardPlayer)
-      mitigationScoreStore.save(shardPlayer)
-      aiSnapshotStore.saveOnQuit(shardPlayer)
-    }
+    persistence.saveAll(players.values.filter { it.isAttached })
   }
 
   fun getPlayer(player: Player?): ShardPlayer? {
@@ -151,19 +102,7 @@ constructor(
     if (user.uuid == null || players.containsKey(user)) {
       return
     }
-    players[user] =
-      ShardPlayer(
-        user = user,
-        plugin = plugin,
-        configManager = configManager,
-        alertManager = alertManager,
-        aiServerProvider = aiServerProvider,
-        exemptManager = exemptManager,
-        scheduler = scheduler,
-        checkManagerFactory = checkManagerFactory,
-        punishmentManagerFactory = punishmentManagerFactory,
-        eventBus = eventBus,
-      )
+    players[user] = playerFactory.create(user)
   }
 
   fun getPlayers(): Collection<ShardPlayer> {
@@ -195,27 +134,22 @@ constructor(
           return@Runnable
         }
         shardPlayer.attach(player)
+        shardPlayer.refreshOnPlayerThread()
+        shardPlayer.playerThreadRefresh =
+          scheduler.runTimer(
+            player,
+            Runnable { shardPlayer.refreshOnPlayerThread() },
+            REFRESH_TICKS,
+            REFRESH_TICKS,
+          )
 
-        val loginTimestamp = System.currentTimeMillis()
-        scheduler.runAsync { databaseManager.database.recordLogin(playerUuid, loginTimestamp) }
-        persistentBufferService.restoreOnLogin(shardPlayer)
-        mitigationScoreStore.restoreOnLogin(shardPlayer)
-
-        enableAlertsOnJoin(player)
+        persistence.restore(shardPlayer, player.name) {
+          shardPlayer.buffersRestored = true
+          sessions.started(shardPlayer)
+        }
+        alertManager.onJoin(player)
       },
     )
-  }
-
-  private fun enableAlertsOnJoin(player: Player) {
-    AlertType.entries.forEach { type ->
-      if (
-        player.hasPermission(type.permission) &&
-          player.hasPermission("${type.permission}.enable-on-join") &&
-          !alertManager.hasAlertsEnabled(player, type)
-      ) {
-        alertManager.toggle(player, type, true)
-      }
-    }
   }
 
   private fun applyInitialWorldState(shardPlayer: ShardPlayer, player: Player) {
@@ -233,9 +167,7 @@ constructor(
     cleanupPlayer(tracked)
   }
 
-  fun reloadAllPlayers() {
-    for (shardPlayer in players.values) {
-      shardPlayer.reload()
-    }
+  private companion object {
+    const val REFRESH_TICKS = 20L
   }
 }

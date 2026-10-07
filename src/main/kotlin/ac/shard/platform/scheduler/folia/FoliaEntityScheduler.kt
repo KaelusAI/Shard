@@ -52,7 +52,7 @@ class FoliaEntityScheduler : EntityScheduler {
     delayTicks: Long,
   ): TaskHandle? {
     val scheduled: ScheduledTask? =
-      entity.scheduler.runDelayed(plugin, { task.run() }, retired, delayTicks)
+      entity.scheduler.runDelayed(plugin, { task.run() }, retired, delayTicks.atLeastOneTick())
     return scheduled?.let { FoliaTaskHandle(it) }
   }
 
@@ -69,8 +69,8 @@ class FoliaEntityScheduler : EntityScheduler {
         plugin,
         { task.run() },
         retired,
-        initialDelayTicks,
-        periodTicks,
+        initialDelayTicks.atLeastOneTick(),
+        periodTicks.atLeastOneTick(),
       )
     return scheduled?.let { FoliaTaskHandle(it) }
   }

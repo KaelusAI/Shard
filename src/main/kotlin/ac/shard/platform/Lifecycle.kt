@@ -13,26 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.api.event
+package ac.shard.platform
 
-import java.util.UUID
+interface Lifecycle {
+  fun start()
 
-data class MitigationEvent(
-  val playerId: UUID,
-  val playerName: String,
-  val mitigationId: String,
-  val tier: String,
-  val score: Double,
-  override var cancelled: Boolean = false,
-) : ShardCancellableEvent
-
-data class MitigationRuleEvent(
-  val playerId: UUID,
-  val playerName: String,
-  val fromRule: String,
-  val toRule: String,
-  val score: Double,
-  val reason: String,
-) : ShardEvent
+  fun stop()
+}

@@ -18,9 +18,9 @@
 package ac.shard.command
 
 import ac.shard.sender.Sender
-import net.kyori.adventure.text.Component
+import ac.shard.utils.Message
 import org.incendo.cloud.processors.requirements.Requirement
 
 interface SenderRequirement : Requirement<Sender, SenderRequirement> {
-  fun errorMessage(sender: Sender): Component
+  val errorMessage: Message
 }
