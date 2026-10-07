@@ -22,14 +22,13 @@
  */
 package ac.shard.database
 
-import ac.shard.config.ConfigManager
+import ac.shard.monitor.core.ModelFilter
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.core.MonitorTheme
-import ac.shard.player.ShardPlayer
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatterBuilder
@@ -58,38 +57,29 @@ private const val TIER_LENGTH = 16
 private const val TEXT_LENGTH = 255
 private const val UUID_LENGTH = 36
 private const val NAME_LENGTH = 64
+private const val GROUP_LENGTH = 255
+private const val MODELS_LENGTH = ModelFilter.MAX_LENGTH
 private const val TRAIL_BYTES = 1024
 
-class SqlViolationDatabase(
-  private val configManager: ConfigManager,
-  private val database: Database,
-) : ViolationDatabase {
+class SqlViolationDatabase(private val database: Database) : ViolationDatabase {
 
-  override fun logAlert(
-    player: ShardPlayer,
-    verbose: String,
-    checkName: String,
-    vls: Int,
-    labels: String,
-    facts: AiFacts,
-  ) {
+  override fun logAlert(violation: Violation) {
     transaction(database) {
-      val now = Instant.now()
       Violations.insert {
-        it[server] = configManager.config.getString("history.server-name", "server")
-        it[uuid] = player.uuid.toString()
-        it[playerName] = player.player.name
-        it[Violations.checkName] = checkName
-        it[Violations.verbose] = verbose
-        it[vl] = vls
-        it[createdAt] = now.toEpochMilli()
-        it[createdAtInstant] = now
-        it[Violations.labels] = labels
-        it[aiBuffer] = facts.buffer
-        it[mitigationScore] = facts.score
-        it[aiWindows] = facts.windows
-        it[aiHighWindows] = facts.highWindows
-        it[probabilityTrail] = facts.trail.takeIf { trail -> trail.isNotEmpty() }
+        it[server] = violation.serverName
+        it[uuid] = violation.playerUUID.toString()
+        it[playerName] = violation.playerName
+        it[checkName] = violation.checkName
+        it[verbose] = violation.verbose
+        it[vl] = violation.vl
+        it[createdAt] = violation.createdAt.toEpochMilli()
+        it[createdAtInstant] = violation.createdAt
+        it[labels] = violation.labels
+        it[aiBuffer] = violation.aiBuffer
+        it[mitigationScore] = violation.mitigationScore
+        it[aiWindows] = violation.windows
+        it[aiHighWindows] = violation.highWindows
+        it[probabilityTrail] = violation.trail.takeIf { trail -> trail.isNotEmpty() }
       }
     }
   }
@@ -106,7 +96,7 @@ class SqlViolationDatabase(
         .where { Violations.uuid eq player.toString() }
         .orderBy(Violations.createdAt to SortOrder.DESC)
         .limit(limit)
-        .offset(((page - 1) * limit).toLong())
+        .offset((page - 1).toLong() * limit)
         .map(::toViolation)
     }
   }
@@ -202,6 +192,7 @@ class SqlViolationDatabase(
             score = row[MitigationEvents.score],
             startedAt = row[MitigationEvents.startedAt],
             endedAt = row[MitigationEvents.endedAt],
+            playerUUID = playerUUID,
           )
         }
     }
@@ -221,6 +212,7 @@ class SqlViolationDatabase(
             score = row[MitigationEvents.score],
             startedAt = row[MitigationEvents.startedAt],
             endedAt = row[MitigationEvents.endedAt],
+            playerUUID = runCatching { UUID.fromString(row[MitigationEvents.uuid]) }.getOrNull(),
           )
         }
     }
@@ -264,40 +256,41 @@ class SqlViolationDatabase(
       query
         .orderBy(Violations.createdAt to SortOrder.DESC)
         .limit(limit)
-        .offset(((page - 1) * limit).toLong())
+        .offset((page - 1).toLong() * limit)
         .map(::toViolation)
     }
   }
 
-  override fun getViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
-    return transaction(database) {
-      Punishments.selectAll()
-        .where {
-          (Punishments.uuid eq playerUUID.toString()) and
-            (Punishments.punishGroup eq punishGroupName)
-        }
-        .firstOrNull()
-        ?.get(Punishments.vl) ?: 0
-    }
-  }
+  override fun getViolationLevel(playerUUID: UUID, punishGroupName: String, since: Long): Int =
+    transaction(database) { countFlags(playerUUID, punishGroupName, since) }
 
-  override fun incrementViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
-    return transaction(database) {
-      Punishments.upsert(onUpdate = { it[Punishments.vl] = Punishments.vl + 1 }) {
+  override fun recordFlag(playerUUID: UUID, punishGroupName: String, at: Long, since: Long): Int =
+    transaction(database) {
+      if (since > 0L) {
+        PunishFlags.deleteWhere {
+          (PunishFlags.uuid eq playerUUID.toString()) and
+            (PunishFlags.punishGroup eq punishGroupName) and
+            (PunishFlags.at less since)
+        }
+      }
+      PunishFlags.insert {
+        it[id] = UUID.randomUUID().toString()
         it[uuid] = playerUUID.toString()
         it[punishGroup] = punishGroupName
-        it[vl] = 1
+        it[PunishFlags.at] = at
       }
-
-      Punishments.selectAll()
-        .where {
-          (Punishments.uuid eq playerUUID.toString()) and
-            (Punishments.punishGroup eq punishGroupName)
-        }
-        .firstOrNull()
-        ?.get(Punishments.vl) ?: 0
+      countFlags(playerUUID, punishGroupName, since)
     }
-  }
+
+  private fun countFlags(playerUUID: UUID, punishGroupName: String, since: Long): Int =
+    PunishFlags.selectAll()
+      .where {
+        (PunishFlags.uuid eq playerUUID.toString()) and
+          (PunishFlags.punishGroup eq punishGroupName) and
+          (PunishFlags.at greaterEq since)
+      }
+      .count()
+      .toInt()
 
   override fun getUniqueViolatorsSince(since: Long): Int {
     return transaction(database) {
@@ -317,6 +310,57 @@ class SqlViolationDatabase(
       }
     }
   }
+
+  override fun recordPlayer(playerUUID: UUID, name: String, seenAt: Long) {
+    val lower = name.lowercase(java.util.Locale.ROOT)
+    transaction(database) {
+      Players.upsert(
+        onUpdate = {
+          it[Players.name] = name
+          it[Players.nameLower] = lower
+          it[Players.lastSeen] = seenAt
+        }
+      ) {
+        it[uuid] = playerUUID.toString()
+        it[Players.name] = name
+        it[nameLower] = lower
+        it[lastSeen] = seenAt
+      }
+    }
+  }
+
+  override fun findPlayer(playerUUID: UUID): KnownPlayer? =
+    transaction(database) {
+      Players.selectAll()
+        .where { Players.uuid eq playerUUID.toString() }
+        .limit(1)
+        .firstOrNull()
+        ?.let(::knownPlayer)
+    }
+
+  override fun findPlayersByName(name: String, limit: Int): List<KnownPlayer> =
+    transaction(database) {
+      Players.selectAll()
+        .where { Players.nameLower eq name.lowercase(java.util.Locale.ROOT) }
+        .orderBy(Players.lastSeen, SortOrder.DESC)
+        .limit(limit)
+        .mapNotNull(::knownPlayer)
+    }
+
+  override fun findPlayersByPrefix(prefix: String, limit: Int): List<KnownPlayer> =
+    transaction(database) {
+      val pattern = LikePattern.ofLiteral(prefix.lowercase(java.util.Locale.ROOT)) + "%"
+      Players.selectAll()
+        .where { Players.nameLower like pattern }
+        .orderBy(Players.lastSeen, SortOrder.DESC)
+        .limit(limit)
+        .mapNotNull(::knownPlayer)
+    }
+
+  private fun knownPlayer(row: ResultRow): KnownPlayer? =
+    runCatching { UUID.fromString(row[Players.uuid]) }
+      .getOrNull()
+      ?.let { KnownPlayer(it, row[Players.name], row[Players.lastSeen]) }
 
   override fun recordAttack(playerUUID: UUID, timestamp: Long) {
     transaction(database) {
@@ -427,6 +471,28 @@ class SqlViolationDatabase(
     }
   }
 
+  override fun clearAiLabelBuffers(playerUUID: UUID, match: (String) -> Boolean) {
+    transaction(database) {
+      val uuidString = playerUUID.toString()
+      val stored =
+        AiLabelBuffers.select(AiLabelBuffers.label)
+          .where { AiLabelBuffers.uuid eq uuidString }
+          .map { it[AiLabelBuffers.label] }
+      val cleared = stored.filter(match)
+      if (cleared.isNotEmpty()) {
+        AiLabelBuffers.deleteWhere {
+          (AiLabelBuffers.uuid eq uuidString) and (AiLabelBuffers.label inList cleared)
+        }
+      }
+      if (cleared.size == stored.size) {
+        PlayerLogins.update({ PlayerLogins.uuid eq uuidString }) {
+          it[PlayerLogins.aiBuffer] = 0.0
+          it[PlayerLogins.aiBufferUpdatedAt] = 0L
+        }
+      }
+    }
+  }
+
   override fun loadAiBuffer(playerUUID: UUID): AiBufferState? {
     return transaction(database) {
       PlayerLogins.select(PlayerLogins.aiBuffer, PlayerLogins.aiBufferUpdatedAt)
@@ -466,6 +532,17 @@ class SqlViolationDatabase(
     }
   }
 
+  override fun clearMitigationScore(playerUUID: UUID, at: Long) {
+    transaction(database) {
+      PlayerLogins.update({
+        (PlayerLogins.uuid eq playerUUID.toString()) and (PlayerLogins.mitigationScoreAt neq 0L)
+      }) {
+        it[PlayerLogins.mitigationScore] = 0.0
+        it[PlayerLogins.mitigationScoreAt] = at
+      }
+    }
+  }
+
   override fun loadMitigationScore(playerUUID: UUID): StoredScore? {
     return transaction(database) {
       PlayerLogins.select(
@@ -494,14 +571,14 @@ class SqlViolationDatabase(
 
   override fun resetViolationLevel(playerUUID: UUID, punishGroupName: String) {
     transaction(database) {
-      Punishments.deleteWhere {
-        (Punishments.uuid eq playerUUID.toString()) and (Punishments.punishGroup eq punishGroupName)
+      PunishFlags.deleteWhere {
+        (PunishFlags.uuid eq playerUUID.toString()) and (PunishFlags.punishGroup eq punishGroupName)
       }
     }
   }
 
   override fun resetAllViolationLevels(playerUUID: UUID) {
-    transaction(database) { Punishments.deleteWhere { Punishments.uuid eq playerUUID.toString() } }
+    transaction(database) { PunishFlags.deleteWhere { PunishFlags.uuid eq playerUUID.toString() } }
   }
 
   override fun loadMonitorSettings(playerUUID: UUID): MonitorSettings? {
@@ -524,6 +601,7 @@ class SqlViolationDatabase(
             chatStyle = MonitorChatStyle.fromConfig(row[MonitorSettingsTable.chatStyle]),
             showCollect = row[MonitorSettingsTable.showCollect],
             labelFocus = row[MonitorSettingsTable.labelFocus],
+            models = row[MonitorSettingsTable.models],
             showInference = row[MonitorSettingsTable.showInference],
           )
         }
@@ -541,6 +619,7 @@ class SqlViolationDatabase(
           it[MonitorSettingsTable.showTrend] = insertValue(MonitorSettingsTable.showTrend)
           it[MonitorSettingsTable.showCollect] = insertValue(MonitorSettingsTable.showCollect)
           it[MonitorSettingsTable.labelFocus] = insertValue(MonitorSettingsTable.labelFocus)
+          it[MonitorSettingsTable.models] = insertValue(MonitorSettingsTable.models)
           it[MonitorSettingsTable.showInference] = insertValue(MonitorSettingsTable.showInference)
           it[MonitorSettingsTable.showName] = insertValue(MonitorSettingsTable.showName)
           it[MonitorSettingsTable.outputKind] = insertValue(MonitorSettingsTable.outputKind)
@@ -555,6 +634,7 @@ class SqlViolationDatabase(
         it[showTrend] = settings.showTrend
         it[showCollect] = settings.showCollect
         it[labelFocus] = settings.labelFocus
+        it[models] = settings.models
         it[showInference] = settings.showInference
         it[showName] = settings.showName.name
         it[outputKind] = MonitorOutputKind.store(settings.outputs)
@@ -609,12 +689,13 @@ class SqlViolationDatabase(
     }
   }
 
-  private object Punishments : Table("shard_punishments") {
-    val uuid: Column<String> = varchar("uuid", 36)
-    val punishGroup: Column<String> = varchar("punish_group", 255)
-    val vl: Column<Int> = integer("vl")
+  private object PunishFlags : Table("shard_punish_flags") {
+    val id: Column<String> = varchar("id", UUID_LENGTH)
+    val uuid: Column<String> = varchar("uuid", UUID_LENGTH)
+    val punishGroup: Column<String> = varchar("punish_group", GROUP_LENGTH)
+    val at: Column<Long> = long("flagged_at")
 
-    override val primaryKey = PrimaryKey(uuid, punishGroup)
+    override val primaryKey = PrimaryKey(id)
   }
 
   private object AiLabelBuffers : Table("ai_label_buffers") {
@@ -671,6 +752,15 @@ class SqlViolationDatabase(
     }
   }
 
+  private object Players : Table("shard_players") {
+    val uuid: Column<String> = varchar("uuid", UUID_LENGTH)
+    val name: Column<String> = varchar("name", NAME_LENGTH)
+    val nameLower: Column<String> = varchar("name_lower", NAME_LENGTH)
+    val lastSeen: Column<Long> = long("last_seen")
+
+    override val primaryKey = PrimaryKey(uuid)
+  }
+
   private object MonitorSettingsTable : Table("monitor_settings") {
     val uuid: Column<String> = varchar("uuid", 36)
     val mode: Column<String> = varchar("mode", 16)
@@ -680,6 +770,7 @@ class SqlViolationDatabase(
     val showTrend: Column<Boolean> = bool("show_trend")
     val showCollect: Column<Boolean> = bool("show_collect").default(true)
     val labelFocus: Column<String> = varchar("label_focus", LABEL_LENGTH).default("")
+    val models: Column<String> = varchar("models", MODELS_LENGTH).default("")
     val showInference: Column<Boolean> = bool("show_inference").default(true)
     val showName: Column<String> = varchar("show_name", 16)
     val outputKind: Column<String> = varchar("output_kind", 64)
@@ -690,7 +781,7 @@ class SqlViolationDatabase(
 
   private companion object {
     private const val UUID_LENGTH = 36
-    private const val LABEL_LENGTH = 64
+    private const val LABEL_LENGTH = 129
 
     private val VIOLATION_READ_COLUMNS =
       listOf<Expression<*>>(

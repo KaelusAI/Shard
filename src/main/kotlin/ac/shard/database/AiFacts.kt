@@ -17,7 +17,6 @@
  */
 package ac.shard.database
 
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.player.ShardPlayer
 
 const val FLAG_TRAIL_POINTS = 120
@@ -31,14 +30,14 @@ data class AiFacts(
 ) {
   companion object {
     fun of(shardPlayer: ShardPlayer): AiFacts {
-      val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java)
+      val ai = shardPlayer.detection
       val state = shardPlayer.mitigation
       return AiFacts(
-        buffer = aiCheck?.buffer ?: 0.0,
+        buffer = ai.buffer,
         score = state.score,
         windows = state.answers,
-        highWindows = aiCheck?.prob90?.toLong() ?: 0L,
-        trail = aiCheck?.trail?.tail(FLAG_TRAIL_POINTS) ?: ByteArray(0),
+        highWindows = ai.prob90.toLong(),
+        trail = ai.trail.tail(FLAG_TRAIL_POINTS),
       )
     }
   }

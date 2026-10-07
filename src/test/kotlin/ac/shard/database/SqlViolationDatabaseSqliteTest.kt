@@ -17,14 +17,12 @@
  */
 package ac.shard.database
 
-import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.MonitorChatStyle
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorOutputKind
 import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.core.MonitorTheme
-import io.mockk.mockk
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Instant
@@ -73,9 +71,8 @@ class SqlViolationDatabaseSqliteTest {
         }
     }
 
-    val configManager = mockk<ConfigManager>(relaxed = true)
     val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
-    val violationDatabase = SqlViolationDatabase(configManager, database)
+    val violationDatabase = SqlViolationDatabase(database)
 
     val playerViolations = violationDatabase.getViolations(playerId, page = 1, limit = 10)
     val recentViolations =
@@ -95,9 +92,8 @@ class SqlViolationDatabaseSqliteTest {
     val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
     migrateFreshSqlite(jdbcUrl)
 
-    val configManager = mockk<ConfigManager>(relaxed = true)
     val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
-    val violationDatabase = SqlViolationDatabase(configManager, database)
+    val violationDatabase = SqlViolationDatabase(database)
     val playerId = UUID.randomUUID()
     val settings =
       MonitorSettings(
@@ -111,8 +107,8 @@ class SqlViolationDatabaseSqliteTest {
         showName = MonitorNameMode.AUTO,
       )
 
-    assertEquals(1, violationDatabase.incrementViolationLevel(playerId, "default"))
-    assertEquals(2, violationDatabase.incrementViolationLevel(playerId, "default"))
+    assertEquals(1, violationDatabase.recordFlag(playerId, "default", 1L, 0L))
+    assertEquals(2, violationDatabase.recordFlag(playerId, "default", 1L, 0L))
     assertEquals(2, violationDatabase.getViolationLevel(playerId, "default"))
 
     violationDatabase.saveMonitorSettings(playerId, settings)
@@ -130,7 +126,7 @@ class SqlViolationDatabaseSqliteTest {
     val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
     migrateFreshSqlite(jdbcUrl)
     val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
-    val violationDatabase = SqlViolationDatabase(mockk(relaxed = true), database)
+    val violationDatabase = SqlViolationDatabase(database)
     val playerId = UUID.randomUUID()
     val settings =
       MonitorSettings(
@@ -169,7 +165,7 @@ class SqlViolationDatabaseSqliteTest {
     }
     val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
 
-    val loaded = SqlViolationDatabase(mockk(relaxed = true), database).loadMonitorSettings(playerId)
+    val loaded = SqlViolationDatabase(database).loadMonitorSettings(playerId)
 
     assertEquals(setOf(MonitorOutputKind.ACTIONBAR), loaded?.outputs)
     assertEquals(MonitorChatStyle.LIVE, loaded?.chatStyle)
@@ -182,7 +178,7 @@ class SqlViolationDatabaseSqliteTest {
     val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
     migrateFreshSqlite(jdbcUrl)
     val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
-    val violationDatabase = SqlViolationDatabase(mockk(relaxed = true), database)
+    val violationDatabase = SqlViolationDatabase(database)
     val hunted = UUID.randomUUID()
     val other = UUID.randomUUID()
 
@@ -221,7 +217,7 @@ class SqlViolationDatabaseSqliteTest {
     val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
     migrateFreshSqlite(jdbcUrl)
     val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
-    val violationDatabase = SqlViolationDatabase(mockk(relaxed = true), database)
+    val violationDatabase = SqlViolationDatabase(database)
     val playerId = UUID.randomUUID()
 
     assertEquals(null, violationDatabase.loadAiSnapshot(playerId), "nothing was written yet")
@@ -246,6 +242,27 @@ class SqlViolationDatabaseSqliteTest {
 
     violationDatabase.saveAiSnapshot(playerId, loaded.copy(windows = 950L))
     assertEquals(950L, violationDatabase.loadAiSnapshot(playerId)?.windows, "a second save updates")
+  }
+
+  @Test
+  fun `a name prefix search matches case-insensitively and treats wildcards literally`() {
+    val databaseFile = Files.createTempFile("shard-sqlite-prefix-", ".db").toFile()
+    databaseFile.deleteOnExit()
+    val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+    migrateFreshSqlite(jdbcUrl)
+    val database = Database.connect(jdbcUrl, driver = "org.sqlite.JDBC")
+    val violationDatabase = SqlViolationDatabase(database)
+    violationDatabase.recordPlayer(UUID.randomUUID(), "Abc", 1L)
+    violationDatabase.recordPlayer(UUID.randomUUID(), "abcd", 2L)
+    violationDatabase.recordPlayer(UUID.randomUUID(), "a_c", 3L)
+    violationDatabase.recordPlayer(UUID.randomUUID(), "x", 4L)
+
+    assertEquals(
+      listOf("abcd", "Abc"),
+      violationDatabase.findPlayersByPrefix("AB", 10).map { it.name },
+    )
+    assertEquals(listOf("a_c"), violationDatabase.findPlayersByPrefix("a_", 10).map { it.name })
+    assertEquals(emptyList(), violationDatabase.findPlayersByPrefix("%", 10))
   }
 
   @Suppress("LongParameterList")

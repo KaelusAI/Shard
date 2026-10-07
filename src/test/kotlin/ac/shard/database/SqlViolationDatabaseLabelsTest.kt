@@ -17,7 +17,6 @@
  */
 package ac.shard.database
 
-import io.mockk.mockk
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.util.UUID
@@ -82,6 +81,61 @@ class SqlViolationDatabaseLabelsTest {
   }
 
   @Test
+  fun `clearing labels removes only the matching ones`() {
+    val database = freshDatabase("labels-clear-some")
+    val player = UUID.randomUUID()
+    database.saveAiBuffer(player, 30.0, UPDATED_AT)
+    database.saveAiLabelBuffers(player, mapOf("x" to 20.0, "b/y" to 30.0), UPDATED_AT)
+
+    database.clearAiLabelBuffers(player) { it == "x" }
+
+    assertEquals(setOf("b/y"), database.loadAiLabelBuffers(player).keys)
+    assertEquals(30.0, database.loadAiBuffer(player)?.buffer)
+  }
+
+  @Test
+  fun `clearing the last label also clears the player buffer`() {
+    val database = freshDatabase("labels-clear-last")
+    val player = UUID.randomUUID()
+    database.saveAiBuffer(player, 30.0, UPDATED_AT)
+    database.saveAiLabelBuffers(player, mapOf("x" to 30.0), UPDATED_AT)
+
+    database.clearAiLabelBuffers(player) { true }
+
+    assertTrue(database.loadAiLabelBuffers(player).isEmpty())
+    assertNull(database.loadAiBuffer(player))
+  }
+
+  @Test
+  fun `clearing the score keeps the history`() {
+    val database = freshDatabase("score-clear")
+    val player = UUID.randomUUID()
+    database.saveMitigationScore(player, StoredScore(12.0, UPDATED_AT, 3, 2, 7L))
+
+    database.clearMitigationScore(player, UPDATED_AT + 1)
+
+    assertEquals(StoredScore(0.0, UPDATED_AT + 1, 3, 2, 7L), database.loadMitigationScore(player))
+  }
+
+  @Test
+  fun `clearing a score that was never stored writes nothing`() {
+    val database = freshDatabase("score-clear-none")
+    val player = UUID.randomUUID()
+
+    database.clearMitigationScore(player, UPDATED_AT)
+
+    assertNull(database.loadMitigationScore(player))
+  }
+
+  @Test
+  fun `a page far past the end is empty instead of overflowing`() {
+    val database = freshDatabase("page-overflow")
+
+    assertTrue(database.getViolations(Int.MAX_VALUE, 100, 0L).isEmpty())
+    assertTrue(database.getViolations(UUID.randomUUID(), Int.MAX_VALUE, 100).isEmpty())
+  }
+
+  @Test
   fun `history returns the labels a flag was written with`() {
     val databaseFile = Files.createTempFile("shard-sqlite-labels-history-", ".db").toFile()
     databaseFile.deleteOnExit()
@@ -105,7 +159,7 @@ class SqlViolationDatabaseLabelsTest {
     }
 
     val violations =
-      SqlViolationDatabase(mockk(relaxed = true), Database.connect(jdbcUrl, "org.sqlite.JDBC"))
+      SqlViolationDatabase(Database.connect(jdbcUrl, "org.sqlite.JDBC"))
         .getViolations(player, 1, 10)
 
     assertEquals(1, violations.size)
@@ -125,7 +179,7 @@ class SqlViolationDatabaseLabelsTest {
     databaseFile.deleteOnExit()
     val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
     migrateFreshSqlite(jdbcUrl)
-    return SqlViolationDatabase(mockk(relaxed = true), Database.connect(jdbcUrl, "org.sqlite.JDBC"))
+    return SqlViolationDatabase(Database.connect(jdbcUrl, "org.sqlite.JDBC"))
   }
 
   private fun migrateFreshSqlite(jdbcUrl: String) {

@@ -19,16 +19,29 @@ package ac.shard.database
 
 import ac.shard.Shard
 import ac.shard.config.ConfigManager
+import ac.shard.platform.Lifecycle
 import com.zaxxer.hikari.HikariDataSource
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import org.flywaydb.core.api.FlywayException
 
-class DatabaseManager(plugin: Shard, configManager: ConfigManager) {
-  val database: ViolationDatabase
-  private val dataSource: HikariDataSource?
-  private val health = DatabaseHealth()
+private const val PROBE_SECONDS = 30L
+private const val PROBE_TIMEOUT_SECONDS = 2
+private const val SHUTDOWN_WAIT_MILLIS = 5_000L
 
-  init {
+class DatabaseManager(private val plugin: Shard, private val configManager: ConfigManager) :
+  Lifecycle {
+  lateinit var database: ViolationDatabase
+    private set
+
+  private var dataSource: HikariDataSource? = null
+  private val health = DatabaseHealth()
+  private var resilient: ResilientViolationDatabase? = null
+  private var probe: ScheduledExecutorService? = null
+
+  override fun start() {
     val rawType = configManager.config.getString("database.type", "sqlite")
     val databaseType = DatabaseType.fromConfig(rawType)
     val environment =
@@ -40,7 +53,7 @@ class DatabaseManager(plugin: Shard, configManager: ConfigManager) {
     val dataSourceFactory = DatabaseDataSourceFactory(environment, configManager)
     val migrationExecutor = DatabaseMigrationExecutor(environment)
     val sqliteRecovery = SqliteMigrationRecovery(environment, configManager, migrationExecutor)
-    val fallbackDatabase = InMemoryViolationDatabase(configManager)
+    val fallbackDatabase = InMemoryViolationDatabase()
     if (SUPPORTED_DATABASE_TYPES.none { it.equals(rawType, ignoreCase = true) }) {
       environment.logger.warning(
         "Unknown database type $rawType, defaulting to sqlite. Supported types: sqlite, mysql, mariadb."
@@ -56,39 +69,39 @@ class DatabaseManager(plugin: Shard, configManager: ConfigManager) {
       )
     }
 
-    if (dataSourceResult.isSuccess) {
-      val resolvedDataSource = dataSourceResult.getOrThrow()
-      dataSource = resolvedDataSource
-      val persistentDatabase =
-        SqlViolationDatabase(
-          configManager = configManager,
-          database = org.jetbrains.exposed.v1.jdbc.Database.connect(resolvedDataSource),
-        )
-      database =
-        ResilientViolationDatabase(
-          primary = persistentDatabase,
-          fallback = fallbackDatabase,
-          health = health,
-          logger = plugin.logger,
-        )
-      health.markPersistent()
-    } else {
-      val failure = dataSourceResult.exceptionOrNull()!!
-      environment.logger.log(
-        Level.WARNING,
-        buildString {
-          append("Persistent database storage is unavailable")
-          append(". Shard will continue in degraded mode using in-memory storage")
-          append(
-            ". Data will work for the current runtime, but it will not persist across restart."
-          )
-        },
-        failure,
+    dataSourceResult
+      .onSuccess { connect(it, fallbackDatabase) }
+      .onFailure { degrade(it, fallbackDatabase) }
+  }
+
+  private fun connect(source: HikariDataSource, fallback: ViolationDatabase) {
+    dataSource = source
+    val persistentDatabase =
+      SqlViolationDatabase(org.jetbrains.exposed.v1.jdbc.Database.connect(source))
+    val resilient =
+      ResilientViolationDatabase(
+        primary = persistentDatabase,
+        fallback = fallback,
+        health = health,
+        logger = plugin.logger,
       )
-      dataSource = null
-      database = fallbackDatabase
-      health.markDegraded(failure)
-    }
+    database = resilient
+    this.resilient = resilient
+    health.markPersistent()
+    probe = startProbe(source, resilient)
+  }
+
+  private fun degrade(failure: Throwable, fallback: ViolationDatabase) {
+    plugin.logger.log(
+      Level.WARNING,
+      "Persistent database storage is unavailable. Shard will continue in degraded mode " +
+        "using in-memory storage. Data will work for the current runtime, but it will not " +
+        "persist across restart.",
+      failure,
+    )
+    dataSource = null
+    database = fallback
+    health.markDegraded(failure)
   }
 
   val isAvailable: Boolean
@@ -121,12 +134,43 @@ class DatabaseManager(plugin: Shard, configManager: ConfigManager) {
       }
   }
 
-  fun shutdown() {
+  val pendingWrites: Int
+    get() = resilient?.pendingWrites ?: 0
+
+  override fun stop() {
+    probe?.shutdownNow()
+    resilient?.let {
+      it.awaitIdle(SHUTDOWN_WAIT_MILLIS)
+      if (!health.isPersistentAvailable()) runCatching { it.recover() }
+    }
     val dataSource = dataSource ?: return
     if (!dataSource.isClosed) {
       dataSource.close()
     }
   }
+
+  private fun startProbe(
+    source: HikariDataSource,
+    database: ResilientViolationDatabase,
+  ): ScheduledExecutorService {
+    val executor = Executors.newSingleThreadScheduledExecutor { r ->
+      Thread(r, "Shard-DatabaseProbe").apply { isDaemon = true }
+    }
+    executor.scheduleWithFixedDelay(
+      {
+        if (!health.isPersistentAvailable() && reachable(source)) {
+          runCatching { database.recover() }
+        }
+      },
+      PROBE_SECONDS,
+      PROBE_SECONDS,
+      TimeUnit.SECONDS,
+    )
+    return executor
+  }
+
+  private fun reachable(source: HikariDataSource): Boolean =
+    runCatching { source.connection.use { it.isValid(PROBE_TIMEOUT_SECONDS) } }.getOrDefault(false)
 
   private fun closeQuietly(dataSource: HikariDataSource) {
     if (!dataSource.isClosed) {

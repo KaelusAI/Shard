@@ -17,66 +17,50 @@
  */
 package ac.shard.database
 
-import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.MonitorMode
 import ac.shard.monitor.core.MonitorNameMode
 import ac.shard.monitor.core.MonitorSettings
 import ac.shard.monitor.core.MonitorTheme
-import ac.shard.player.ShardPlayer
-import io.mockk.every
-import io.mockk.mockk
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import org.bukkit.entity.Player
 import org.junit.jupiter.api.Test
 
 class InMemoryViolationDatabaseTest {
 
   @Test
   fun `stores alerts in memory with working counts paging and time filters`() {
-    val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.config.getString("history.server-name", any()) } returns "test-server"
-    val database = InMemoryViolationDatabase(configManager)
-    val firstPlayer = createPlayer(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Alpha")
-    val secondPlayer =
-      createPlayer(UUID.fromString("00000000-0000-0000-0000-000000000002"), "Bravo")
+    val database = InMemoryViolationDatabase()
+    val first = UUID.fromString("00000000-0000-0000-0000-000000000001")
+    val second = UUID.fromString("00000000-0000-0000-0000-000000000002")
 
-    database.logAlert(firstPlayer, "first", "Aim", 1, "", facts(buffer = 12.5))
-    val afterFirstInsert =
-      database
-        .getViolations(firstPlayer.uuid, page = 1, limit = 1)
-        .single()
-        .createdAt
-        .toEpochMilli() + 1
-    Thread.sleep(5)
-    database.logAlert(secondPlayer, "second", "Reach", 2, "", facts(buffer = 3.0))
+    database.logAlert(violation(first, "Alpha", "first", at = 1_000L))
+    database.logAlert(violation(second, "Bravo", "second", at = 2_000L))
 
-    assertEquals(1, database.getLogCount(firstPlayer.uuid))
-    assertEquals(1, database.getLogCount(secondPlayer.uuid))
+    assertEquals(1, database.getLogCount(first))
+    assertEquals(1, database.getLogCount(second))
     assertEquals(2, database.getLogCount(0))
-    assertEquals(1, database.getLogCount(afterFirstInsert))
+    assertEquals(1, database.getLogCount(1_001L))
     assertEquals(2, database.getUniqueViolatorsSince(0))
-    assertEquals(1, database.getUniqueViolatorsSince(afterFirstInsert))
-    assertEquals(
-      1,
-      database.getLogCounts(listOf(firstPlayer.uuid, secondPlayer.uuid))[firstPlayer.uuid],
-    )
+    assertEquals(1, database.getUniqueViolatorsSince(1_001L))
+    assertEquals(1, database.getLogCounts(listOf(first, second))[first])
     assertEquals(
       listOf("second", "first"),
       database.getViolations(page = 1, limit = 10, since = 0).map(Violation::verbose),
     )
     assertEquals(
       listOf("first"),
-      database.getViolations(firstPlayer.uuid, page = 1, limit = 10).map(Violation::verbose),
+      database.getViolations(first, page = 1, limit = 10).map(Violation::verbose),
+    )
+    assertEquals(
+      java.time.Instant.ofEpochMilli(1_000L),
+      database.getViolations(first, page = 1, limit = 1).single().createdAt,
     )
   }
 
   @Test
   fun `stores punishment levels and monitor settings in degraded runtime`() {
-    val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.config.getString("history.server-name", any()) } returns "test-server"
-    val database = InMemoryViolationDatabase(configManager)
+    val database = InMemoryViolationDatabase()
     val playerId = UUID.randomUUID()
     val settings =
       MonitorSettings(
@@ -90,8 +74,8 @@ class InMemoryViolationDatabaseTest {
         showName = MonitorNameMode.AUTO,
       )
 
-    assertEquals(1, database.incrementViolationLevel(playerId, "default"))
-    assertEquals(2, database.incrementViolationLevel(playerId, "default"))
+    assertEquals(1, database.recordFlag(playerId, "default", 1L, 0L))
+    assertEquals(2, database.recordFlag(playerId, "default", 1L, 0L))
     assertEquals(2, database.getViolationLevel(playerId, "default"))
 
     database.saveMonitorSettings(playerId, settings)
@@ -100,24 +84,22 @@ class InMemoryViolationDatabaseTest {
     database.resetViolationLevel(playerId, "default")
     assertEquals(0, database.getViolationLevel(playerId, "default"))
 
-    database.incrementViolationLevel(playerId, "combat")
-    database.incrementViolationLevel(playerId, "movement")
+    database.recordFlag(playerId, "combat", 1L, 0L)
+    database.recordFlag(playerId, "movement", 1L, 0L)
     database.resetAllViolationLevels(playerId)
     assertEquals(0, database.getViolationLevel(playerId, "combat"))
     assertEquals(0, database.getViolationLevel(playerId, "movement"))
     assertNull(database.loadMonitorSettings(UUID.randomUUID()))
   }
 
-  private fun createPlayer(uuid: UUID, name: String): ShardPlayer {
-    val bukkitPlayer = mockk<Player>(relaxed = true)
-    every { bukkitPlayer.name } returns name
-
-    val shardPlayer = mockk<ShardPlayer>(relaxed = true)
-    every { shardPlayer.uuid } returns uuid
-    every { shardPlayer.player } returns bukkitPlayer
-    return shardPlayer
-  }
-
-  private fun facts(buffer: Double) =
-    AiFacts(buffer = buffer, score = 0.0, windows = 0L, highWindows = 0L)
+  private fun violation(uuid: UUID, name: String, verbose: String, at: Long) =
+    Violation(
+      serverName = "test-server",
+      playerUUID = uuid,
+      playerName = name,
+      checkName = "x",
+      verbose = verbose,
+      vl = 1,
+      createdAt = java.time.Instant.ofEpochMilli(at),
+    )
 }

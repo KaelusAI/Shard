@@ -17,6 +17,8 @@
  */
 package ac.shard.database
 
+import java.util.UUID
+
 data class MitigationLogEntry(
   val serverName: String,
   val playerName: String,
@@ -25,4 +27,5 @@ data class MitigationLogEntry(
   val score: Double,
   val startedAt: Long,
   val endedAt: Long,
+  val playerUUID: UUID? = null,
 )

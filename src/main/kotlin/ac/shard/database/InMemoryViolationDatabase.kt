@@ -17,10 +17,7 @@
  */
 package ac.shard.database
 
-import ac.shard.config.ConfigManager
 import ac.shard.monitor.core.MonitorSettings
-import ac.shard.player.ShardPlayer
-import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -28,11 +25,11 @@ private const val MAX_IN_MEMORY_VIOLATIONS = 5000
 private const val MAX_IN_MEMORY_MITIGATIONS = 500
 
 @Suppress("TooManyFunctions")
-internal class InMemoryViolationDatabase(private val configManager: ConfigManager) :
-  ViolationDatabase {
+internal class InMemoryViolationDatabase : ViolationDatabase {
   private val monitorSettings = ConcurrentHashMap<UUID, MonitorSettings>()
-  private val punishmentLevels = ConcurrentHashMap<PunishmentKey, Int>()
+  private val punishmentLevels = ConcurrentHashMap<PunishmentKey, List<Long>>()
   private val playerLogins = ConcurrentHashMap<UUID, Long>()
+  private val players = ConcurrentHashMap<UUID, KnownPlayer>()
   private val playerAttacks = ConcurrentHashMap<UUID, Long>()
   private val aiBuffers = ConcurrentHashMap<UUID, AiBufferState>()
   private val aiLabelBuffers = ConcurrentHashMap<UUID, ConcurrentHashMap<String, AiBufferState>>()
@@ -43,33 +40,9 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private val violations = ArrayDeque<Violation>()
   private val violationsLock = Any()
 
-  override fun logAlert(
-    player: ShardPlayer,
-    verbose: String,
-    checkName: String,
-    vls: Int,
-    labels: String,
-    facts: AiFacts,
-  ) {
-    val entry =
-      Violation(
-        serverName = configManager.config.getString("history.server-name", "server"),
-        playerUUID = player.uuid,
-        playerName = player.player.name,
-        checkName = checkName,
-        verbose = verbose,
-        vl = vls,
-        createdAt = Instant.now(),
-        labels = labels,
-        aiBuffer = facts.buffer,
-        mitigationScore = facts.score,
-        windows = facts.windows,
-        highWindows = facts.highWindows,
-        trail = facts.trail,
-      )
-
+  override fun logAlert(violation: Violation) {
     synchronized(violationsLock) {
-      violations.addFirst(entry)
+      violations.addFirst(violation)
       while (violations.size > MAX_IN_MEMORY_VIOLATIONS) {
         violations.removeLast()
       }
@@ -99,6 +72,24 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   override fun recordLogin(playerUUID: UUID, timestamp: Long) {
     playerLogins[playerUUID] = timestamp
   }
+
+  override fun recordPlayer(playerUUID: UUID, name: String, seenAt: Long) {
+    players[playerUUID] = KnownPlayer(playerUUID, name, seenAt)
+  }
+
+  override fun findPlayer(playerUUID: UUID): KnownPlayer? = players[playerUUID]
+
+  override fun findPlayersByName(name: String, limit: Int): List<KnownPlayer> =
+    players.values
+      .filter { it.name.equals(name, ignoreCase = true) }
+      .sortedByDescending { it.lastSeen }
+      .take(limit)
+
+  override fun findPlayersByPrefix(prefix: String, limit: Int): List<KnownPlayer> =
+    players.values
+      .filter { it.name.startsWith(prefix, ignoreCase = true) }
+      .sortedByDescending { it.lastSeen }
+      .take(limit)
 
   override fun countUniquePlayersSince(since: Long): Int {
     return playerLogins.values.count { it >= since }
@@ -136,8 +127,22 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> =
     aiLabelBuffers[playerUUID]?.toMap() ?: emptyMap()
 
+  override fun clearAiLabelBuffers(playerUUID: UUID, match: (String) -> Boolean) {
+    val stored = aiLabelBuffers[playerUUID]
+    stored?.keys?.removeIf(match)
+    if (!stored.isNullOrEmpty()) return
+    aiLabelBuffers.remove(playerUUID)
+    aiBuffers.computeIfPresent(playerUUID) { _, _ -> AiBufferState(0.0, 0L) }
+  }
+
   override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) {
     mitigationScores[playerUUID] = state
+  }
+
+  override fun clearMitigationScore(playerUUID: UUID, at: Long) {
+    mitigationScores.computeIfPresent(playerUUID) { _, stored ->
+      stored.copy(score = 0.0, updatedAt = at)
+    }
   }
 
   override fun loadMitigationScore(playerUUID: UUID): StoredScore? = mitigationScores[playerUUID]
@@ -161,14 +166,14 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
     snapshotMitigationLog()
       .asSequence()
       .filter { (uuid, _) -> uuid == playerUUID }
-      .map { (_, entry) -> entry }
+      .map { (uuid, entry) -> entry.copy(playerUUID = uuid) }
       .sortedByDescending { it.endedAt }
       .take(limit)
       .toList()
 
   override fun getMitigationLog(limit: Int): List<MitigationLogEntry> =
     snapshotMitigationLog()
-      .map { (_, entry) -> entry }
+      .map { (uuid, entry) -> entry.copy(playerUUID = uuid) }
       .sortedByDescending { it.endedAt }
       .take(limit)
 
@@ -199,13 +204,14 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
       .page(page, limit)
   }
 
-  override fun getViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
-    return punishmentLevels[PunishmentKey(playerUUID, punishGroupName)] ?: 0
-  }
+  override fun getViolationLevel(playerUUID: UUID, punishGroupName: String, since: Long): Int =
+    punishmentLevels[PunishmentKey(playerUUID, punishGroupName)]?.count { it >= since } ?: 0
 
-  override fun incrementViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
+  override fun recordFlag(playerUUID: UUID, punishGroupName: String, at: Long, since: Long): Int {
     val key = PunishmentKey(playerUUID, punishGroupName)
-    return punishmentLevels.compute(key) { _, currentLevel -> (currentLevel ?: 0) + 1 } ?: 0
+    val kept =
+      punishmentLevels.compute(key) { _, flags -> flags.orEmpty().filter { it >= since } + at }
+    return kept?.size ?: 0
   }
 
   override fun resetViolationLevel(playerUUID: UUID, punishGroupName: String) {
@@ -233,7 +239,8 @@ internal class InMemoryViolationDatabase(private val configManager: ConfigManage
   private fun Sequence<Violation>.page(page: Int, limit: Int): List<Violation> {
     val safePage = page.coerceAtLeast(1)
     val safeLimit = limit.coerceAtLeast(1)
-    return drop((safePage - 1) * safeLimit).take(safeLimit).toList()
+    val skip = ((safePage - 1).toLong() * safeLimit).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    return drop(skip).take(safeLimit).toList()
   }
 
   private data class PunishmentKey(val playerUUID: UUID, val punishGroupName: String)

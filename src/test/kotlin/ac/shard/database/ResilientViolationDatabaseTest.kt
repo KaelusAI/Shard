@@ -18,249 +18,127 @@
 package ac.shard.database
 
 import ac.shard.config.ConfigManager
-import ac.shard.monitor.core.MonitorMode
-import ac.shard.monitor.core.MonitorNameMode
-import ac.shard.monitor.core.MonitorSettings
-import ac.shard.monitor.core.MonitorTheme
-import ac.shard.player.ShardPlayer
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
+import java.sql.SQLSyntaxErrorException
+import java.sql.SQLTransientConnectionException
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
 class ResilientViolationDatabaseTest {
+  private class Switchable(val store: ViolationDatabase) : ViolationDatabase by store {
+    @Volatile var failure: Exception? = null
 
-  @Test
-  fun `switches to in-memory fallback after runtime failure`() {
+    val database: ViolationDatabase
+      get() = this
+
+    override fun recordFlag(playerUUID: UUID, punishGroupName: String, at: Long, since: Long): Int {
+      failure?.let { throw it }
+      return store.recordFlag(playerUUID, punishGroupName, at, since)
+    }
+  }
+
+  private fun memory(): ViolationDatabase {
     val configManager = mockk<ConfigManager>(relaxed = true)
     every { configManager.config.getString("history.server-name", any()) } returns "server"
-    val logger = mockk<Logger>(relaxed = true)
+    return InMemoryViolationDatabase()
+  }
+
+  private val player = UUID.randomUUID()
+
+  @Test
+  fun `a lost connection is written later instead of being lost for good`() {
+    val primary = Switchable(memory())
     val health = DatabaseHealth()
     val database =
-      ResilientViolationDatabase(
-        primary = AlwaysFailingViolationDatabase(),
-        fallback = InMemoryViolationDatabase(configManager),
-        health = health,
-        logger = logger,
-      )
-    val playerId = UUID.randomUUID()
-    val settings =
-      MonitorSettings(
-        mode = MonitorMode.COMPACT,
-        theme = MonitorTheme.CALM,
-        showPing = true,
-        showDmg = true,
-        showTrend = true,
-        showCollect = true,
-        showInference = true,
-        showName = MonitorNameMode.AUTO,
-      )
+      ResilientViolationDatabase(primary.database, memory(), health, Logger.getAnonymousLogger())
 
-    assertEquals(1, database.incrementViolationLevel(playerId, "default"))
+    primary.failure = SQLTransientConnectionException("pool timeout")
+    database.recordFlag(player, "general", 1L, 0L)
+    database.recordFlag(player, "general", 2L, 0L)
     assertFalse(health.isPersistentAvailable())
-    assertEquals(1, database.getViolationLevel(playerId, "default"))
+    assertEquals(2, database.pendingWrites)
 
-    database.saveMonitorSettings(playerId, settings)
-    assertEquals(settings, database.loadMonitorSettings(playerId))
+    assertFalse(database.recover(), "the database is still down")
 
-    verify(exactly = 1) {
-      logger.log(
-        Level.WARNING,
-        "Persistent database storage failed at runtime. Shard is switching to in-memory storage.",
-        any<Throwable>(),
-      )
-    }
+    primary.failure = null
+    assertTrue(database.recover())
+    assertTrue(health.isPersistentAvailable())
+    assertEquals(0, database.pendingWrites)
+    assertEquals(3, primary.store.recordFlag(player, "general", 3L, 0L))
   }
 
   @Test
-  fun `degrades only once and stops retrying the broken persistent database`() {
-    val configManager = mockk<ConfigManager>(relaxed = true)
-    every { configManager.config.getString("history.server-name", any()) } returns "server"
-    val logger = mockk<Logger>(relaxed = true)
+  fun `a broken query is answered from memory without leaving the database`() {
+    val primary = Switchable(memory())
     val health = DatabaseHealth()
-    val primary = CountingFailingViolationDatabase()
+    val database =
+      ResilientViolationDatabase(primary.database, memory(), health, Logger.getAnonymousLogger())
+
+    primary.failure = SQLSyntaxErrorException("unknown column")
+    database.recordFlag(player, "general", 1L, 0L)
+
+    assertTrue(health.isPersistentAvailable())
+    assertEquals(0, database.pendingWrites)
+    primary.failure = null
+    assertEquals(1, database.recordFlag(player, "general", 2L, 0L))
+  }
+
+  @Test
+  fun `a broken query reaches a strict caller instead of being answered from memory`() {
+    val primary = Switchable(memory())
+    val health = DatabaseHealth()
+    val database =
+      ResilientViolationDatabase(primary.database, memory(), health, Logger.getAnonymousLogger())
+
+    primary.failure = SQLSyntaxErrorException("unknown column")
+    assertFailsWith<SQLSyntaxErrorException> {
+      strictStorage { database.recordFlag(player, "general", 1L, 0L) }
+    }
+
+    assertTrue(health.isPersistentAvailable())
+    assertEquals(0, database.pendingWrites)
+    assertEquals(
+      1,
+      database.recordFlag(player, "general", 2L, 0L),
+      "outside strict mode it falls back",
+    )
+  }
+
+  @Test
+  fun `a strict caller still falls back when the connection is lost`() {
+    val primary = Switchable(memory())
+    val health = DatabaseHealth()
+    val database =
+      ResilientViolationDatabase(primary.database, memory(), health, Logger.getAnonymousLogger())
+
+    primary.failure = SQLTransientConnectionException("pool timeout")
+    strictStorage { database.recordFlag(player, "general", 1L, 0L) }
+
+    assertFalse(health.isPersistentAvailable())
+    assertEquals(1, database.pendingWrites)
+  }
+
+  @Test
+  fun `the oldest changes are dropped once the queue is full`() {
+    val primary = Switchable(memory())
     val database =
       ResilientViolationDatabase(
-        primary = primary,
-        fallback = InMemoryViolationDatabase(configManager),
-        health = health,
-        logger = logger,
+        primary.database,
+        memory(),
+        DatabaseHealth(),
+        Logger.getAnonymousLogger(),
+        maxPending = 2,
       )
-    val playerId = UUID.randomUUID()
 
-    assertEquals(1, database.incrementViolationLevel(playerId, "default"))
-    assertEquals(1, primary.incrementAttempts.get())
-    assertFalse(health.isPersistentAvailable())
-    assertNotNull(health.failureCause)
+    primary.failure = SQLTransientConnectionException("down")
+    repeat(5) { database.recordFlag(player, "general", it.toLong(), 0L) }
 
-    assertEquals(2, database.incrementViolationLevel(playerId, "default"))
-    assertEquals(1, primary.incrementAttempts.get())
-
-    verify(exactly = 1) {
-      logger.log(
-        Level.WARNING,
-        "Persistent database storage failed at runtime. Shard is switching to in-memory storage.",
-        any<Throwable>(),
-      )
-    }
-  }
-
-  private class AlwaysFailingViolationDatabase : ViolationDatabase {
-    override fun logAlert(
-      player: ShardPlayer,
-      verbose: String,
-      checkName: String,
-      vls: Int,
-      labels: String,
-      facts: AiFacts,
-    ) = error("db down")
-
-    override fun getLogCount(player: UUID): Int = error("db down")
-
-    override fun getViolations(player: UUID, page: Int, limit: Int): List<Violation> =
-      error("db down")
-
-    override fun getUniqueViolatorsSince(since: Long): Int = error("db down")
-
-    override fun recordLogin(playerUUID: UUID, timestamp: Long) = error("db down")
-
-    override fun countUniquePlayersSince(since: Long): Int = error("db down")
-
-    override fun recordAttack(playerUUID: UUID, timestamp: Long) = error("db down")
-
-    override fun countAttackersSince(since: Long): Int = error("db down")
-
-    override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) = error("db down")
-
-    override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = error("db down")
-
-    override fun saveAiLabelBuffers(
-      playerUUID: UUID,
-      buffers: Map<String, Double>,
-      updatedAt: Long,
-    ) = error("db down")
-
-    override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = error("db down")
-
-    override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
-
-    override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
-
-    override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) = error("db down")
-
-    override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? = error("db down")
-
-    override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) = error("db down")
-
-    override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> =
-      error("db down")
-
-    override fun getMitigationLog(limit: Int): List<MitigationLogEntry> = error("db down")
-
-    override fun getLogCount(since: Long): Int = error("db down")
-
-    override fun getLogCounts(playerUUIDs: Collection<UUID>): Map<UUID, Int> = error("db down")
-
-    override fun getViolations(page: Int, limit: Int, since: Long): List<Violation> =
-      error("db down")
-
-    override fun getViolationLevel(playerUUID: UUID, punishGroupName: String): Int =
-      error("db down")
-
-    override fun incrementViolationLevel(playerUUID: UUID, punishGroupName: String): Int =
-      error("db down")
-
-    override fun resetViolationLevel(playerUUID: UUID, punishGroupName: String) = error("db down")
-
-    override fun resetAllViolationLevels(playerUUID: UUID) = error("db down")
-
-    override fun loadMonitorSettings(playerUUID: UUID): MonitorSettings? = error("db down")
-
-    override fun saveMonitorSettings(playerUUID: UUID, settings: MonitorSettings) = error("db down")
-  }
-
-  private class CountingFailingViolationDatabase : ViolationDatabase {
-    val incrementAttempts = AtomicInteger()
-
-    override fun logAlert(
-      player: ShardPlayer,
-      verbose: String,
-      checkName: String,
-      vls: Int,
-      labels: String,
-      facts: AiFacts,
-    ) = error("db down")
-
-    override fun getLogCount(player: UUID): Int = error("db down")
-
-    override fun getViolations(player: UUID, page: Int, limit: Int): List<Violation> =
-      error("db down")
-
-    override fun getUniqueViolatorsSince(since: Long): Int = error("db down")
-
-    override fun recordLogin(playerUUID: UUID, timestamp: Long) = error("db down")
-
-    override fun countUniquePlayersSince(since: Long): Int = error("db down")
-
-    override fun recordAttack(playerUUID: UUID, timestamp: Long) = error("db down")
-
-    override fun countAttackersSince(since: Long): Int = error("db down")
-
-    override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) = error("db down")
-
-    override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = error("db down")
-
-    override fun saveAiLabelBuffers(
-      playerUUID: UUID,
-      buffers: Map<String, Double>,
-      updatedAt: Long,
-    ) = error("db down")
-
-    override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = error("db down")
-
-    override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) = error("db down")
-
-    override fun loadMitigationScore(playerUUID: UUID): StoredScore? = error("db down")
-
-    override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) = error("db down")
-
-    override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? = error("db down")
-
-    override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) = error("db down")
-
-    override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> =
-      error("db down")
-
-    override fun getMitigationLog(limit: Int): List<MitigationLogEntry> = error("db down")
-
-    override fun getLogCount(since: Long): Int = error("db down")
-
-    override fun getLogCounts(playerUUIDs: Collection<UUID>): Map<UUID, Int> = error("db down")
-
-    override fun getViolations(page: Int, limit: Int, since: Long): List<Violation> =
-      error("db down")
-
-    override fun getViolationLevel(playerUUID: UUID, punishGroupName: String): Int =
-      error("db down")
-
-    override fun incrementViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
-      incrementAttempts.incrementAndGet()
-      error("db down")
-    }
-
-    override fun resetViolationLevel(playerUUID: UUID, punishGroupName: String) = error("db down")
-
-    override fun resetAllViolationLevels(playerUUID: UUID) = error("db down")
-
-    override fun loadMonitorSettings(playerUUID: UUID): MonitorSettings? = error("db down")
-
-    override fun saveMonitorSettings(playerUUID: UUID, settings: MonitorSettings) = error("db down")
+    assertEquals(2, database.pendingWrites)
   }
 }

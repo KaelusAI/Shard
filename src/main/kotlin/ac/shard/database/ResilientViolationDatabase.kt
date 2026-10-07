@@ -18,15 +18,53 @@
 package ac.shard.database
 
 import ac.shard.monitor.core.MonitorSettings
-import ac.shard.player.ShardPlayer
 import java.sql.SQLException
+import java.sql.SQLNonTransientConnectionException
+import java.sql.SQLRecoverableException
+import java.sql.SQLTransientException
+import java.util.ArrayDeque
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Level
 import java.util.logging.Logger
 
 private const val STORAGE_DEGRADED_LOG =
-  "Persistent database storage failed at runtime. Shard is switching to in-memory storage."
+  "Lost the connection to the database. Shard keeps working in memory and will write the " +
+    "pending changes once the database is back."
+private const val STORAGE_RESTORED_LOG = "The database is back, %d pending changes were written."
+
+internal fun isConnectionFailure(failure: Throwable): Boolean =
+  generateSequence(failure) { it.cause }
+    .take(MAX_CAUSE_DEPTH)
+    .any { cause ->
+      cause is SQLTransientException ||
+        cause is SQLRecoverableException ||
+        cause is SQLNonTransientConnectionException ||
+        (cause is SQLException && isConnectionState(cause))
+    }
+
+private fun isConnectionState(failure: SQLException): Boolean {
+  val message = failure.message.orEmpty()
+  return failure.sqlState?.startsWith("08") == true ||
+    "SQLITE_BUSY" in message ||
+    "SQLITE_LOCKED" in message ||
+    "database is locked" in message
+}
+
+private const val MAX_CAUSE_DEPTH = 8
+
+private val strictCalls = ThreadLocal.withInitial { false }
+
+internal fun <T> strictStorage(block: () -> T): T {
+  val outer = strictCalls.get()
+  strictCalls.set(true)
+  try {
+    return block()
+  } finally {
+    strictCalls.set(outer)
+  }
+}
 
 @Suppress("TooManyFunctions")
 internal class ResilientViolationDatabase(
@@ -34,54 +72,61 @@ internal class ResilientViolationDatabase(
   private val fallback: ViolationDatabase,
   private val health: DatabaseHealth,
   private val logger: Logger,
+  private val maxPending: Int = MAX_PENDING_WRITES,
 ) : ViolationDatabase {
-  private val switchedToFallback = AtomicBoolean(false)
+  private val inFlight = AtomicInteger()
+  private val pending = ArrayDeque<(ViolationDatabase) -> Unit>()
+  private val reported = ConcurrentHashMap.newKeySet<String>()
+  @Volatile private var droppedWrites = 0
 
-  override fun logAlert(
-    player: ShardPlayer,
-    verbose: String,
-    checkName: String,
-    vls: Int,
-    labels: String,
-    facts: AiFacts,
-  ) {
-    execute { database -> database.logAlert(player, verbose, checkName, vls, labels, facts) }
+  override fun logAlert(violation: Violation) {
+    write { it.logAlert(violation) }
   }
 
-  override fun getLogCount(player: UUID): Int {
-    return execute { database -> database.getLogCount(player) }
+  override fun getLogCount(player: UUID): Int = read { it.getLogCount(player) }
+
+  override fun getViolations(player: UUID, page: Int, limit: Int): List<Violation> = read {
+    it.getViolations(player, page, limit)
   }
 
-  override fun getViolations(player: UUID, page: Int, limit: Int): List<Violation> {
-    return execute { database -> database.getViolations(player, page, limit) }
-  }
-
-  override fun getUniqueViolatorsSince(since: Long): Int {
-    return execute { database -> database.getUniqueViolatorsSince(since) }
+  override fun getUniqueViolatorsSince(since: Long): Int = read {
+    it.getUniqueViolatorsSince(since)
   }
 
   override fun recordLogin(playerUUID: UUID, timestamp: Long) {
-    execute { database -> database.recordLogin(playerUUID, timestamp) }
+    write { it.recordLogin(playerUUID, timestamp) }
   }
 
-  override fun countUniquePlayersSince(since: Long): Int {
-    return execute { database -> database.countUniquePlayersSince(since) }
+  override fun recordPlayer(playerUUID: UUID, name: String, seenAt: Long) {
+    write { it.recordPlayer(playerUUID, name, seenAt) }
+  }
+
+  override fun findPlayer(playerUUID: UUID): KnownPlayer? = read { it.findPlayer(playerUUID) }
+
+  override fun findPlayersByName(name: String, limit: Int): List<KnownPlayer> = read {
+    it.findPlayersByName(name, limit)
+  }
+
+  override fun findPlayersByPrefix(prefix: String, limit: Int): List<KnownPlayer> = read {
+    it.findPlayersByPrefix(prefix, limit)
+  }
+
+  override fun countUniquePlayersSince(since: Long): Int = read {
+    it.countUniquePlayersSince(since)
   }
 
   override fun recordAttack(playerUUID: UUID, timestamp: Long) {
-    execute { database -> database.recordAttack(playerUUID, timestamp) }
+    write { it.recordAttack(playerUUID, timestamp) }
   }
 
-  override fun countAttackersSince(since: Long): Int {
-    return execute { database -> database.countAttackersSince(since) }
-  }
+  override fun countAttackersSince(since: Long): Int = read { it.countAttackersSince(since) }
 
   override fun saveAiBuffer(playerUUID: UUID, buffer: Double, updatedAt: Long) {
-    execute { database -> database.saveAiBuffer(playerUUID, buffer, updatedAt) }
+    write { it.saveAiBuffer(playerUUID, buffer, updatedAt) }
   }
 
-  override fun loadAiBuffer(playerUUID: UUID): AiBufferState? {
-    return execute { database -> database.loadAiBuffer(playerUUID) }
+  override fun loadAiBuffer(playerUUID: UUID): AiBufferState? = read {
+    it.loadAiBuffer(playerUUID)
   }
 
   override fun saveAiLabelBuffers(
@@ -89,97 +134,190 @@ internal class ResilientViolationDatabase(
     buffers: Map<String, Double>,
     updatedAt: Long,
   ) {
-    execute { database -> database.saveAiLabelBuffers(playerUUID, buffers, updatedAt) }
+    write { it.saveAiLabelBuffers(playerUUID, buffers, updatedAt) }
   }
 
-  override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> {
-    return execute { database -> database.loadAiLabelBuffers(playerUUID) }
+  override fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState> = read {
+    it.loadAiLabelBuffers(playerUUID)
+  }
+
+  override fun clearAiLabelBuffers(playerUUID: UUID, match: (String) -> Boolean) {
+    write { it.clearAiLabelBuffers(playerUUID, match) }
   }
 
   override fun saveMitigationScore(playerUUID: UUID, state: StoredScore) {
-    execute { database -> database.saveMitigationScore(playerUUID, state) }
+    write { it.saveMitigationScore(playerUUID, state) }
   }
 
-  override fun loadMitigationScore(playerUUID: UUID): StoredScore? {
-    return execute { database -> database.loadMitigationScore(playerUUID) }
+  override fun clearMitigationScore(playerUUID: UUID, at: Long) {
+    write { it.clearMitigationScore(playerUUID, at) }
+  }
+
+  override fun loadMitigationScore(playerUUID: UUID): StoredScore? = read {
+    it.loadMitigationScore(playerUUID)
   }
 
   override fun saveAiSnapshot(playerUUID: UUID, snapshot: AiSnapshot) {
-    execute { database -> database.saveAiSnapshot(playerUUID, snapshot) }
+    write { it.saveAiSnapshot(playerUUID, snapshot) }
   }
 
-  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? {
-    return execute { database -> database.loadAiSnapshot(playerUUID) }
+  override fun loadAiSnapshot(playerUUID: UUID): AiSnapshot? = read {
+    it.loadAiSnapshot(playerUUID)
   }
 
   override fun recordMitigation(playerUUID: UUID, entry: MitigationLogEntry) {
-    execute { database -> database.recordMitigation(playerUUID, entry) }
+    write { it.recordMitigation(playerUUID, entry) }
   }
 
-  override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> {
-    return execute { database -> database.getMitigationLog(playerUUID, limit) }
+  override fun getMitigationLog(playerUUID: UUID, limit: Int): List<MitigationLogEntry> = read {
+    it.getMitigationLog(playerUUID, limit)
   }
 
-  override fun getMitigationLog(limit: Int): List<MitigationLogEntry> {
-    return execute { database -> database.getMitigationLog(limit) }
+  override fun getMitigationLog(limit: Int): List<MitigationLogEntry> = read {
+    it.getMitigationLog(limit)
   }
 
-  override fun getLogCount(since: Long): Int {
-    return execute { database -> database.getLogCount(since) }
+  override fun getLogCount(since: Long): Int = read { it.getLogCount(since) }
+
+  override fun getLogCounts(playerUUIDs: Collection<UUID>): Map<UUID, Int> = read {
+    it.getLogCounts(playerUUIDs)
   }
 
-  override fun getLogCounts(playerUUIDs: Collection<UUID>): Map<UUID, Int> {
-    return execute { database -> database.getLogCounts(playerUUIDs) }
+  override fun getViolations(page: Int, limit: Int, since: Long): List<Violation> = read {
+    it.getViolations(page, limit, since)
   }
 
-  override fun getViolations(page: Int, limit: Int, since: Long): List<Violation> {
-    return execute { database -> database.getViolations(page, limit, since) }
-  }
+  override fun getViolationLevel(playerUUID: UUID, punishGroupName: String, since: Long): Int =
+    read {
+      it.getViolationLevel(playerUUID, punishGroupName, since)
+    }
 
-  override fun getViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
-    return execute { database -> database.getViolationLevel(playerUUID, punishGroupName) }
-  }
-
-  override fun incrementViolationLevel(playerUUID: UUID, punishGroupName: String): Int {
-    return execute { database -> database.incrementViolationLevel(playerUUID, punishGroupName) }
-  }
+  override fun recordFlag(playerUUID: UUID, punishGroupName: String, at: Long, since: Long): Int =
+    write {
+      it.recordFlag(playerUUID, punishGroupName, at, since)
+    }
 
   override fun resetViolationLevel(playerUUID: UUID, punishGroupName: String) {
-    execute { database -> database.resetViolationLevel(playerUUID, punishGroupName) }
+    write { it.resetViolationLevel(playerUUID, punishGroupName) }
   }
 
   override fun resetAllViolationLevels(playerUUID: UUID) {
-    execute { database -> database.resetAllViolationLevels(playerUUID) }
+    write { it.resetAllViolationLevels(playerUUID) }
   }
 
-  override fun loadMonitorSettings(playerUUID: UUID): MonitorSettings? {
-    return execute { database -> database.loadMonitorSettings(playerUUID) }
+  override fun loadMonitorSettings(playerUUID: UUID): MonitorSettings? = read {
+    it.loadMonitorSettings(playerUUID)
   }
 
   override fun saveMonitorSettings(playerUUID: UUID, settings: MonitorSettings) {
-    execute { database -> database.saveMonitorSettings(playerUUID, settings) }
+    write { it.saveMonitorSettings(playerUUID, settings) }
   }
 
-  private fun <T> execute(operation: (ViolationDatabase) -> T): T {
-    if (!health.isPersistentAvailable()) {
-      return operation(fallback)
-    }
+  val pendingWrites: Int
+    get() = synchronized(pending) { pending.size }
 
-    return try {
-      operation(primary)
-    } catch (failure: SQLException) {
-      switchToFallback(failure)
-      operation(fallback)
-    } catch (failure: IllegalStateException) {
-      switchToFallback(failure)
-      operation(fallback)
+  fun recover(): Boolean {
+    if (health.isPersistentAvailable()) return true
+    val written = replay()
+    if (written != null) {
+      health.markPersistent()
+      logger.info(STORAGE_RESTORED_LOG.format(written))
+    }
+    return written != null
+  }
+
+  fun awaitIdle(timeoutMillis: Long) {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    while (inFlight.get() > 0 && System.currentTimeMillis() < deadline) {
+      Thread.sleep(IDLE_POLL_MILLIS)
     }
   }
 
-  private fun switchToFallback(failure: Throwable) {
-    health.markDegraded(failure)
-    if (switchedToFallback.compareAndSet(false, true)) {
+  @Suppress("TooGenericExceptionCaught")
+  private fun replay(): Int? {
+    var written = 0
+    while (true) {
+      val next = synchronized(pending) { pending.peekFirst() } ?: return written
+      try {
+        next(primary)
+      } catch (failure: Exception) {
+        if (isConnectionFailure(failure)) return null
+        report("replay", failure)
+      }
+      synchronized(pending) { pending.pollFirst() }
+      written++
+    }
+  }
+
+  private fun <T> read(operation: (ViolationDatabase) -> T): T = run(operation, replayable = false)
+
+  private fun <T> write(operation: (ViolationDatabase) -> T): T = run(operation, replayable = true)
+
+  private fun <T> run(operation: (ViolationDatabase) -> T, replayable: Boolean): T {
+    inFlight.incrementAndGet()
+    try {
+      if (!health.isPersistentAvailable()) {
+        if (replayable) remember(operation)
+        return operation(fallback)
+      }
+      return try {
+        operation(primary)
+      } catch (failure: SQLException) {
+        recoverFrom(failure, operation, replayable)
+      } catch (failure: IllegalStateException) {
+        recoverFrom(failure, operation, replayable)
+      }
+    } finally {
+      inFlight.decrementAndGet()
+    }
+  }
+
+  private fun <T> recoverFrom(
+    failure: Exception,
+    operation: (ViolationDatabase) -> T,
+    replayable: Boolean,
+  ): T {
+    if (isConnectionFailure(failure)) {
+      degrade(failure)
+      if (replayable) remember(operation)
+    } else {
+      report(operation.javaClass.name, failure)
+      if (strictCalls.get()) throw failure
+    }
+    return operation(fallback)
+  }
+
+  private fun remember(operation: (ViolationDatabase) -> Any?) {
+    synchronized(pending) {
+      if (pending.size >= maxPending) {
+        pending.pollFirst()
+        droppedWrites++
+        if (droppedWrites == 1) {
+          logger.warning(
+            "The database is still unavailable, the oldest pending changes are being dropped."
+          )
+        }
+      }
+      pending.addLast { operation(it) }
+    }
+  }
+
+  private fun degrade(failure: Throwable) {
+    if (health.isPersistentAvailable()) {
       logger.log(Level.WARNING, STORAGE_DEGRADED_LOG, failure)
     }
+    health.markDegraded(failure)
+  }
+
+  private fun report(where: String, failure: Throwable) {
+    val key = "$where|${failure.javaClass.name}|${failure.message}"
+    if (reported.add(key)) {
+      logger.log(Level.WARNING, "A database query failed and was answered from memory.", failure)
+    }
+  }
+
+  private companion object {
+    const val MAX_PENDING_WRITES = 10_000
+    const val IDLE_POLL_MILLIS = 10L
   }
 }

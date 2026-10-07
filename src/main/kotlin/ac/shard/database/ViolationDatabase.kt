@@ -23,19 +23,12 @@
 package ac.shard.database
 
 import ac.shard.monitor.core.MonitorSettings
-import ac.shard.player.ShardPlayer
 import java.util.UUID
 
+data class KnownPlayer(val uuid: UUID, val name: String, val lastSeen: Long)
+
 interface ViolationDatabase {
-  @Suppress("LongParameterList")
-  fun logAlert(
-    player: ShardPlayer,
-    verbose: String,
-    checkName: String,
-    vls: Int,
-    labels: String,
-    facts: AiFacts,
-  )
+  fun logAlert(violation: Violation)
 
   fun getLogCount(player: UUID): Int
 
@@ -44,6 +37,14 @@ interface ViolationDatabase {
   fun getUniqueViolatorsSince(since: Long): Int
 
   fun recordLogin(playerUUID: UUID, timestamp: Long)
+
+  fun recordPlayer(playerUUID: UUID, name: String, seenAt: Long)
+
+  fun findPlayer(playerUUID: UUID): KnownPlayer?
+
+  fun findPlayersByName(name: String, limit: Int): List<KnownPlayer>
+
+  fun findPlayersByPrefix(prefix: String, limit: Int): List<KnownPlayer>
 
   fun recordAttack(playerUUID: UUID, timestamp: Long)
 
@@ -59,7 +60,11 @@ interface ViolationDatabase {
 
   fun loadAiLabelBuffers(playerUUID: UUID): Map<String, AiBufferState>
 
+  fun clearAiLabelBuffers(playerUUID: UUID, match: (String) -> Boolean)
+
   fun saveMitigationScore(playerUUID: UUID, state: StoredScore)
+
+  fun clearMitigationScore(playerUUID: UUID, at: Long)
 
   fun loadMitigationScore(playerUUID: UUID): StoredScore?
 
@@ -79,9 +84,9 @@ interface ViolationDatabase {
 
   fun getViolations(page: Int, limit: Int, since: Long): List<Violation>
 
-  fun getViolationLevel(playerUUID: UUID, punishGroupName: String): Int
+  fun getViolationLevel(playerUUID: UUID, punishGroupName: String, since: Long = 0L): Int
 
-  fun incrementViolationLevel(playerUUID: UUID, punishGroupName: String): Int
+  fun recordFlag(playerUUID: UUID, punishGroupName: String, at: Long, since: Long): Int
 
   fun resetViolationLevel(playerUUID: UUID, punishGroupName: String)
 

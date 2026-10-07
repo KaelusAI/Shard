@@ -57,7 +57,7 @@ class DatabaseManagerTest {
       assertNull(manager.failureCause)
       assertTrue(manager.database is ResilientViolationDatabase)
     } finally {
-      manager.shutdown()
+      manager.stop()
     }
 
     DriverManager.getConnection(runtime.jdbcUrl).use { connection ->
@@ -80,7 +80,7 @@ class DatabaseManagerTest {
       assertTrue(manager.isAvailable)
       assertNull(manager.failureCause)
     } finally {
-      manager.shutdown()
+      manager.stop()
     }
 
     DriverManager.getConnection(runtime.jdbcUrl).use { connection ->
@@ -103,7 +103,7 @@ class DatabaseManagerTest {
       assertTrue(manager.isAvailable)
       assertNull(manager.failureCause)
     } finally {
-      manager.shutdown()
+      manager.stop()
     }
 
     DriverManager.getConnection(runtime.jdbcUrl).use { connection ->
@@ -131,8 +131,8 @@ class DatabaseManagerTest {
 
     createManager(runtime).use { manager ->
       assertTrue(manager.isAvailable)
-      assertEquals(1, manager.database.incrementViolationLevel(playerId, "default"))
-      assertEquals(2, manager.database.incrementViolationLevel(playerId, "default"))
+      assertEquals(1, manager.database.recordFlag(playerId, "default", 1L, 0L))
+      assertEquals(2, manager.database.recordFlag(playerId, "default", 1L, 0L))
       manager.database.saveMonitorSettings(playerId, settings)
     }
 
@@ -160,7 +160,7 @@ class DatabaseManagerTest {
       assertTrue(manager.isAvailable)
       assertNull(manager.failureCause)
     } finally {
-      manager.shutdown()
+      manager.stop()
     }
 
     DriverManager.getConnection(runtime.jdbcUrl).use { connection ->
@@ -200,12 +200,12 @@ class DatabaseManagerTest {
           showName = MonitorNameMode.AUTO,
         )
 
-      assertEquals(1, manager.database.incrementViolationLevel(playerId, "default"))
+      assertEquals(1, manager.database.recordFlag(playerId, "default", 1L, 0L))
       manager.database.saveMonitorSettings(playerId, settings)
       assertEquals(settings, manager.database.loadMonitorSettings(playerId))
       assertTrue(countBackups(runtime.backupDirectory) == 1)
     } finally {
-      manager.shutdown()
+      manager.stop()
     }
 
     verify {
@@ -221,7 +221,7 @@ class DatabaseManagerTest {
   }
 
   private fun createManager(runtime: TestRuntime): DatabaseManager {
-    return DatabaseManager(runtime.plugin, runtime.configManager)
+    return DatabaseManager(runtime.plugin, runtime.configManager).apply { start() }
   }
 
   private fun createRuntime(name: String): TestRuntime {
@@ -429,7 +429,7 @@ class DatabaseManagerTest {
     try {
       block(this)
     } finally {
-      shutdown()
+      stop()
     }
   }
 }
