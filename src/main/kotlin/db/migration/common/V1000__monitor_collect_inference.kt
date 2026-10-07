@@ -48,29 +48,11 @@ class V1000__monitor_collect_inference : BaseJavaMigration() {
     executeSql(connection, "ALTER TABLE $MONITOR_SETTINGS_TABLE ADD COLUMN $column $definition")
   }
 
-  private fun tableExists(connection: Connection, tableName: String): Boolean {
-    val metadata = connection.metaData
-    buildTableLookups(connection).forEach { (catalog, schema) ->
-      metadata.getTables(catalog, schema, tableName, arrayOf("TABLE")).use { resultSet ->
-        if (resultSet.next()) {
-          return true
-        }
-      }
-    }
-    return false
-  }
+  private fun tableExists(connection: Connection, tableName: String): Boolean =
+    MigrationSchema.tableExists(connection, tableName)
 
-  private fun columnExists(connection: Connection, tableName: String, columnName: String): Boolean {
-    val metadata = connection.metaData
-    buildTableLookups(connection).forEach { (catalog, schema) ->
-      metadata.getColumns(catalog, schema, tableName, columnName).use { resultSet ->
-        if (resultSet.next()) {
-          return true
-        }
-      }
-    }
-    return false
-  }
+  private fun columnExists(connection: Connection, tableName: String, columnName: String): Boolean =
+    MigrationSchema.columnExists(connection, tableName, columnName)
 
   private enum class SqlDialect {
     SQLITE,
@@ -98,13 +80,4 @@ class V1000__monitor_collect_inference : BaseJavaMigration() {
 
 private fun executeSql(connection: Connection, sql: String) {
   connection.createStatement().use { statement -> statement.execute(sql) }
-}
-
-private fun buildTableLookups(connection: Connection): List<Pair<String?, String?>> {
-  return listOf(
-    connection.catalog to connection.schema,
-    connection.catalog to null,
-    null to connection.schema,
-    null to null,
-  )
 }

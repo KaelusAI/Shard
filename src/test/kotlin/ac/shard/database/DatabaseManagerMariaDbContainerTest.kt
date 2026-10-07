@@ -52,7 +52,7 @@ class DatabaseManagerMariaDbContainerTest {
   fun `database manager starts against mariadb and repository operations work`() {
     withMariaDbContainer("shard_startup") { container ->
       val runtime = createRuntime(container)
-      val manager = DatabaseManager(runtime.plugin, runtime.configManager)
+      val manager = DatabaseManager(runtime.plugin, runtime.configManager).apply { start() }
       val playerId = UUID.randomUUID()
       val settings =
         MonitorSettings(
@@ -72,8 +72,8 @@ class DatabaseManagerMariaDbContainerTest {
         assertTrue(manager.isAvailable)
         assertNull(manager.failureCause)
 
-        assertEquals(1, manager.database.incrementViolationLevel(playerId, "default"))
-        assertEquals(2, manager.database.incrementViolationLevel(playerId, "default"))
+        assertEquals(1, manager.database.recordFlag(playerId, "default", 1L, 0L))
+        assertEquals(2, manager.database.recordFlag(playerId, "default", 1L, 0L))
         assertEquals(2, manager.database.getViolationLevel(playerId, "default"))
 
         manager.database.saveMonitorSettings(playerId, settings)
@@ -81,7 +81,7 @@ class DatabaseManagerMariaDbContainerTest {
 
         container.createConnection("").use { connection -> assertCurrentMariaDbSchema(connection) }
       } finally {
-        manager.shutdown()
+        manager.stop()
       }
     }
   }
@@ -103,19 +103,23 @@ class DatabaseManagerMariaDbContainerTest {
           showName = MonitorNameMode.AUTO,
         )
 
-      DatabaseManager(runtime.plugin, runtime.configManager).use { manager ->
-        assertTrue(manager.isAvailable)
-        assertEquals(1, manager.database.incrementViolationLevel(playerId, "default"))
-        assertEquals(2, manager.database.incrementViolationLevel(playerId, "default"))
-        manager.database.saveMonitorSettings(playerId, settings)
-      }
+      DatabaseManager(runtime.plugin, runtime.configManager)
+        .apply { start() }
+        .use { manager ->
+          assertTrue(manager.isAvailable)
+          assertEquals(1, manager.database.recordFlag(playerId, "default", 1L, 0L))
+          assertEquals(2, manager.database.recordFlag(playerId, "default", 1L, 0L))
+          manager.database.saveMonitorSettings(playerId, settings)
+        }
 
-      DatabaseManager(runtime.plugin, runtime.configManager).use { manager ->
-        assertTrue(manager.isAvailable)
-        assertNull(manager.failureCause)
-        assertEquals(2, manager.database.getViolationLevel(playerId, "default"))
-        assertEquals(settings, manager.database.loadMonitorSettings(playerId))
-      }
+      DatabaseManager(runtime.plugin, runtime.configManager)
+        .apply { start() }
+        .use { manager ->
+          assertTrue(manager.isAvailable)
+          assertNull(manager.failureCause)
+          assertEquals(2, manager.database.getViolationLevel(playerId, "default"))
+          assertEquals(settings, manager.database.loadMonitorSettings(playerId))
+        }
     }
   }
 
@@ -123,7 +127,7 @@ class DatabaseManagerMariaDbContainerTest {
   fun `database manager degrades to in memory storage after mariadb runtime outage`() {
     withMariaDbContainer("shard_outage") { container ->
       val runtime = createRuntime(container)
-      val manager = DatabaseManager(runtime.plugin, runtime.configManager)
+      val manager = DatabaseManager(runtime.plugin, runtime.configManager).apply { start() }
       val playerId = UUID.fromString("00000000-0000-0000-0000-0000000000cc")
       val settings =
         MonitorSettings(
@@ -141,7 +145,7 @@ class DatabaseManagerMariaDbContainerTest {
         assertTrue(manager.isAvailable)
         container.stop()
 
-        assertEquals(1, manager.database.incrementViolationLevel(playerId, "default"))
+        assertEquals(1, manager.database.recordFlag(playerId, "default", 1L, 0L))
         manager.database.saveMonitorSettings(playerId, settings)
 
         assertFalse(manager.isAvailable)
@@ -151,24 +155,114 @@ class DatabaseManagerMariaDbContainerTest {
         verify(exactly = 1) {
           runtime.logger.log(
             Level.WARNING,
-            "Persistent database storage failed at runtime. Shard is switching to in-memory storage.",
+            "Lost the connection to the database. Shard keeps working in memory and will write " +
+              "the pending changes once the database is back.",
             any<Throwable>(),
           )
         }
       } finally {
-        manager.shutdown()
+        manager.stop()
       }
     }
   }
 
-  private fun createRuntime(container: MariaDBContainer<*>): TestRuntime {
+  @Test
+  fun `a database left by 1_3_5 upgrades in place and keeps its history and punishments`() {
+    withMariaDbContainer("shard_old") { container ->
+      org.flywaydb.core.Flyway.configure()
+        .dataSource(container.jdbcUrl, container.username, container.password)
+        .locations("classpath:db/migration/common", "classpath:db/migration/mysql")
+        .target("12")
+        .load()
+        .migrate()
+      val player = UUID.randomUUID()
+      container.createConnection("").use { connection ->
+        connection.createStatement().use {
+          it.execute(
+            "INSERT INTO violations(server, uuid, player_name, check_name, verbose, vl, " +
+              "created_at) VALUES ('old', '$player', 'OldTimer', 'AI', 'v', 4, 1700000000000)"
+          )
+          it.execute(
+            "INSERT INTO shard_punishments(uuid, punish_group, vl) VALUES ('$player', 'general', 3)"
+          )
+        }
+      }
+
+      val runtime = createRuntime(container, "shard_old")
+      DatabaseManager(runtime.plugin, runtime.configManager)
+        .apply { start() }
+        .use { manager ->
+          assertTrue(manager.isAvailable)
+          assertNull(manager.failureCause)
+          assertEquals(1, manager.database.getLogCount(player))
+          assertEquals(3, manager.database.getViolationLevel(player, "general"))
+          assertEquals(player, manager.database.findPlayersByName("oldtimer", 1).single().uuid)
+          assertEquals(
+            4,
+            manager.database.recordFlag(player, "general", System.currentTimeMillis(), 0L),
+          )
+        }
+    }
+  }
+
+  @Test
+  fun `two servers sharing one mariadb each get a complete schema in their own database`() {
+    withMariaDbContainer("shard_first") { container ->
+      java.sql.DriverManager.getConnection(
+          "jdbc:mariadb://${container.host}:${container.firstMappedPort}/",
+          "root",
+          container.password,
+        )
+        .use { admin ->
+          admin.createStatement().use {
+            it.execute("CREATE DATABASE shard_second")
+            it.execute("GRANT ALL ON shard_second.* TO 'shard'@'%'")
+          }
+        }
+
+      val first = createRuntime(container, "shard_first")
+      DatabaseManager(first.plugin, first.configManager)
+        .apply { start() }
+        .use { assertTrue(it.isAvailable) }
+
+      val second = createRuntime(container, "shard_second")
+      DatabaseManager(second.plugin, second.configManager)
+        .apply { start() }
+        .use { manager ->
+          assertTrue(manager.isAvailable, "the second database must not be treated as migrated")
+          assertNull(manager.failureCause)
+          val player = UUID.randomUUID()
+          manager.database.recordPlayer(player, "Second", 1L)
+          assertEquals("Second", manager.database.findPlayer(player)?.name)
+          assertEquals(1, manager.database.recordFlag(player, "general", 1L, 0L))
+        }
+
+      container.createConnection("").use { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute("USE shard_second")
+          statement.executeQuery("SHOW TABLES LIKE 'shard_players'").use { assertTrue(it.next()) }
+          statement.executeQuery("SHOW TABLES LIKE 'ai_label_buffers'").use {
+            assertTrue(it.next())
+          }
+          statement.executeQuery("SHOW TABLES LIKE 'shard_punish_flags'").use {
+            assertTrue(it.next())
+          }
+        }
+      }
+    }
+  }
+
+  private fun createRuntime(
+    container: MariaDBContainer<*>,
+    database: String = container.databaseName,
+  ): TestRuntime {
     val dataDirectory = Files.createTempDirectory("shard-mariadb-runtime-")
     val logger = mockk<Logger>(relaxed = true)
     val plugin = mockk<Shard>(relaxed = true)
     every { plugin.dataFolder } returns dataDirectory.toFile()
     every { plugin.logger } returns logger
 
-    writeMariaDbConfig(dataDirectory, container)
+    writeMariaDbConfig(dataDirectory, container, database)
     copyResourceTo(dataDirectory, "punishments.yml")
     copyResourceTo(dataDirectory, "monitor.yml")
 
@@ -186,7 +280,11 @@ class DatabaseManagerMariaDbContainerTest {
       }
   }
 
-  private fun writeMariaDbConfig(dataDirectory: Path, container: MariaDBContainer<*>) {
+  private fun writeMariaDbConfig(
+    dataDirectory: Path,
+    container: MariaDBContainer<*>,
+    database: String,
+  ) {
     Files.writeString(
       dataDirectory.resolve("config.yml"),
       """
@@ -196,7 +294,7 @@ class DatabaseManagerMariaDbContainerTest {
         mysql:
           host: "${container.host}"
           port: ${container.firstMappedPort}
-          database: "${container.databaseName}"
+          database: "$database"
           username: "${container.username}"
           password: "${container.password}"
           use-ssl: false
@@ -257,7 +355,7 @@ class DatabaseManagerMariaDbContainerTest {
     try {
       block(this)
     } finally {
-      shutdown()
+      stop()
     }
   }
 }

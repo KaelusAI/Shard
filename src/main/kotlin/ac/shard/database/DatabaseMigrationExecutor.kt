@@ -33,7 +33,10 @@ internal class DatabaseMigrationExecutor(private val environment: DatabaseEnviro
     announceCompat: Boolean,
   ): org.flywaydb.core.Flyway {
     if (!renumberMovedMigrations(dataSource, environment.logger)) return flyway
-    flyway.repair()
+    val invalid = flyway.validateWithResult().invalidMigrations.orEmpty()
+    if (invalid.isNotEmpty() && invalid.all { it.version in movedMigrationVersions() }) {
+      flyway.repair()
+    }
     return buildMigrationFlyway(
       environment.classLoader,
       environment.logger,

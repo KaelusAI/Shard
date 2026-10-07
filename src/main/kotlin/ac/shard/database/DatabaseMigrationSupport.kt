@@ -146,10 +146,11 @@ private fun hasAppliedMigrationVersion(dataSource: HikariDataSource, version: St
 }
 
 internal fun flywaySchemaHistoryTableExists(connection: java.sql.Connection): Boolean {
-  connection.metaData.getTables(null, null, "flyway_schema_history", arrayOf("TABLE")).use {
-    resultSet ->
-    return resultSet.next()
-  }
+  connection.metaData
+    .getTables(connection.catalog, connection.schema, "flyway_schema_history", arrayOf("TABLE"))
+    .use { resultSet ->
+      return resultSet.next()
+    }
 }
 
 private fun sqliteRequiresLegacyCompat(dataSource: HikariDataSource): Boolean {

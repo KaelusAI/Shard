@@ -136,43 +136,14 @@ class V2__align_schema : BaseJavaMigration() {
     }
   }
 
-  private fun tableExists(connection: Connection, tableName: String): Boolean {
-    val metadata = connection.metaData
-    val lookups = buildTableLookups(connection)
-    lookups.forEach { (catalog, schema) ->
-      metadata.getTables(catalog, schema, tableName, arrayOf("TABLE")).use { resultSet ->
-        if (resultSet.next()) {
-          return true
-        }
-      }
-    }
-    return false
-  }
+  private fun tableExists(connection: Connection, tableName: String): Boolean =
+    MigrationSchema.tableExists(connection, tableName)
 
-  private fun columnExists(connection: Connection, tableName: String, columnName: String): Boolean {
-    val metadata = connection.metaData
-    val lookups = buildTableLookups(connection)
-    lookups.forEach { (catalog, schema) ->
-      metadata.getColumns(catalog, schema, tableName, columnName).use { resultSet ->
-        if (resultSet.next()) {
-          return true
-        }
-      }
-    }
-    return false
-  }
+  private fun columnExists(connection: Connection, tableName: String, columnName: String): Boolean =
+    MigrationSchema.columnExists(connection, tableName, columnName)
 
-  private fun existingIndexColumns(connection: Connection, tableName: String): Set<List<String>> {
-    val metadata = connection.metaData
-    val lookups = buildTableLookups(connection)
-    lookups.forEach { (catalog, schema) ->
-      val indexes = readIndexColumns(metadata, catalog, schema, tableName)
-      if (indexes.isNotEmpty()) {
-        return indexes
-      }
-    }
-    return emptySet()
-  }
+  private fun existingIndexColumns(connection: Connection, tableName: String): Set<List<String>> =
+    readIndexColumns(connection.metaData, connection.catalog, connection.schema, tableName)
 
   private fun readIndexColumns(
     metadata: DatabaseMetaData,
@@ -240,13 +211,4 @@ class V2__align_schema : BaseJavaMigration() {
 
 private fun executeSql(connection: Connection, sql: String) {
   connection.createStatement().use { statement -> statement.execute(sql) }
-}
-
-private fun buildTableLookups(connection: Connection): List<Pair<String?, String?>> {
-  return listOf(
-    connection.catalog to connection.schema,
-    connection.catalog to null,
-    null to connection.schema,
-    null to null,
-  )
 }

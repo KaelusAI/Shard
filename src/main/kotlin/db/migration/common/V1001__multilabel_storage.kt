@@ -57,37 +57,15 @@ class V1001__multilabel_storage : BaseJavaMigration() {
     )
   }
 
-  private fun tableExists(connection: Connection, table: String): Boolean {
-    val metadata = connection.metaData
-    buildTableLookups(connection).forEach { (catalog, schema) ->
-      metadata.getTables(catalog, schema, table, arrayOf("TABLE")).use { resultSet ->
-        if (resultSet.next()) return true
-      }
-    }
-    return false
-  }
+  private fun tableExists(connection: Connection, table: String): Boolean =
+    MigrationSchema.tableExists(connection, table)
 
-  private fun columnExists(connection: Connection, table: String, column: String): Boolean {
-    val metadata = connection.metaData
-    buildTableLookups(connection).forEach { (catalog, schema) ->
-      metadata.getColumns(catalog, schema, table, column).use { resultSet ->
-        if (resultSet.next()) return true
-      }
-    }
-    return false
-  }
+  private fun columnExists(connection: Connection, table: String, column: String): Boolean =
+    MigrationSchema.columnExists(connection, table, column)
 
   private fun executeSql(connection: Connection, sql: String) {
     connection.createStatement().use { statement -> statement.execute(sql) }
   }
-
-  private fun buildTableLookups(connection: Connection): List<Pair<String?, String?>> =
-    listOf(
-      connection.catalog to connection.schema,
-      connection.catalog to null,
-      null to connection.schema,
-      null to null,
-    )
 
   private companion object {
     private const val VIOLATIONS_TABLE = "violations"

@@ -34,6 +34,9 @@ private val MOVED_MIGRATIONS =
     "12" to ("multilabel storage" to "1001"),
   )
 
+internal fun movedMigrationVersions(): Set<String> =
+  MOVED_MIGRATIONS.values.map { it.second }.toSet()
+
 internal fun renumberMovedMigrations(dataSource: HikariDataSource, logger: Logger): Boolean {
   dataSource.connection.use { connection ->
     if (!flywaySchemaHistoryTableExists(connection)) return false
