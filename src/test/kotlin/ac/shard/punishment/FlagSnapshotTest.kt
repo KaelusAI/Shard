@@ -18,11 +18,9 @@
 package ac.shard.punishment
 
 import ac.shard.Shard
-import ac.shard.checks.ICheck
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigManager
-import ac.shard.coroutines.ShardCoroutines
 import ac.shard.database.DatabaseManager
+import ac.shard.detection.DetectionState
 import ac.shard.mitigation.MitigationState
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
@@ -39,7 +37,7 @@ class FlagSnapshotTest {
   fun `the buffer is read before handleFlag returns, not on the coroutine`() {
     var reads = 0
     val aiCheck =
-      mockk<AiCheck>(relaxed = true) {
+      mockk<DetectionState>(relaxed = true) {
         every { buffer } answers
           {
             reads++
@@ -61,29 +59,31 @@ class FlagSnapshotTest {
       mockk<ShardPlayer>(relaxed = true) {
         every { mitigation } returns MitigationState()
         every { uuid } returns UUID.randomUUID()
-        every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
-        every { exemptManager.isExempt(any()) } returns false
-        every { exemptManager.isDisabled(any()) } returns false
+        every { detection } returns aiCheck
+        every { exemptManager.isExempt(any<ShardPlayer>()) } returns false
+        every { exemptManager.isDisabled(any<ShardPlayer>()) } returns false
       }
 
     val manager =
       PunishmentManager(
-        shardPlayer = shardPlayer,
+        messages = mockk(relaxed = true),
         plugin = mockk<Shard>(relaxed = true),
+        logger = Logger.getLogger("test"),
         configManager = mockk<ConfigManager>(relaxed = true),
         databaseManager = mockk<DatabaseManager>(relaxed = true),
         alertManager = mockk(relaxed = true),
         adventure = mockk(relaxed = true),
         scheduler = scheduler,
-        coroutines = ShardCoroutines(scheduler, Logger.getLogger("test")),
+        events = mockk(relaxed = true),
+        mitigationSkip = mockk(relaxed = true),
       )
 
-    manager.handleFlag(mockk<ICheck>(relaxed = true), emptySet(), "debug")
+    manager.handleFlag(shardPlayer, "AI", emptySet(), "debug")
 
     assertTrue(
       reads > 0,
       "handleFlag returned without reading the buffer, so the snapshot is taken later - by then " +
-        "AiCheck has already reset it and the violation row stores the reset value",
+        "detection has already reset it and the violation row stores the reset value",
     )
     assertTrue(pending.isEmpty() || reads > 0, "nothing else can explain the read")
   }

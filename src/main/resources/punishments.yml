@@ -1,73 +1,69 @@
-# Placeholders:
+# Placeholders in commands:
 #   <player>      player name
 #   <uuid>        player UUID
 #   <check_name>  name of the check that flagged
 #   <vl>          how many times this group has flagged the player
 #   <verbose>     extra detail from the check
-#   <labels>      labels the model attached to this detection, comma separated, empty when none
+#   <labels>      labels the model attached to this detection, comma separated
 #
 # Special actions:
-#   [alert]              tell staff with shard.alerts
-#   [log]                write the flag to the database, so it shows in /shard logs
-#   [broadcast] <text>   send a message to everyone online
-#   [reset]              set this group's violation level back to zero
-#   [wait] <time>        pause before the next action (10s, 40t, 500ms)
+#   [alert]             message staff with shard.alerts
+#   [log]               save the flag, shown in /shard logs
+#   [broadcast] <text>  message everyone online
+#   [reset]             reset this group's flag count
+#   [wait] <time>       pause before the next action (10s, 40t, 500ms)
+#   Any other line runs as a console command.
 #
-# labels: an optional list under a group. The group then only fires when the detection carries
-#         one of those labels; leave it out and the group fires on every detection of its checks.
-#         Label names are matched loosely, so "Aim Assist", aim-assist and aim_assist are one label.
+# commands: named command sets, local to this server. The panel sees only their names.
 #
-# Splitting a check by label:
+# groups: on each level a flag goes to the group naming its model or label most precisely,
+#         otherwise to that level's "other". Models without labels flag as "general".
+#   models / labels: what the group takes, everything when left out
+#   expire:  older flags stop counting (30d, 12h), nested groups inherit it
+#   actions: flag count -> command set, the highest step reached runs.
+#            { 1: warn, 3: ban-1h } warns on flags 1-2 and bans from flag 3, {} punishes nothing.
+#   groups / other: nested groups and where the flags none of them take go
 #
-#   Punishments:
-#     AI-Aim:
-#       checks: ["AI"]
-#       labels: ["aim"]
-#       actions: { 1: ["[alert]", "[log]"], 3: ["tempban <player> 1d Aim assistance."] }
-#     AI-Trigger:
-#       checks: ["AI"]
-#       labels: ["trigger"]
-#       actions: { 1: ["[alert]", "[log]"], 5: ["tempban <player> 6h Auto clicking."] }
-#     AI:                      # keep this one, with no labels: key
-#       checks: ["AI"]
-#       actions: { 1: ["[alert]", "[log]"] }
-#
-#         Without that last group, a detection with an unlisted label goes unpunished.
-#         Every matching group fires.
-#
-# Anything else is run from the console as a command.
-#
-# A step runs when the violation level reaches its number and stays in force until the next
-# step. Levels are kept between sessions until [reset] clears them.
+# /shard punishments shows where each model and label goes.
+config-version: 2
 
-Punishments:
-  AI:
-    checks:
-      - "AI"
-    actions:
-      1:
-        - "[alert]"
-        - "[log]"
-        - "kick <player> Your combat looked unusual. Reconnect and keep playing."
-      3:
-        - "[alert]"
-        - "[log]"
-        - "tempban <player> 1h Your combat looked unusual."
-      6:
-        - "[alert]"
-        - "[log]"
-        - "tempban <player> 6h Your combat looked unusual."
-      12:
-        - "[alert]"
-        - "[log]"
-        - "tempban <player> 1d Your combat looked unusual."
-      20:
-        - "[alert]"
-        - "[log]"
-        - "tempban <player> 7d Your combat looked unusual."
-      30:
-        - "[alert]"
-        - "[log]"
-        - "[broadcast] <gradient:#39FF14:#ADFF2F>Shard</gradient> <gray>banned</gray> <white><player></white> <gray>for 30 days.</gray>"
-        - "tempban <player> 30d Your combat looked unusual."
-        - "[reset]"
+commands:
+  alert:
+    - "[alert]"
+    - "[log]"
+  warn:
+    - "[alert]"
+    - "[log]"
+    - "kick <player> Your combat looked unusual. Reconnect and keep playing."
+  ban-1h:
+    - "[alert]"
+    - "[log]"
+    - "tempban <player> 1h Your combat looked unusual."
+  ban-6h:
+    - "[alert]"
+    - "[log]"
+    - "tempban <player> 6h Your combat looked unusual."
+  ban-1d:
+    - "[alert]"
+    - "[log]"
+    - "tempban <player> 1d Your combat looked unusual."
+  ban-7d:
+    - "[alert]"
+    - "[log]"
+    - "tempban <player> 7d Your combat looked unusual."
+  ban-30d:
+    - "[alert]"
+    - "[log]"
+    - "[broadcast] <gradient:#39FF14:#ADFF2F>Shard</gradient> <gray>banned</gray> <white><player></white> <gray>for 30 days.</gray>"
+    - "tempban <player> 30d Your combat looked unusual."
+    - "[reset]"
+
+groups:
+  general:
+    labels: ["general", "aim"]
+    expire: 30d
+    actions: { 1: warn, 3: ban-1h, 6: ban-6h, 12: ban-1d, 20: ban-7d, 30: ban-30d }
+
+other:
+  expire: 30d
+  actions: { 1: alert }
