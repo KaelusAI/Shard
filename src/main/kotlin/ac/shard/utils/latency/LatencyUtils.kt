@@ -18,19 +18,24 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package ac.shard.utils.latency
 
-import ac.shard.Shard
 import ac.shard.player.ShardPlayer
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import com.github.retrooper.packetevents.netty.channel.ChannelHelper
 import java.util.ArrayDeque
 import java.util.ArrayList
+import java.util.logging.Level
+import java.util.logging.Logger
 
-class LatencyUtils(private val player: ShardPlayer, private val plugin: Shard) : ILatencyUtils {
+class LatencyUtils(
+  private val player: ShardPlayer,
+  private val logger: Logger,
+  private val messages: Messages,
+) : ILatencyUtils {
   private data class TransactionTask(val transactionId: Int, val task: Runnable)
 
   private val transactionMap: ArrayDeque<TransactionTask> = ArrayDeque()
@@ -80,11 +85,12 @@ class LatencyUtils(private val player: ShardPlayer, private val plugin: Shard) :
       try {
         runnable.run()
       } catch (ex: Exception) {
-        plugin.logger.severe(
-          "An error occurred when running transactions for player: ${player.user.name}"
+        logger.log(
+          Level.SEVERE,
+          "An error occurred when running transactions for player: ${player.user.name}",
+          ex,
         )
-        ex.printStackTrace()
-        player.disconnect(MessageUtil.getMessage(Message.INTERNAL_ERROR))
+        player.disconnect(messages.getMessage(Message.INTERNAL_ERROR))
       }
     }
   }

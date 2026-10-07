@@ -22,8 +22,7 @@ import com.github.retrooper.packetevents.PacketEventsAPI
 import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder
 import java.util.logging.Level
 
-internal class PacketEventsLoader(private val plugin: Shard) {
-
+class PacketEventsLoader(private val plugin: Shard) {
   fun load() {
     PacketEvents.setAPI(SpigotPacketEventsBuilder.build(plugin))
     PacketEvents.getAPI()
@@ -36,9 +35,12 @@ internal class PacketEventsLoader(private val plugin: Shard) {
     PacketEvents.getAPI().load()
   }
 
+  fun init() {
+    PacketEvents.getAPI().init()
+  }
+
   fun shutdown() {
     val api = PacketEvents.getAPI() ?: return
-
     runCatching {
         when {
           api.isInitialized -> api.terminate()

@@ -15,14 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package ac.shard.player.state
+package ac.shard
 
-class MovementState {
-  var x: Double = 0.0
-  var y: Double = 0.0
-  var z: Double = 0.0
-  var yaw: Float = 0f
-  var pitch: Float = 0f
-  var lastYaw: Float = 0f
-  var lastPitch: Float = 0f
+// The PacketEvents plugin owns the shared instance and its lifecycle.
+@Suppress("UnusedPrivateProperty")
+class PacketEventsLoader(private val plugin: Shard) {
+  fun load() = Unit
+
+  fun init() = Unit
+
+  fun shutdown() = Unit
 }

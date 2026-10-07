@@ -38,7 +38,7 @@ class TrackingState {
   @Volatile var pendingSequenceBreak: Boolean = false
   @Volatile var pendingBufferReset: Boolean = false
 
-  var sequenceId: Int = 1
+  @Volatile var sequenceId: Int = 1
   var tickIndex: Long = 0
 
   var lastY: Double = 0.0
@@ -106,7 +106,7 @@ class TrackingState {
   var attackThisTick: Boolean = false
   var windowStartThisTick: Boolean = false
   var windowStartKind: Short = 0
-  var enabledWindowStarts: Int = MELEE_PLAYER_ONLY
+  var enabledWindowStarts: () -> Int = { MELEE_PLAYER_ONLY }
   var isSprintingOnAttack: Boolean = false
   var attackSpeed: Float = 4.0f
 
@@ -227,7 +227,7 @@ class TrackingState {
   }
 
   fun raiseWindowStart(kind: Short) {
-    if (enabledWindowStarts and (1 shl kind.toInt()) == 0) return
+    if (enabledWindowStarts() and (1 shl kind.toInt()) == 0) return
     if (!windowStartThisTick || kind < windowStartKind) {
       windowStartThisTick = true
       windowStartKind = kind

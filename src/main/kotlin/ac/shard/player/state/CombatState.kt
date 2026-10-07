@@ -13,12 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package ac.shard.player.state
 
 class CombatState(initialTicksSinceAttack: Int = 255) {
   var ticksSinceAttack: Int = initialTicksSinceAttack
   @Volatile var hasAttacked: Boolean = false
-  @Volatile var damageMultiplier: Double = 1.0
 }
