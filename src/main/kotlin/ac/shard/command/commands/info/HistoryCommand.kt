@@ -23,60 +23,61 @@
 package ac.shard.command.commands.info
 
 import ac.shard.command.ShardCommand
+import ac.shard.command.TargetResolver
+import ac.shard.command.shardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
 import ac.shard.database.DatabaseManager
+import ac.shard.database.KnownPlayer
 import ac.shard.database.Violation
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
+import ac.shard.utils.MiniText
 import ac.shard.utils.Sparkline
 import ac.shard.utils.TimeUtil
 import java.util.Locale
 import net.kyori.adventure.text.Component
-import org.bukkit.OfflinePlayer
 import org.incendo.cloud.CommandManager
-import org.incendo.cloud.bukkit.parser.OfflinePlayerParser
 import org.incendo.cloud.context.CommandContext
 import org.incendo.cloud.description.Description
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 import org.incendo.cloud.parser.standard.IntegerParser
 
 private const val SPARKLINE_WIDTH = 20
 private const val DEFAULT_SERVER_NAME = "server"
 
 class HistoryCommand(
+  private val messages: Messages,
   private val databaseManager: DatabaseManager,
   private val configManager: ConfigManager,
   private val localeManager: LocaleManager,
   private val scheduler: SchedulerService,
+  private val targets: TargetResolver,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("history", Description.empty(), "hist")
-        .permission("shard.history")
-        .required("target", OfflinePlayerParser.offlinePlayerParser())
+    manager.shardCommand {
+      targets
+        .target(literal("history", Description.empty(), "hist").permission("shard.history"))
         .optional("page", IntegerParser.integerParser(1))
-        .handler(this@HistoryCommand::handleHistory)
+        .handler { handleHistory(it) }
     }
   }
 
   private fun handleHistory(context: CommandContext<Sender>) {
     val sender = context.sender()
-    val target: OfflinePlayer = context["target"]
     val page: Int = context.getOrDefault("page", 1)
 
     if (!configManager.config.getBoolean("history.enabled", false)) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.HISTORY_DISABLED)
+      messages.sendMessage(sender.nativeSender, Message.HISTORY_DISABLED)
       return
     }
-    if (!target.hasPlayedBefore() && !target.isOnline) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.PLAYER_NOT_FOUND)
-      return
-    }
+    targets.resolve(context) { target -> showHistory(sender, target, page) }
+  }
+
+  private fun showHistory(sender: Sender, target: KnownPlayer, page: Int) {
     warnIfStorageDegraded(sender)
-    val targetId = target.uniqueId
+    val targetId = target.uuid
 
     scheduler.runAsync {
       val entriesPerPage = 10
@@ -87,10 +88,10 @@ class HistoryCommand(
         kotlin.math.max(1, kotlin.math.ceil(totalLogs.toDouble() / entriesPerPage).toInt())
 
       val header =
-        MessageUtil.getMessage(
+        messages.getMessage(
           Message.HISTORY_HEADER,
           "player",
-          displayName(target),
+          target.name,
           "page",
           page.toString(),
           "max_pages",
@@ -107,7 +108,7 @@ class HistoryCommand(
         sender.sendMessage(header)
 
         if (entries.isEmpty()) {
-          MessageUtil.sendMessage(sender.nativeSender, Message.HISTORY_NO_VIOLATIONS)
+          messages.sendMessage(sender.nativeSender, Message.HISTORY_NO_VIOLATIONS)
           return@runSync
         }
 
@@ -123,7 +124,7 @@ class HistoryCommand(
       configManager.labelCatalog.format(
         violation.labels.split(',').map(String::trim).filter(String::isNotEmpty)
       )
-    return MessageUtil.getMessage(
+    return messages.getMessage(
       Message.HISTORY_ENTRY,
       "server",
       serverTag(violation.serverName, showServer),
@@ -148,7 +149,7 @@ class HistoryCommand(
       "labels",
       shown,
       "labels_line",
-      MessageUtil.labelsLine(shown),
+      messages.labelsLine(shown),
     )
   }
 
@@ -156,16 +157,12 @@ class HistoryCommand(
     if (!show || name.isBlank()) {
       ""
     } else {
-      "<dark_gray>[<white>${MessageUtil.escape(name)}</white>]</dark_gray> "
+      "<dark_gray>[<white>${MiniText.escape(name)}</white>]</dark_gray> "
     }
 
   private fun warnIfStorageDegraded(sender: Sender) {
     if (!databaseManager.isAvailable) {
-      MessageUtil.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
+      messages.sendMessage(sender.nativeSender, Message.STORAGE_DEGRADED)
     }
-  }
-
-  private fun displayName(target: OfflinePlayer): String {
-    return target.name ?: target.uniqueId.toString()
   }
 }

@@ -22,35 +22,39 @@
  */
 package ac.shard.command.commands.info
 
-import ac.shard.checks.impl.ai.AiCheck
+import ac.shard.Shard
 import ac.shard.command.ShardCommand
+import ac.shard.command.TargetResolver
+import ac.shard.command.shardCommand
 import ac.shard.config.ConfigManager
 import ac.shard.config.LocaleManager
 import ac.shard.database.AiSnapshot
 import ac.shard.database.DatabaseManager
+import ac.shard.database.KnownPlayer
 import ac.shard.mitigation.ScoreMath
 import ac.shard.player.PlayerDataManager
 import ac.shard.player.ShardPlayer
 import ac.shard.scheduler.SchedulerService
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import ac.shard.utils.TimeUtil
 import java.time.Instant
 import java.util.Locale
 import java.util.logging.Logger
-import org.bukkit.OfflinePlayer
 import org.bukkit.Statistic
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
-import org.incendo.cloud.bukkit.parser.OfflinePlayerParser
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 
 private const val PERCENT = 100
 
+@Suppress("LongParameterList")
 class ProfileCommand(
+  private val plugin: Shard,
+  private val targets: TargetResolver,
+  private val messages: Messages,
   private val playerDataManager: PlayerDataManager,
   private val configManager: ConfigManager,
   private val localeManager: LocaleManager,
@@ -59,30 +63,26 @@ class ProfileCommand(
   private val logger: Logger,
 ) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("profile")
-        .permission("shard.profile")
-        .required("target", OfflinePlayerParser.offlinePlayerParser())
-        .handler(this@ProfileCommand::execute)
+    manager.shardCommand {
+      targets.target(literal("profile").permission("shard.profile")).handler { execute(it) }
     }
   }
 
   private fun execute(context: CommandContext<Sender>) {
     val sender: CommandSender = context.sender().nativeSender
-    val target: OfflinePlayer = context["target"]
-
-    val online = target.player
-    val shardPlayer = online?.let { playerDataManager.getPlayer(it) }
-    if (online == null || shardPlayer == null) {
-      offline(sender, target)
-      return
+    targets.resolve(context) { target ->
+      val online = plugin.server.getPlayer(target.uuid)
+      val shardPlayer = online?.let { playerDataManager.getPlayer(it) }
+      if (online == null || shardPlayer == null) {
+        offline(sender, target)
+      } else {
+        show(sender, online, shardPlayer)
+      }
     }
-
-    show(sender, online, shardPlayer)
   }
 
   private fun show(sender: CommandSender, target: Player, shardPlayer: ShardPlayer) {
-    val aiCheck = shardPlayer.checkManager.getCheck(AiCheck::class.java)
+    val aiCheck = shardPlayer.detection
 
     val sessionMillis = System.currentTimeMillis() - shardPlayer.joinTime
     var totalPlayTicks = 0L
@@ -94,7 +94,7 @@ class ProfileCommand(
 
     val totalPlayMillis = totalPlayTicks * 50
 
-    MessageUtil.sendMessageList(
+    messages.sendMessageList(
       sender,
       Message.PROFILE_LINES,
       "player",
@@ -110,11 +110,11 @@ class ProfileCommand(
       "total_playtime",
       TimeUtil.formatDuration(totalPlayMillis, localeManager),
       "ai_buffer",
-      if (aiCheck != null) String.format("%.2f", aiCheck.buffer) else "N/A",
+      String.format("%.2f", aiCheck.buffer),
       "ai_probs_90",
-      if (aiCheck != null) aiCheck.prob90.toString() else "N/A",
+      aiCheck.prob90.toString(),
       "ai_labels",
-      if (aiCheck != null) labelBreakdown(aiCheck.labelBufferSnapshot()) else "N/A",
+      labelBreakdown(aiCheck.labelBufferSnapshot()),
       "mitigation_tier",
       shardPlayer.mitigation.tierName,
       "mitigation_score",
@@ -132,13 +132,9 @@ class ProfileCommand(
     )
   }
 
-  private fun offline(sender: CommandSender, target: OfflinePlayer) {
-    if (!target.hasPlayedBefore()) {
-      MessageUtil.sendMessage(sender, Message.PROFILE_NO_DATA)
-      return
-    }
-    val uuid = target.uniqueId
-    val name = target.name ?: uuid.toString()
+  private fun offline(sender: CommandSender, target: KnownPlayer) {
+    val uuid = target.uuid
+    val name = target.name
 
     scheduler.runAsync {
       val database = databaseManager.database
@@ -148,7 +144,7 @@ class ProfileCommand(
       val violations = database.getLogCount(uuid)
 
       val lines =
-        MessageUtil.getMessageList(
+        messages.getMessageList(
           Message.PROFILE_OFFLINE_LINES,
           "player",
           name,
@@ -174,7 +170,7 @@ class ProfileCommand(
           violations.toString(),
         )
 
-      scheduler.runSync { lines.forEach { MessageUtil.sendMessage(sender, it) } }
+      scheduler.runSync { lines.forEach { messages.sendMessage(sender, it) } }
     }
   }
 
