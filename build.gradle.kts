@@ -6,11 +6,11 @@ import versioning.BuildConfig
 
 plugins {
   id("java")
-  id("org.jetbrains.kotlin.jvm") version "2.4.10"
-  id("com.gradleup.shadow") version "9.6.1"
-  id("net.minecrell.plugin-yml.bukkit") version "0.6.0"
-  id("com.diffplug.spotless") version "8.8.0"
-  id("io.gitlab.arturbosch.detekt") version "1.23.8"
+  alias(libs.plugins.kotlin.jvm)
+  alias(libs.plugins.shadow)
+  alias(libs.plugins.plugin.yml.bukkit)
+  alias(libs.plugins.spotless)
+  alias(libs.plugins.detekt)
 }
 
 BuildConfig.init(project)
@@ -19,83 +19,76 @@ group = "ac.shard"
 
 version = (findProperty("shardVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.0.0"
 
-val packetEventsSpigot = "com.github.retrooper:packetevents-spigot:2.13.0"
-
 repositories {
   mavenCentral()
-  maven("https://jitpack.io")
   maven("https://repo.papermc.io/repository/maven-public/")
   maven("https://repo.codemc.io/repository/maven-releases/")
   maven("https://repo.codemc.io/repository/maven-snapshots/")
   maven("https://maven.enginehub.org/repo/") // WorldGuard
-  maven("https://repo.extendedclip.com/releases/") // PlaceholderAPI
   maven("https://repo.opencollab.dev/maven-snapshots/") // Geyser / Floodgate
 }
 
 dependencies {
   // Bukkit APIs
-  compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-  compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.17")
-  compileOnly("me.clip:placeholderapi:2.12.3")
-  compileOnly("org.geysermc.floodgate:api:2.0-SNAPSHOT")
+  compileOnly(libs.paper.api)
+  compileOnly(libs.worldguard)
+  compileOnly(libs.floodgate.api)
+
+  implementation(libs.shard.api)
 
   // PacketEvents
   if (BuildConfig.shadePE) {
-    implementation(packetEventsSpigot)
+    implementation(libs.packetevents.spigot)
   } else {
-    compileOnly(packetEventsSpigot)
+    compileOnly(libs.packetevents.spigot)
   }
-  implementation("org.bstats:bstats-bukkit:3.2.1")
+  implementation(libs.bstats.bukkit)
 
   // Cloud Command Framework
-  implementation("org.incendo:cloud-paper:2.0.0")
-  implementation("org.incendo:cloud-processors-requirements:1.0.0-rc.1")
-  implementation("org.incendo:cloud-kotlin-extensions:2.1.0")
-  implementation("org.incendo:cloud-kotlin-coroutines:2.1.0")
+  implementation(libs.cloud.paper)
+  implementation(libs.cloud.processors.requirements)
+  implementation(libs.cloud.kotlin.extensions)
 
   // Adventure & MiniMessage
-  implementation("net.kyori:adventure-platform-bukkit:4.4.1")
-  implementation("net.kyori:adventure-text-minimessage:4.26.1")
-  implementation("net.kyori:adventure-text-serializer-plain:4.26.1")
-  implementation("net.kyori:adventure-text-serializer-gson:4.26.1")
+  implementation(libs.adventure.platform.bukkit)
+  implementation(libs.adventure.minimessage)
+  implementation(libs.adventure.serializer.plain)
+  implementation(libs.adventure.serializer.gson)
 
   // HikariCP
-  implementation("com.zaxxer:HikariCP:7.1.0")
-  implementation("org.slf4j:slf4j-jdk14:2.0.18")
-  implementation("org.jetbrains.exposed:exposed-core:1.3.1")
-  implementation("org.jetbrains.exposed:exposed-java-time:1.3.1")
-  implementation("org.jetbrains.exposed:exposed-jdbc:1.3.1")
-  implementation("org.flywaydb:flyway-core:12.1.1")
-  implementation("org.flywaydb:flyway-mysql:12.1.1")
-  implementation("org.mariadb.jdbc:mariadb-java-client:3.5.9")
-  implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
+  implementation(libs.hikaricp)
+  implementation(libs.slf4j.jdk14)
+  implementation(libs.exposed.core)
+  implementation(libs.exposed.jdbc)
+  implementation(libs.flyway.core)
+  implementation(libs.flyway.mysql)
+  implementation(libs.mariadb)
+  implementation(libs.jackson.databind)
 
-  // Redis (cross-server alerts). Netty stays unbundled and unrelocated: PacketEvents reflects on
-  // the server's io.netty Channel type, so Lettuce must share the server's Netty.
-  implementation("io.lettuce:lettuce-core:6.5.0.RELEASE") { exclude(group = "io.netty") }
-  compileOnly("io.netty:netty-handler:4.1.113.Final")
+  implementation(libs.jedis) {
+    exclude(group = "com.google.code.gson")
+    exclude(group = "org.slf4j")
+  }
 
   // Utilities
   implementation(kotlin("stdlib"))
-  implementation("it.unimi.dsi:fastutil:8.5.18")
-  implementation("org.jetbrains:annotations:26.1.0")
-  implementation("org.spongepowered:configurate-yaml:4.2.0")
-  implementation("ru.vyarus:yaml-config-updater:1.4.4")
-  implementation("io.insert-koin:koin-core:4.2.2")
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-  implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.5.1")
+  implementation(libs.fastutil)
+  implementation(libs.jetbrains.annotations)
+  implementation(libs.configurate.yaml)
+  implementation(libs.yaml.config.updater)
+  implementation(libs.koin.core)
+  implementation(libs.kotlinx.collections.immutable)
 
   // Testing
   testImplementation(kotlin("test"))
-  testImplementation(packetEventsSpigot)
-  testImplementation("org.junit.jupiter:junit-jupiter:6.1.2")
-  testImplementation("io.mockk:mockk:1.14.11")
-  testImplementation("org.testcontainers:junit-jupiter:1.21.4")
-  testImplementation("org.testcontainers:mariadb:1.21.4")
-  testCompileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-  testRuntimeOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-  testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.2.1")
-  testRuntimeOnly("io.netty:netty-handler:4.1.113.Final")
+  testImplementation(libs.packetevents.spigot)
+  testImplementation(libs.junit.jupiter)
+  testImplementation(libs.mockk)
+  testImplementation(libs.testcontainers.junit)
+  testImplementation(libs.testcontainers.mariadb)
+  testCompileOnly(libs.paper.api)
+  testRuntimeOnly(libs.paper.api)
+  testRuntimeOnly(libs.sqlite.jdbc)
 }
 
 java {
@@ -103,7 +96,15 @@ java {
   disableAutoTargetJvm()
 }
 
-kotlin { jvmToolchain(21) }
+kotlin {
+  jvmToolchain(21)
+  sourceSets.main {
+    kotlin.srcDir(
+      if (BuildConfig.shadePE) "src/packetevents/bundled/kotlin"
+      else "src/packetevents/external/kotlin"
+    )
+  }
+}
 
 tasks.withType<JavaCompile> {
   options.release.set(17)
@@ -113,7 +114,7 @@ tasks.withType<JavaCompile> {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
   compilerOptions {
     jvmTarget.set(JvmTarget.JVM_17)
-    freeCompilerArgs.addAll("-jvm-default=enable")
+    freeCompilerArgs.addAll("-jvm-default=enable", "-Xjdk-release=17")
   }
 }
 
@@ -133,17 +134,18 @@ tasks.shadowJar {
   }
 
   minimize {
+    exclude(dependency("ac.shard:shard-api"))
     exclude(dependency("org.slf4j:slf4j-api"))
     exclude(dependency("org.slf4j:slf4j-jdk14"))
     exclude(dependency("org.jetbrains.exposed:exposed-core"))
     exclude(dependency("org.jetbrains.exposed:exposed-jdbc"))
-    exclude(dependency("org.jetbrains.exposed:exposed-java-time"))
     exclude(dependency("org.flywaydb:flyway-core"))
     exclude(dependency("org.flywaydb:flyway-mysql"))
     exclude(dependency("org.mariadb.jdbc:mariadb-java-client"))
-    exclude(dependency("io.lettuce:lettuce-core"))
-    exclude(dependency("io.projectreactor:reactor-core"))
-    exclude(dependency("org.reactivestreams:reactive-streams"))
+    exclude(dependency("redis.clients:jedis"))
+    exclude(dependency("redis.clients.authentication:redis-authx-core"))
+    exclude(dependency("org.apache.commons:commons-pool2"))
+    exclude(dependency("org.json:json"))
     exclude(dependency("net.kyori:adventure-text-serializer-gson:.*"))
   }
 
@@ -165,13 +167,12 @@ tasks.shadowJar {
   relocate("org.spongepowered.configurate", "ac.shard.libs.configurate")
   relocate("org.yaml.snakeyaml", "ac.shard.libs.snakeyaml")
   relocate("ru.vyarus.yaml.updater", "ac.shard.libs.yamlupdater")
-  relocate("org.joml", "ac.shard.libs.joml")
   relocate("org.koin", "ac.shard.libs.koin")
   relocate("org.flywaydb", "ac.shard.libs.flyway")
   relocate("tools.jackson", "ac.shard.libs.tools.jackson")
-  relocate("io.lettuce", "ac.shard.libs.lettuce")
-  relocate("reactor", "ac.shard.libs.reactor")
-  relocate("org.reactivestreams", "ac.shard.libs.reactivestreams")
+  relocate("redis.clients", "ac.shard.libs.redis")
+  relocate("org.apache.commons.pool2", "ac.shard.libs.pool2")
+  relocate("org.json", "ac.shard.libs.json")
 }
 
 tasks.register<PrintFilePathTask>("printShadowJarPath") {
@@ -211,7 +212,7 @@ val containerTest by
 tasks.build { dependsOn(tasks.shadowJar) }
 
 detekt {
-  toolVersion = "1.23.8"
+  toolVersion = libs.versions.detekt.get()
   buildUponDefaultConfig = true
   allRules = false
   parallel = true
@@ -245,7 +246,6 @@ bukkit {
       "Geyser-Spigot",
       "floodgate",
       "FastLogin",
-      "PlaceholderAPI",
       "WorldGuard",
     )
 

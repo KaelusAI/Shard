@@ -19,7 +19,7 @@
       "enabled": false
     },
     {
-      "matchPackageNames": ["io.netty:netty-handler"],
+      "matchDepNames": ["java-jdk"],
       "enabled": false
     },
     {

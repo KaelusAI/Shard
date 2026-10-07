@@ -2,45 +2,24 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:PacketListener.kt$PacketListener$kb != null &amp;&amp; (kb.x != 0f || kb.y != 0f || kb.z != 0f)</ID>
-    <ID>ComplexCondition:TelemetryService.kt$TelemetryService$preWindow != null || postWindow != null || step != null || model != null</ID>
-    <ID>CyclomaticComplexMethod:AimProcessor.kt$AimProcessor$override fun process(rotationUpdate: RotationUpdate)</ID>
+    <ID>CyclomaticComplexMethod:AimProcessor.kt$AimProcessor$fun process(rotationUpdate: RotationUpdate)</ID>
     <ID>CyclomaticComplexMethod:BoundingBoxSize.kt$BoundingBoxSize$private fun getHeightBase(entity: PacketEntity): Float</ID>
     <ID>CyclomaticComplexMethod:BoundingBoxSize.kt$BoundingBoxSize$private fun getWidthBase(entity: PacketEntity): Float</ID>
     <ID>CyclomaticComplexMethod:CompensatedEntities.kt$CompensatedEntities$fun updateAttributes( entityId: Int, properties: List&lt;WrapperPlayServerUpdateAttributes.Property>, )</ID>
-    <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$override fun onPacketSend(event: PacketSendEvent)</ID>
-    <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$private fun checkTeleportQueue( player: ShardPlayer, flying: WrapperPlayClientPlayerFlying, ): Boolean</ID>
-    <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$private fun handleShardClientPackets(event: PacketReceiveEvent, shardPlayer: ShardPlayer)</ID>
-    <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$private fun handleShardServerPackets(event: PacketSendEvent, shardPlayer: ShardPlayer)</ID>
-    <ID>CyclomaticComplexMethod:PacketListener.kt$PacketListener$private fun isAgeableMob(type: EntityType): Boolean</ID>
     <ID>CyclomaticComplexMethod:ReachUtils.kt$ReachUtils$fun calculateIntercept(box: SimpleCollisionBox, origin: Vector3dm, end: Vector3dm): Vector3dm?</ID>
     <ID>ImplicitDefaultLocale:ProfileCommand.kt$ProfileCommand$String.format("%.2f", aiCheck.buffer)</ID>
-    <ID>LargeClass:PacketListener.kt$PacketListener : PacketListenerAbstract</ID>
-    <ID>LongMethod:AiCheck.kt$AiCheck$private fun onResponse(parsed: AiResult)</ID>
     <ID>LongMethod:BoundingBoxSize.kt$BoundingBoxSize$private fun getHeightBase(entity: PacketEntity): Float</ID>
     <ID>LongMethod:BoundingBoxSize.kt$BoundingBoxSize$private fun getWidthBase(entity: PacketEntity): Float</ID>
-    <ID>LongMethod:ConfigManager.kt$ConfigManager$private fun loadValues()</ID>
-    <ID>LongMethod:PacketListener.kt$PacketListener$override fun onPacketSend(event: PacketSendEvent)</ID>
-    <ID>LongMethod:PacketListener.kt$PacketListener$private fun handleShardClientPackets(event: PacketReceiveEvent, shardPlayer: ShardPlayer)</ID>
-    <ID>LongMethod:PacketListener.kt$PacketListener$private fun handleShardServerPackets(event: PacketSendEvent, shardPlayer: ShardPlayer)</ID>
-    <ID>LongMethod:PlayerDataManagerTest.kt$PlayerDataManagerTest$private fun createFixture(): Fixture</ID>
     <ID>LongMethod:TickData.kt$TickData$fun capture(player: ShardPlayer)</ID>
     <ID>LongMethod:TickData.kt$TickData$private fun captureCombatContext(player: ShardPlayer, tracking: TrackingState)</ID>
     <ID>LongMethod:TickSchemaByteIdentityTest.kt$TickSchemaByteIdentityTest$private fun referenceAppendCsv(out: Appendable, t: TickData)</ID>
     <ID>LongMethod:TickSchemaByteIdentityTest.kt$TickSchemaByteIdentityTest$private fun samples(): List&lt;TickData></ID>
-    <ID>LongParameterList:AiCheck.kt$AiCheck$( shardPlayer: ShardPlayer, private val plugin: Shard, private val aiService: AiService, private val configManager: ConfigManager, private val regionProvider: RegionProvider, private val alertManager: AlertManager, private val damageProcessor: DamageProcessor, private val debugManager: DebugManager, private val scheduler: SchedulerService, )</ID>
     <ID>LongParameterList:CompensatedEntities.kt$CompensatedEntities$( entityId: Int, uuid: UUID, type: EntityType, x: Double = 0.0, y: Double = 0.0, z: Double = 0.0, )</ID>
     <ID>LongParameterList:EntityScheduler.kt$EntityScheduler$( entity: Entity, plugin: Plugin, task: Runnable, retired: Runnable?, initialDelayTicks: Long, periodTicks: Long, )</ID>
-    <ID>LongParameterList:PacketListener.kt$PacketListener$( shardPlayer: ShardPlayer, entityId: Int, deltaX: Double, deltaY: Double, deltaZ: Double, relative: Boolean, )</ID>
-    <ID>LongParameterList:PunishmentManager.kt$PunishmentManager$( group: PunishGroup, vl: Int, verbose: String, command: String, playerName: String, checkName: String, )</ID>
-    <ID>LongParameterList:PunishmentManager.kt$PunishmentManager$( group: PunishGroup, vl: Int, verbose: String, commands: List&lt;String>, playerName: String, checkName: String, )</ID>
-    <ID>LongParameterList:PunishmentManager.kt$PunishmentManager$( private val shardPlayer: ShardPlayer, private val plugin: Shard, private val configManager: ConfigManager, databaseManager: DatabaseManager, private val alertManager: AlertManager, private val adventure: BukkitAudiences, private val scheduler: SchedulerService, private val coroutines: ShardCoroutines, )</ID>
     <ID>LongParameterList:ReachInterpolationData.kt$ReachInterpolationData$( step: Int, stepMinX: Double, stepMaxX: Double, stepMinY: Double, stepMaxY: Double, stepMinZ: Double, stepMaxZ: Double, )</ID>
     <ID>LongParameterList:RegionScheduler.kt$RegionScheduler$( plugin: Plugin, world: World, chunkX: Int, chunkZ: Int, task: Runnable, delayTicks: Long, )</ID>
     <ID>LongParameterList:RegionScheduler.kt$RegionScheduler$( plugin: Plugin, world: World, chunkX: Int, chunkZ: Int, task: Runnable, initialDelayTicks: Long, periodTicks: Long, )</ID>
     <ID>LoopWithTooManyJumpStatements:LatencyUtils.kt$LatencyUtils$while</ID>
-    <ID>LoopWithTooManyJumpStatements:PacketListener.kt$PacketListener$for</ID>
-    <ID>LoopWithTooManyJumpStatements:PacketListener.kt$PacketListener$while</ID>
     <ID>MagicNumber:AIServer.kt$AIServer.ResponseCode.BAD_REQUEST$400</ID>
     <ID>MagicNumber:AIServer.kt$AIServer.ResponseCode.NETWORK_ERROR$2</ID>
     <ID>MagicNumber:AIServer.kt$AIServer.ResponseCode.NOT_FOUND$404</ID>
@@ -54,10 +33,6 @@
     <ID>MagicNumber:AIServer.kt$AIServer.ResponseCode.UNAUTHORIZED$403</ID>
     <ID>MagicNumber:AIServer.kt$AIServer.ResponseCode.UNKNOWN_ERROR$4</ID>
     <ID>MagicNumber:AIServer.kt$AIServer.ResponseCode.WAITING$5</ID>
-    <ID>MagicNumber:AIServerProvider.kt$AIServerProvider$5</ID>
-    <ID>MagicNumber:AIServerProvider.kt$AIServerProvider$60</ID>
-    <ID>MagicNumber:AiCheck.kt$AiCheck$0.9</ID>
-    <ID>MagicNumber:ApiCooldown.kt$ApiCooldown$1000</ID>
     <ID>MagicNumber:BlockFriction.kt$BlockFriction$0.05f</ID>
     <ID>MagicNumber:BlockFriction.kt$BlockFriction$0.25f</ID>
     <ID>MagicNumber:BlockFriction.kt$BlockFriction$0.75f</ID>
@@ -104,28 +79,17 @@
     <ID>MagicNumber:BoundingBoxSize.kt$BoundingBoxSize$4.0f</ID>
     <ID>MagicNumber:BoundingBoxSize.kt$BoundingBoxSize$4.5f</ID>
     <ID>MagicNumber:BoundingBoxSize.kt$BoundingBoxSize$8.0f</ID>
-    <ID>MagicNumber:ClientBrand.kt$ClientBrand$64</ID>
     <ID>MagicNumber:CompensatedWorld.kt$CompensatedWorld$4</ID>
     <ID>MagicNumber:CompensatedWorld.kt$CompensatedWorld.Companion$0xFFFFFFFFL</ID>
     <ID>MagicNumber:CompensatedWorld.kt$CompensatedWorld.Companion$32</ID>
-    <ID>MagicNumber:ConfigManager.kt$ConfigManager$0.9</ID>
-    <ID>MagicNumber:ConfigManager.kt$ConfigManager$100.0</ID>
-    <ID>MagicNumber:ConfigManager.kt$ConfigManager$25.0</ID>
-    <ID>MagicNumber:ConfigManager.kt$ConfigManager$50.0</ID>
     <ID>MagicNumber:FoliaRegionScheduler.kt$FoliaRegionScheduler$4</ID>
     <ID>MagicNumber:HistoryCommand.kt$HistoryCommand$10</ID>
     <ID>MagicNumber:LogsCommand.kt$LogsCommand$10</ID>
-    <ID>MagicNumber:PacketListener.kt$PacketListener$1.0E-7</ID>
     <ID>MagicNumber:PlatformScheduler.kt$PlatformScheduler.Companion$50</ID>
     <ID>MagicNumber:PlatformScheduler.kt$PlatformScheduler.Companion$50L</ID>
     <ID>MagicNumber:ProfileCommand.kt$ProfileCommand$50</ID>
-    <ID>MagicNumber:PunishmentManager.kt$PunishmentManager$20.0</ID>
-    <ID>MagicNumber:PunishmentManager.kt$PunishmentManager$50.0</ID>
     <ID>MagicNumber:ReachInterpolationData.kt$ReachInterpolationData$0.015625</ID>
     <ID>MagicNumber:ReachInterpolationData.kt$ReachInterpolationData$0.03125</ID>
-    <ID>MagicNumber:ReachInterpolationData.kt$ReachInterpolationData$10</ID>
-    <ID>MagicNumber:ReachInterpolationData.kt$ReachInterpolationData$3</ID>
-    <ID>MagicNumber:ReachInterpolationData.kt$ReachInterpolationData$5</ID>
     <ID>MagicNumber:ReachUtils.kt$ReachUtils$0.001</ID>
     <ID>MagicNumber:ReachUtils.kt$ReachUtils$0.4</ID>
     <ID>MagicNumber:ReachUtils.kt$ReachUtils$1.27</ID>
@@ -142,8 +106,6 @@
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.MonitorSettingsTable$36</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.MonitorSettingsTable$64</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.PlayerLogins$36</ID>
-    <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.Punishments$255</ID>
-    <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.Punishments$36</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.Violations$255</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.Violations$36</ID>
     <ID>MagicNumber:SqlViolationDatabase.kt$SqlViolationDatabase.Violations$64</ID>
@@ -187,58 +149,36 @@
     <ID>MayBeConst:Sender.kt$Sender.Companion$@JvmField val CONSOLE_NAME: String = "Console"</ID>
     <ID>NestedBlockDepth:ReachUtils.kt$ReachUtils$fun getMinAngleToBox(player: ShardPlayer, box: SimpleCollisionBox): Double</ID>
     <ID>PrintStackTrace:CommandManager.kt$CommandManager$e</ID>
-    <ID>PrintStackTrace:LatencyUtils.kt$LatencyUtils$ex</ID>
-    <ID>ReturnCount:AiApiImpl.kt$AiApiImpl$override fun getSnapshot(playerId: UUID): Optional&lt;AiSnapshot></ID>
-    <ID>ReturnCount:AiCheck.kt$AiCheck$private fun onError(error: Throwable): Void?</ID>
-    <ID>ReturnCount:AiCheck.kt$AiCheck$private fun onResponse(parsed: AiResult)</ID>
     <ID>ReturnCount:BlockFriction.kt$BlockFriction$fun isWater(state: WrappedBlockState?): Boolean</ID>
-    <ID>ReturnCount:CheckApiImpl.kt$CheckApiImpl$override fun getCheck(playerId: UUID, checkName: String): Optional&lt;CheckInfo></ID>
     <ID>ReturnCount:CompensatedWorld.kt$CompensatedWorld$fun getBlock(x: Int, y: Int, z: Int): WrappedBlockState?</ID>
     <ID>ReturnCount:CompensatedWorld.kt$CompensatedWorld$fun setBlock(x: Int, y: Int, z: Int, state: WrappedBlockState?)</ID>
-    <ID>ReturnCount:TickBuffer.kt$TickBuffer$fun extractWindow( preWindow: Int, postWindow: Int, ticksSinceAttack: Int, attackIdx: Int = attackBufferIndex, windowStartKind: Short = TickData.START_MELEE_PLAYER, ): List&lt;TickData>?</ID>
-    <ID>ReturnCount:ExemptManager.kt$ExemptManager$fun isExempt(player: Player?): Boolean</ID>
-    <ID>ReturnCount:MonitorApiImpl.kt$MonitorApiImpl$override fun getSnapshot(playerId: UUID): Optional&lt;MonitorSnapshot></ID>
     <ID>ReturnCount:PacketListener.kt$PacketListener$override fun onPacketReceive(event: PacketReceiveEvent)</ID>
-    <ID>ReturnCount:PacketListener.kt$PacketListener$private fun checkRotationQueue( player: ShardPlayer, flying: WrapperPlayClientPlayerFlying, ): Boolean</ID>
-    <ID>ReturnCount:PacketListener.kt$PacketListener$private fun checkTeleportQueue( player: ShardPlayer, flying: WrapperPlayClientPlayerFlying, ): Boolean</ID>
-    <ID>ReturnCount:PacketListener.kt$PacketListener$private fun handleTransaction(event: PacketReceiveEvent, shardPlayer: ShardPlayer): Boolean</ID>
-    <ID>ReturnCount:PunishmentManager.kt$PunishmentManager$private suspend fun executeCommand( group: PunishGroup, vl: Int, verbose: String, command: String, playerName: String, checkName: String, )</ID>
     <ID>ReturnCount:ReachUtils.kt$ReachUtils$fun aimError(player: ShardPlayer, box: SimpleCollisionBox): Double</ID>
     <ID>ReturnCount:ReachUtils.kt$ReachUtils$fun minDistanceRayToBox( origin: Vector3dm, dir: Vector3dm, maxDist: Double, box: SimpleCollisionBox, ): Double</ID>
     <ID>ReturnCount:SchedulerService.kt$SchedulerService$fun runSync(player: Player?, task: Runnable): TaskHandle</ID>
+    <ID>ReturnCount:TickBuffer.kt$TickBuffer$fun extractWindow( preWindow: Int, postWindow: Int, ticksSinceAttack: Int, attackIdx: Int = attackBufferIndex, windowStartKind: Short = TickData.START_MELEE_PLAYER, ): List&lt;TickData>?</ID>
     <ID>ReturnCount:TickData.kt$TickData$private fun computeIsCritical(player: ShardPlayer, tracking: TrackingState): Boolean</ID>
     <ID>ReturnCount:TickData.kt$TickData$private fun computeRaytraceHitPoint( player: ShardPlayer, targetBox: SimpleCollisionBox, ): Vector3dm?</ID>
     <ID>ReturnCount:TimeUtil.kt$TimeUtil$@JvmStatic fun formatTimeAgo(timestamp: Instant, lm: LocaleManager): String</ID>
     <ID>ReturnCount:TimeUtil.kt$TimeUtil$@JvmStatic fun parseDuration(durationStr: String?): Long</ID>
     <ID>SpreadOperator:ConfigView.kt$ConfigView$(*path.split('.').toTypedArray())</ID>
-    <ID>SwallowedException:ConfigManager.kt$ConfigManager$e: PatternSyntaxException</ID>
     <ID>SwallowedException:ConfigView.kt$ConfigView$ex: SerializationException</ID>
     <ID>SwallowedException:FoliaDetector.kt$FoliaDetector$ex: ClassNotFoundException</ID>
     <ID>SwallowedException:MonitorMode.kt$MonitorMode.Companion$e: IllegalArgumentException</ID>
     <ID>SwallowedException:MonitorNameMode.kt$MonitorNameMode.Companion$ex: IllegalArgumentException</ID>
     <ID>SwallowedException:MonitorTheme.kt$MonitorTheme.Companion$e: IllegalArgumentException</ID>
     <ID>SwallowedException:TimeUtil.kt$TimeUtil$ex: Exception</ID>
-    <ID>TooGenericExceptionCaught:AiCheck.kt$AiCheck$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CommandManager.kt$CommandManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ConfigManager.kt$ConfigManager$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:DefaultAiService.kt$DefaultAiService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:LatencyUtils.kt$LatencyUtils$ex: Exception</ID>
-    <ID>TooGenericExceptionCaught:PunishmentApiImpl.kt$PunishmentApiImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PunishmentManager.kt$PunishmentManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:TimeUtil.kt$TimeUtil$ex: Exception</ID>
-    <ID>TooManyFunctions:AIServerProvider.kt$AIServerProvider : Supplier</ID>
-    <ID>TooManyFunctions:BatchingAiTransport.kt$BatchingAiTransport : AiTransport</ID>
     <ID>TooManyFunctions:ConfigManager.kt$ConfigManager</ID>
-    <ID>TooManyFunctions:MessageUtil.kt$MessageUtil</ID>
-    <ID>TooManyFunctions:PacketListener.kt$PacketListener : PacketListenerAbstract</ID>
     <ID>TooManyFunctions:PunishmentManager.kt$PunishmentManager</ID>
     <ID>TooManyFunctions:ReachUtils.kt$ReachUtils</ID>
-    <ID>TooManyFunctions:ShardPlayer.kt$ShardPlayer</ID>
     <ID>TooManyFunctions:SqlViolationDatabase.kt$SqlViolationDatabase : ViolationDatabase</ID>
     <ID>TooManyFunctions:TickSchema.kt$TickSchema</ID>
     <ID>TooManyFunctions:ViolationDatabase.kt$ViolationDatabase</ID>
-    <ID>UnusedPrivateProperty:ShardPlayer.kt$ShardPlayer$aiServerProvider: AIServerProvider</ID>
-    <ID>UnusedPrivateProperty:ShardPlayer.kt$ShardPlayer$alertManager: AlertManager</ID>
     <ID>WildcardImport:SqlViolationDatabase.kt$import org.jetbrains.exposed.v1.core.*</ID>
   </CurrentIssues>
 </SmellBaseline>

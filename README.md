@@ -71,7 +71,7 @@ If API access is not available yet, disable the AI check for now.
 
 ## Configuration files
 
-- [`config.yml`](src/main/resources/config.yml): AI, database, Redis and cross-server alerts, alerts, duplicate packet handling
+- [`config.yml`](src/main/resources/config.yml): AI, database, Redis and network alerts, alerts, duplicate packet handling
 - [`monitor.yml`](src/main/resources/monitor.yml): outputs, limits, themes and formatting for `/shard monitor` and `/shard view`
 - [`punishments.yml`](src/main/resources/punishments.yml): punishment rules
 - [`messages/messages_en.yml`](src/main/resources/messages/messages_en.yml): English messages
