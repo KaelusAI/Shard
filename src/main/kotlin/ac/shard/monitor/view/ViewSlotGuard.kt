@@ -17,15 +17,15 @@
  */
 package ac.shard.monitor.view
 
-import ac.shard.Shard
 import ac.shard.monitor.core.ScoreboardPacketBridge
 import ac.shard.monitor.core.SlotLossReason
 import ac.shard.monitor.core.SlotLostCallback
 import java.util.UUID
+import java.util.logging.Logger
 import org.bukkit.entity.Player
 
 internal class ViewSlotGuard(
-  private val plugin: Shard,
+  private val logger: Logger,
   private val tracker: ViewTargetTracker,
   private val bridge: ScoreboardPacketBridge,
   private val sessionProvider: (UUID) -> ViewSession?,
@@ -51,7 +51,7 @@ internal class ViewSlotGuard(
       return
     }
 
-    plugin.logger.warning(
+    logger.warning(
       "[View] Viewer ${viewer.name} reasserted Shard below-name display after " +
         "'$conflictingObjective' attempted to claim the slot."
     )

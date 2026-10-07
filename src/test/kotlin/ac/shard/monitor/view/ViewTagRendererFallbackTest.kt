@@ -18,10 +18,12 @@
 package ac.shard.monitor.view
 
 import ac.shard.ai.label.LabelCatalog
-import ac.shard.checks.CheckManager
-import ac.shard.checks.impl.ai.AiCheck
 import ac.shard.config.ConfigView
 import ac.shard.data.CollectManager
+import ac.shard.detection.CardRow
+import ac.shard.detection.DetectionState
+import ac.shard.detection.ModelCard
+import ac.shard.detection.PlayerInference
 import ac.shard.mitigation.MitigationState
 import ac.shard.monitor.core.MonitorSampler
 import ac.shard.player.PlayerDataManager
@@ -70,46 +72,28 @@ class ViewTagRendererFallbackTest {
   }
 
   @Test
-  fun `known player without ai check falls back on both values and scores zero`() {
-    val playerDataManager = mockk<PlayerDataManager>()
-    val target = mockk<org.bukkit.entity.Player>(relaxed = true)
-    val shardPlayer = mockk<ShardPlayer>()
-    val checkManager = mockk<CheckManager>()
-    every { playerDataManager.getPlayer(target) } returns shardPlayer
-    every { shardPlayer.checkManager } returns checkManager
-    every { shardPlayer.combat } returns mockk(relaxed = true)
-    every { shardPlayer.mitigation } returns MitigationState()
-    every { checkManager.getCheck(AiCheck::class.java) } returns null
-
-    val rendered =
-      ViewTagRenderer(MonitorSampler(playerDataManager, noCollector()), emptyCatalog())
-        .render(target, target, "", config)
-
-    assertEquals("--|??", rendered.prefix)
-    assertEquals("--", rendered.below)
-    assertEquals(0, rendered.belowScore)
-  }
-
-  @Test
   fun `present ai check renders formatted values and a rounded score`() {
     val playerDataManager = mockk<PlayerDataManager>()
     val target = mockk<org.bukkit.entity.Player>(relaxed = true)
     val shardPlayer = mockk<ShardPlayer>()
-    val checkManager = mockk<CheckManager>()
-    val aiCheck = mockk<AiCheck>()
+    val aiCheck = mockk<PlayerInference>()
+    val state = mockk<DetectionState>()
     every { playerDataManager.getPlayer(target) } returns shardPlayer
-    every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.combat } returns mockk(relaxed = true)
     every { shardPlayer.mitigation } returns MitigationState()
-    every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
-    every { aiCheck.lastProbability } returns 0.954
-    every { aiCheck.buffer } returns 12.5
-    every { aiCheck.prob90 } returns 0
-    every { aiCheck.inferenceProgress } returns null
-    every { aiCheck.labelBufferSnapshot() } returns emptyMap()
-    every { aiCheck.lastCheatProbability } returns 0.954
-    every { aiCheck.lastLabelProbabilities } returns emptyMap()
-    every { aiCheck.declaredLabels } returns emptyList()
+    every { shardPlayer.ai } returns aiCheck
+    every { shardPlayer.detection } returns state
+    every { state.lastProbability } returns 0.954
+    every { state.primaryBuffer } returns 12.5
+    every { state.prob90 } returns 0
+    every { aiCheck.inferenceProgressByModel() } returns emptyList()
+    every { aiCheck.streamBlockReason } returns null
+    every { state.shownModelTitle } returns ""
+    every { state.modelCards() } returns emptyList()
+    every { state.labelBufferSnapshot() } returns emptyMap()
+    every { state.lastCheatProbability } returns 0.954
+    every { state.lastLabelProbabilities } returns emptyMap()
+    every { state.declaredLabels } returns emptyList()
 
     val rendered =
       ViewTagRenderer(MonitorSampler(playerDataManager, noCollector()), emptyCatalog())
@@ -170,8 +154,10 @@ class ViewTagRendererFallbackTest {
 
     assertTrue(
       "aim" in rendered.below,
-      "position is BELOW_NAME by default, so a label only in the suffix would never be seen",
+      "older viewers fall back to BELOW_NAME, so a label only in the suffix would never be seen",
     )
+    assertTrue("aim" in rendered.display, "the default TEXT_DISPLAY names the detection too")
+    assertEquals(ViewPlacement.TEXT_DISPLAY, shipped.placement)
   }
 
   @Test
@@ -199,7 +185,7 @@ class ViewTagRendererFallbackTest {
         MonitorSampler(playerDataManager, noCollector()),
         emptyCatalog(),
         { pinned },
-        { millis },
+        clock = { millis },
       )
       .render(target, target, "", config)
 
@@ -219,21 +205,32 @@ class ViewTagRendererFallbackTest {
   private fun target(playerDataManager: PlayerDataManager): org.bukkit.entity.Player {
     val target = mockk<org.bukkit.entity.Player>(relaxed = true)
     val shardPlayer = mockk<ShardPlayer>()
-    val checkManager = mockk<CheckManager>()
-    val aiCheck = mockk<AiCheck>()
+    val aiCheck = mockk<PlayerInference>()
+    val state = mockk<DetectionState>()
     every { playerDataManager.getPlayer(target) } returns shardPlayer
-    every { shardPlayer.checkManager } returns checkManager
     every { shardPlayer.combat } returns mockk(relaxed = true)
     every { shardPlayer.mitigation } returns MitigationState()
-    every { checkManager.getCheck(AiCheck::class.java) } returns aiCheck
-    every { aiCheck.lastProbability } returns 0.99
-    every { aiCheck.buffer } returns 70.0
-    every { aiCheck.prob90 } returns 0
-    every { aiCheck.inferenceProgress } returns null
-    every { aiCheck.labelBufferSnapshot() } returns mapOf("aim" to 70.0, "trigger" to 5.0)
-    every { aiCheck.lastCheatProbability } returns 0.99
-    every { aiCheck.lastLabelProbabilities } returns mapOf("aim" to 0.30, "trigger" to 0.99)
-    every { aiCheck.declaredLabels } returns listOf("aim", "trigger")
+    every { shardPlayer.ai } returns aiCheck
+    every { shardPlayer.detection } returns state
+    every { state.lastProbability } returns 0.99
+    every { state.primaryBuffer } returns 70.0
+    every { state.prob90 } returns 0
+    every { aiCheck.inferenceProgressByModel() } returns emptyList()
+    every { aiCheck.streamBlockReason } returns null
+    every { state.shownModelTitle } returns ""
+    every { state.modelCards() } returns
+      listOf(
+        ModelCard(
+          "a",
+          50.0,
+          70.0,
+          listOf(CardRow("aim", 70.0, 0.30), CardRow("trigger", 5.0, 0.99)),
+        )
+      )
+    every { state.labelBufferSnapshot() } returns mapOf("aim" to 70.0, "trigger" to 5.0)
+    every { state.lastCheatProbability } returns 0.99
+    every { state.lastLabelProbabilities } returns mapOf("aim" to 0.30, "trigger" to 0.99)
+    every { state.declaredLabels } returns listOf("aim", "trigger")
     return target
   }
 }

@@ -20,13 +20,15 @@ package ac.shard.monitor.view
 import ac.shard.monitor.core.ScoreboardPacketBridge
 import java.util.HashSet
 import java.util.UUID
-import org.bukkit.Bukkit
+import org.bukkit.Server
 import org.bukkit.entity.Player
 
 internal class ViewTargetTracker(
   private val tagRenderer: ViewTagRenderer,
   private val teamBridge: ViewTeamPacketBridge,
   private val bridge: ScoreboardPacketBridge,
+  private val displayBridge: ViewDisplayPacketBridge,
+  private val server: Server,
 ) {
   fun trackTarget(session: ViewSession, target: Player) {
     session.updateTrackedName(target.uniqueId, target.name)
@@ -36,7 +38,7 @@ internal class ViewTargetTracker(
 
   fun refreshTrackedTargets(viewer: Player, session: ViewSession) {
     for ((targetUuid, state) in session.targetTeams.entries.toList()) {
-      val target = Bukkit.getPlayer(targetUuid)
+      val target = server.getPlayer(targetUuid)
       if (target == null || !shouldTrackTarget(viewer, target)) {
         removeTrackedTarget(viewer, session, targetUuid, target?.name)
         continue
@@ -46,22 +48,24 @@ internal class ViewTargetTracker(
   }
 
   fun bootstrapTrackedTargets(viewer: Player, session: ViewSession) {
-    for (target in Bukkit.getOnlinePlayers()) {
+    for (target in server.onlinePlayers) {
       if (!shouldTrackTarget(viewer, target)) {
         continue
       }
       trackTarget(session, target)
+      if (session.usesDisplay() && trackedBy(target, viewer)) session.clientSpawned(target.entityId)
     }
   }
 
   fun resyncTrackedTargets(viewer: Player, session: ViewSession) {
     val seenTargets = HashSet<UUID>()
-    for (target in Bukkit.getOnlinePlayers()) {
+    for (target in server.onlinePlayers) {
       if (!shouldTrackTarget(viewer, target)) {
         continue
       }
       seenTargets.add(target.uniqueId)
       trackTarget(session, target)
+      if (session.usesDisplay() && trackedBy(target, viewer)) session.clientSpawned(target.entityId)
     }
 
     for (targetId in session.targetTeams.keys.toList()) {
@@ -90,6 +94,7 @@ internal class ViewTargetTracker(
       fallbackTargetName.orEmpty(),
       bridge,
       teamBridge,
+      displayBridge,
     )
   }
 
@@ -107,6 +112,7 @@ internal class ViewTargetTracker(
         session.targetNameFor(targetId).orEmpty(),
         bridge,
         teamBridge,
+        displayBridge,
       )
     }
     session.clearTargets()
@@ -122,7 +128,17 @@ internal class ViewTargetTracker(
     val pingDisplay = state.resolvePingDisplay(target.ping, session.config)
     val rendered = tagRenderer.render(viewer, target, pingDisplay, session.config)
 
-    if (session.usesBelowName()) {
+    if (session.usesDisplay()) {
+      state.updateDisplay(
+        viewer,
+        target,
+        target.uniqueId != viewer.uniqueId && session.clientKnows(target.entityId),
+        rendered,
+        session.config.displayStyle,
+        session.config.rebindCycles,
+        displayBridge,
+      )
+    } else if (session.usesBelowName()) {
       state.updateBelowName(viewer, session.belowObjectiveName, target.name, rendered, bridge)
     } else {
       state.updateTeam(viewer, session.config.rebindCycles, target.name, rendered, teamBridge)
@@ -130,6 +146,9 @@ internal class ViewTargetTracker(
 
     session.updateTrackedName(target.uniqueId, state.lastTargetName.ifBlank { target.name })
   }
+
+  private fun trackedBy(target: Player, viewer: Player): Boolean =
+    runCatching { viewer in target.trackedBy }.getOrDefault(false)
 
   private fun shouldTrackTarget(viewer: Player, target: Player): Boolean {
     return target.isOnline && viewer.world.uid == target.world.uid && viewer.canSee(target)

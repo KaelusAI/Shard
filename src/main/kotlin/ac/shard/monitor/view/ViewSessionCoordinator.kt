@@ -25,7 +25,6 @@ import ac.shard.monitor.core.SlotClaim
 import ac.shard.scheduler.SchedulerService
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 
 internal class ViewSessionCoordinator(
@@ -38,8 +37,11 @@ internal class ViewSessionCoordinator(
 ) {
   private val sessions = ConcurrentHashMap<UUID, ViewSession>()
   private val teamBridge = ViewTeamPacketBridge(componentCache)
-  private val tracker = ViewTargetTracker(tagRenderer, teamBridge, bridge)
-  private val slotGuard = ViewSlotGuard(plugin, tracker, bridge) { viewerId -> sessions[viewerId] }
+  private val displayBridge = ViewDisplayPacketBridge(componentCache)
+  private val tracker =
+    ViewTargetTracker(tagRenderer, teamBridge, bridge, displayBridge, plugin.server)
+  private val slotGuard =
+    ViewSlotGuard(plugin.logger, tracker, bridge) { viewerId -> sessions[viewerId] }
 
   fun session(viewerId: UUID): ViewSession? = sessions[viewerId]
 
@@ -52,14 +54,20 @@ internal class ViewSessionCoordinator(
       return
     }
 
+    val placement =
+      if (config.placement == ViewPlacement.TEXT_DISPLAY && !displayBridge.supports(viewer)) {
+        ViewPlacement.BELOW_NAME
+      } else {
+        config.placement
+      }
     val objectiveName =
-      if (config.placement == ViewPlacement.BELOW_NAME) {
+      if (placement == ViewPlacement.BELOW_NAME) {
         objectiveNameForViewer(viewerId)
       } else {
         null
       }
 
-    val session = ViewSession(config, config.placement, objectiveName)
+    val session = ViewSession(config, placement, objectiveName)
     sessions[viewerId] = session
 
     if (session.usesBelowName()) {
@@ -72,7 +80,7 @@ internal class ViewSessionCoordinator(
     session.task =
       scheduler.runTimer(
         viewer,
-        Runnable { refreshViewer(viewerId, ::resolveViewSessionViewer) },
+        Runnable { refreshViewer(viewerId, plugin.server::getPlayer) },
         1L,
         config.updateTicks,
       )
@@ -80,7 +88,7 @@ internal class ViewSessionCoordinator(
 
   fun reload(config: ViewRuntimeConfig) {
     for (viewerId in activeViewerIds) {
-      val viewer = Bukkit.getPlayer(viewerId)
+      val viewer = plugin.server.getPlayer(viewerId)
       disable(viewerId, viewer)
       if (viewer != null && viewer.isOnline && viewer.hasPermission(VIEW_PERMISSION)) {
         enable(viewer, config)
@@ -98,6 +106,14 @@ internal class ViewSessionCoordinator(
     tracker.refreshTrackedTargets(viewer, session)
   }
 
+  fun passengersWithDisplay(viewerId: UUID, vehicleId: Int, passengers: IntArray): IntArray? {
+    val session = sessions[viewerId]?.takeIf(ViewSession::usesDisplay) ?: return null
+    return session
+      .targetIdByEntityId(vehicleId)
+      ?.let { session.targetTeams[it] }
+      ?.passengersWithDisplay(passengers)
+  }
+
   fun trackTarget(viewerId: UUID, target: Player) {
     val session = sessions[viewerId] ?: return
     tracker.trackTarget(session, target)
@@ -105,13 +121,13 @@ internal class ViewSessionCoordinator(
 
   fun removeTrackedTarget(viewerId: UUID, targetId: UUID, fallbackTargetName: String?) {
     val session = sessions[viewerId] ?: return
-    val viewer = resolveViewSessionViewer(viewerId) ?: return
+    val viewer = plugin.server.getPlayer(viewerId) ?: return
     tracker.removeTrackedTarget(viewer, session, targetId, fallbackTargetName)
   }
 
   fun removeTrackedEntities(viewerId: UUID, entityIds: IntArray) {
     val session = sessions[viewerId] ?: return
-    val viewer = resolveViewSessionViewer(viewerId) ?: return
+    val viewer = plugin.server.getPlayer(viewerId) ?: return
     for (entityId in entityIds) {
       val targetId = session.targetIdByEntityId(entityId) ?: continue
       tracker.removeTrackedTarget(viewer, session, targetId, session.targetNameFor(targetId))
@@ -120,7 +136,7 @@ internal class ViewSessionCoordinator(
 
   fun removeTargetFromAllSessions(targetId: UUID, targetName: String) {
     for ((viewerId, session) in sessions.entries) {
-      val viewer = Bukkit.getPlayer(viewerId)
+      val viewer = plugin.server.getPlayer(viewerId)
       if (viewer != null && viewer.isOnline) {
         tracker.removeTrackedTarget(viewer, session, targetId, targetName)
       } else {
@@ -134,7 +150,7 @@ internal class ViewSessionCoordinator(
     session.task?.cancel()
     slotRegistry.release(viewerId, session.config.slot)
 
-    val viewer = viewerHint ?: Bukkit.getPlayer(viewerId)
+    val viewer = viewerHint ?: plugin.server.getPlayer(viewerId)
     if (viewer != null && viewer.isOnline) {
       if (session.usesBelowName()) {
         session.belowObjectiveName?.let { bridge.removeObjective(viewer, it) }
@@ -146,5 +162,3 @@ internal class ViewSessionCoordinator(
     session.clearTargets()
   }
 }
-
-private fun resolveViewSessionViewer(viewerId: UUID): Player? = Bukkit.getPlayer(viewerId)

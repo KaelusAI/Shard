@@ -18,7 +18,9 @@
 package ac.shard.monitor.view
 
 import ac.shard.ai.label.LabelCatalog
+import ac.shard.detection.ModelCard
 import ac.shard.monitor.core.LabelFocus
+import ac.shard.monitor.core.ModelFilter
 import ac.shard.monitor.core.MonitorLabelInfo
 import ac.shard.monitor.core.MonitorSample
 import ac.shard.monitor.core.MonitorSampler
@@ -31,8 +33,12 @@ internal class ViewTagRenderer(
   private val sampler: MonitorSampler,
   private val labelCatalog: LabelCatalog,
   private val labelFocus: (Player) -> String = { LabelFocus.AUTO },
+  private val modelFilter: (Player) -> String = { ModelFilter.ALL },
+  private val pinnedModel: (Player) -> String? = { null },
   private val clock: () -> Long = System::currentTimeMillis,
 ) {
+  private val cards = ViewCardRenderer(labelCatalog)
+
   fun render(
     viewer: Player,
     target: Player,
@@ -83,7 +89,37 @@ internal class ViewTagRenderer(
       applyTemplate(config.suffixTemplate, values),
       applyTemplate(config.belowTemplate, values),
       belowScore,
+      cards.render(
+        sample.copy(models = cardModels(viewer, sample, config)),
+        mapOf(
+          "name" to target.name,
+          "ping" to pingDisplay,
+          "tier" to sample.tier,
+          "rule" to sample.rule,
+        ),
+        config.card,
+        titled = sample.models.size > 1,
+      ),
     )
+  }
+
+  private fun cardModels(
+    viewer: Player,
+    sample: MonitorSample,
+    config: ViewRuntimeConfig,
+  ): List<ModelCard> {
+    val filter = modelFilter(viewer)
+    val shown =
+      sample.models
+        .filter { ModelFilter.shows(filter, it.id, it.primary) }
+        .ifEmpty { sample.models.filter { it.primary } }
+    val pinned = pinnedModel(viewer)?.let { id -> shown.filter { it.id == id } }.orEmpty()
+    val period = config.card.rotateMillis
+    return when {
+      pinned.isNotEmpty() -> pinned
+      period <= 0L || shown.size < 2 -> shown
+      else -> listOf(shown[((clock() / period) % shown.size).toInt()])
+    }
   }
 
   private fun focusOf(

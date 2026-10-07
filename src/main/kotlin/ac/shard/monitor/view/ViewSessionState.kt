@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import org.bukkit.entity.Player
 
+@Suppress("TooManyFunctions")
 internal class ViewSession(
   val config: ViewRuntimeConfig,
   var placement: ViewPlacement,
@@ -36,12 +37,30 @@ internal class ViewSession(
   private val targetIdsByName = ConcurrentHashMap<String, UUID>()
   private val targetIdsByEntityId = ConcurrentHashMap<Int, UUID>()
   private val entityIdsByTargetId = ConcurrentHashMap<UUID, Int>()
+  private val clientEntities = ConcurrentHashMap.newKeySet<Int>()
 
   var task: TaskHandle? = null
   var cyclesSinceResync: Int = 0
   var belowNameConflictLogged: Boolean = false
 
   fun usesBelowName(): Boolean = placement == ViewPlacement.BELOW_NAME && belowObjectiveName != null
+
+  fun usesDisplay(): Boolean = placement == ViewPlacement.TEXT_DISPLAY
+
+  fun clientSpawned(entityId: Int) {
+    clientEntities.add(entityId)
+  }
+
+  fun clientDestroyed(entityIds: IntArray) {
+    entityIds.forEach(clientEntities::remove)
+  }
+
+  fun clientKnows(entityId: Int): Boolean = entityId in clientEntities
+
+  fun clientReset() {
+    clientEntities.clear()
+    targetTeams.values.forEach(TargetTeamState::forgetDisplay)
+  }
 
   fun shouldResync(): Boolean {
     cyclesSinceResync++
@@ -92,6 +111,7 @@ internal class ViewSession(
 
   fun clearTargets() {
     targetTeams.clear()
+    clientEntities.clear()
     targetNamesById.clear()
     targetIdsByName.clear()
     targetIdsByEntityId.clear()
@@ -99,6 +119,7 @@ internal class ViewSession(
   }
 }
 
+@Suppress("TooManyFunctions")
 internal class TargetTeamState(val teamName: String) {
   var created: Boolean = false
   var lastPrefix: String = ""
@@ -106,6 +127,10 @@ internal class TargetTeamState(val teamName: String) {
   var lastBelow: String = ""
   var lastBelowScore: Int = 0
   var lastTargetName: String = ""
+
+  @Volatile var displayId: Int = 0
+  @Volatile var displaySpawned: Boolean = false
+  private var lastDisplay: String = ""
 
   private var cyclesSinceRebind: Int = 0
   private val pendingRebind = AtomicBoolean(false)
@@ -236,13 +261,70 @@ internal class TargetTeamState(val teamName: String) {
     lastTargetName = targetName
   }
 
+  @Suppress("LongParameterList")
+  fun updateDisplay(
+    viewer: Player,
+    target: Player,
+    known: Boolean,
+    rendered: RenderedTag,
+    style: DisplayStyle,
+    rebindCycles: Int,
+    displayBridge: ViewDisplayPacketBridge,
+  ) {
+    if (!known) {
+      hideDisplay(viewer, displayBridge)
+      return
+    }
+    if (!displaySpawned) {
+      if (displayId == 0) displayId = displayBridge.nextId()
+      displayBridge.spawn(viewer, displayId, target, style, rendered.display)
+      displaySpawned = true
+      lastDisplay = rendered.display
+      mountDisplay(viewer, target, displayBridge)
+      return
+    }
+    if (rendered.display != lastDisplay) {
+      displayBridge.text(viewer, displayId, rendered.display)
+      lastDisplay = rendered.display
+    }
+    if (pendingRebind.getAndSet(false) || ++cyclesSinceRebind >= rebindCycles) {
+      mountDisplay(viewer, target, displayBridge)
+    }
+  }
+
+  fun forgetDisplay() {
+    displaySpawned = false
+    lastDisplay = ""
+  }
+
+  fun passengersWithDisplay(passengers: IntArray): IntArray? =
+    if (!displaySpawned || displayId in passengers) null else passengers + displayId
+
+  private fun mountDisplay(viewer: Player, target: Player, displayBridge: ViewDisplayPacketBridge) {
+    val riders = target.passengers.map { it.entityId }.toIntArray()
+    displayBridge.mount(viewer, target.entityId, riders + displayId)
+    cyclesSinceRebind = 0
+  }
+
+  private fun hideDisplay(viewer: Player, displayBridge: ViewDisplayPacketBridge) {
+    if (displaySpawned) displayBridge.destroy(viewer, displayId)
+    displaySpawned = false
+    lastDisplay = ""
+  }
+
+  @Suppress("LongParameterList")
   fun removeFromViewer(
     viewer: Player,
     objectiveName: String?,
     fallbackTargetName: String,
     bridge: ScoreboardPacketBridge,
     teamBridge: ViewTeamPacketBridge,
+    displayBridge: ViewDisplayPacketBridge,
   ) {
+    if (displayId != 0) {
+      hideDisplay(viewer, displayBridge)
+      return
+    }
     if (objectiveName != null) {
       val entryName = lastTargetName.ifBlank { fallbackTargetName }
       if (entryName.isNotBlank()) {
@@ -264,4 +346,5 @@ internal data class RenderedTag(
   val suffix: String,
   val below: String,
   val belowScore: Int?,
+  val display: String = "",
 )

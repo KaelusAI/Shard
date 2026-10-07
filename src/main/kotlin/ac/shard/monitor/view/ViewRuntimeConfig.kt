@@ -45,6 +45,8 @@ internal data class ViewRuntimeConfig(
   val defaultBelowText: String,
   val usesPing: Boolean,
   val slot: Int = BELOW_NAME_DISPLAY_SLOT,
+  val card: ViewCardConfig = ViewCardConfig(),
+  val displayStyle: DisplayStyle = DEFAULT_DISPLAY_STYLE,
 ) {
   fun objectiveSpec(objectiveName: String): ObjectiveSpec =
     ObjectiveSpec(
@@ -67,6 +69,7 @@ internal data class ViewRuntimeConfig(
       val prefixTemplate = config.getString("view.template.prefix", DEFAULT_PREFIX_TEMPLATE)
       val suffixTemplate = config.getString("view.template.suffix", DEFAULT_SUFFIX_TEMPLATE)
       val belowTemplate = config.getString("view.template.below", DEFAULT_BELOW_TEMPLATE)
+      val card = ViewCardConfig.from(config)
       val rotateTicks =
         config.getLong("behavior.label-rotate-ticks", DEFAULT_VIEW_ROTATE_TICKS).coerceAtLeast(0L)
 
@@ -104,10 +107,12 @@ internal data class ViewRuntimeConfig(
             ),
           ),
         usesPing =
-          prefixTemplate.contains(PING_PLACEHOLDER) ||
-            suffixTemplate.contains(PING_PLACEHOLDER) ||
-            belowTemplate.contains(PING_PLACEHOLDER),
+          (listOf(prefixTemplate, suffixTemplate, belowTemplate) + card.templates).any {
+            it.contains(PING_PLACEHOLDER)
+          },
         slot = viewDisplaySlot(config),
+        card = card,
+        displayStyle = displayStyleFrom(config),
       )
     }
   }
@@ -119,6 +124,7 @@ internal fun viewDisplaySlot(config: ConfigView): Int =
 internal enum class ViewPlacement {
   ABOVE_NAME,
   BELOW_NAME,
+  TEXT_DISPLAY,
 }
 
 internal fun parseViewPlacement(raw: String?): ViewPlacement {
@@ -126,7 +132,28 @@ internal fun parseViewPlacement(raw: String?): ViewPlacement {
   return when {
     normalized.equals("below", ignoreCase = true) -> ViewPlacement.BELOW_NAME
     normalized.equals("below_name", ignoreCase = true) -> ViewPlacement.BELOW_NAME
+    normalized.equals("text_display", ignoreCase = true) -> ViewPlacement.TEXT_DISPLAY
     else -> ViewPlacement.ABOVE_NAME
+  }
+}
+
+private fun displayStyleFrom(config: ConfigView): DisplayStyle =
+  DisplayStyle(
+    offset = config.getDouble("view.display.offset", DEFAULT_DISPLAY_OFFSET.toDouble()).toFloat(),
+    background = parseBackground(config.getString("view.display.background", "default")),
+    shadow = config.getBoolean("view.display.shadow", false),
+    seeThrough = config.getBoolean("view.display.see-through", true),
+    lineWidth =
+      config.getInt("view.display.line-width", DEFAULT_DISPLAY_LINE_WIDTH).coerceAtLeast(1),
+  )
+
+internal fun parseBackground(raw: String?): Int? {
+  val value = raw?.trim().orEmpty()
+  return when {
+    value.equals("none", ignoreCase = true) -> 0
+    value.startsWith("#") && value.length == ARGB_HEX_LENGTH ->
+      value.substring(1).toLongOrNull(HEX_RADIX)?.toInt()
+    else -> null
   }
 }
 
@@ -146,6 +173,12 @@ internal const val OBJECTIVE_PREFIX = "svw_"
 internal const val OBJECTIVE_HASH_LENGTH = 12
 
 internal const val DEFAULT_UPDATE_TICKS = 2L
+internal const val DEFAULT_DISPLAY_OFFSET = 0.7f
+internal const val DEFAULT_DISPLAY_LINE_WIDTH = 1000
+internal val DEFAULT_DISPLAY_STYLE =
+  DisplayStyle(DEFAULT_DISPLAY_OFFSET, null, false, true, DEFAULT_DISPLAY_LINE_WIDTH)
+private const val ARGB_HEX_LENGTH = 9
+private const val HEX_RADIX = 16
 internal const val DEFAULT_REBIND_TICKS = 100L
 internal const val DEFAULT_RESYNC_TICKS = 100L
 internal const val DEFAULT_PING_REFRESH_TICKS = 20L
@@ -153,7 +186,7 @@ internal const val DEFAULT_PING_BUCKET_MS = 10
 internal const val BELOW_NAME_DISPLAY_SLOT = 2
 internal const val MAX_DISPLAY_SLOT = 2
 internal const val LEGACY_BELOW_TITLE = "% AI"
-internal const val DEFAULT_VIEW_POSITION = "BELOW_NAME"
+internal const val DEFAULT_VIEW_POSITION = "TEXT_DISPLAY"
 internal const val DEFAULT_BELOW_TITLE = ""
 internal const val DEFAULT_FALLBACK_PROB = "--"
 internal const val DEFAULT_FALLBACK_BUFFER = "--"

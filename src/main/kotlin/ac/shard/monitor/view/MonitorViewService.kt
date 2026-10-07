@@ -27,7 +27,8 @@ import ac.shard.monitor.core.ScoreboardSlotRegistry
 import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.PacketEvents
 import java.util.UUID
-import org.bukkit.Bukkit
+import java.util.concurrent.ConcurrentHashMap
+import org.bukkit.Server
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -45,6 +46,8 @@ class MonitorViewService(
   slotRegistry: ScoreboardSlotRegistry,
   bridge: ScoreboardPacketBridge,
 ) : Listener {
+  private val pinnedModels = ConcurrentHashMap<UUID, String>()
+
   private val coordinator =
     ViewSessionCoordinator(
       plugin,
@@ -53,30 +56,27 @@ class MonitorViewService(
       ViewTagRenderer(
         sampler,
         configManager.labelCatalog,
-        { viewer ->
-          settingsService.getSettings(viewer.uniqueId).labelFocus
-        },
+        { viewer -> settingsService.getSettings(viewer.uniqueId).labelFocus },
+        { viewer -> settingsService.getSettings(viewer.uniqueId).models },
+        { viewer -> pinnedModels[viewer.uniqueId] },
       ),
       slotRegistry,
       bridge,
     )
   private val trackingObserver =
-    ViewTrackingObserver(scheduler, coordinator) { viewerId ->
-      resolveActiveViewViewer(viewerId, coordinator)
+    ViewTrackingObserver(scheduler, coordinator, plugin.server) { viewerId ->
+      resolveActiveViewViewer(plugin.server, viewerId, coordinator)
     }
   private val teamConflictObserver = ViewTeamConflictObserver(coordinator)
 
   @Volatile private var runtimeConfig = ViewRuntimeConfig.from(configManager.monitorConfig)
   private var packetHooksRegistered = false
 
-  init {
-    plugin.server.pluginManager.registerEvents(this, plugin)
-  }
-
   fun start() {
     if (packetHooksRegistered) {
       return
     }
+    plugin.server.pluginManager.registerEvents(this, plugin)
     PacketEvents.getAPI().eventManager.registerListener(trackingObserver)
     PacketEvents.getAPI().eventManager.registerListener(teamConflictObserver)
     packetHooksRegistered = true
@@ -93,6 +93,11 @@ class MonitorViewService(
     }
   }
 
+  fun pinModel(viewer: Player, modelId: String?) {
+    if (modelId == null) pinnedModels.remove(viewer.uniqueId)
+    else pinnedModels[viewer.uniqueId] = modelId
+  }
+
   fun enable(viewer: Player) {
     coordinator.enable(viewer, runtimeConfig)
   }
@@ -105,6 +110,7 @@ class MonitorViewService(
   @EventHandler
   fun onPlayerQuit(event: PlayerQuitEvent) {
     val left = event.player
+    pinnedModels.remove(left.uniqueId)
     coordinator.disable(left.uniqueId, left)
     coordinator.removeTargetFromAllSessions(left.uniqueId, left.name)
   }
@@ -115,7 +121,7 @@ class MonitorViewService(
       return
     }
     for (viewerId in coordinator.activeViewerIds) {
-      coordinator.disable(viewerId, Bukkit.getPlayer(viewerId))
+      coordinator.disable(viewerId, plugin.server.getPlayer(viewerId))
     }
   }
 }
@@ -126,8 +132,12 @@ internal fun isTrackableViewTarget(viewer: Player, target: Player): Boolean {
   return target.isOnline && viewer.world.uid == target.world.uid && viewer.canSee(target)
 }
 
-private fun resolveActiveViewViewer(viewerId: UUID, coordinator: ViewSessionCoordinator): Player? {
-  val viewer = Bukkit.getPlayer(viewerId)
+private fun resolveActiveViewViewer(
+  server: Server,
+  viewerId: UUID,
+  coordinator: ViewSessionCoordinator,
+): Player? {
+  val viewer = server.getPlayer(viewerId)
   return when {
     viewer == null || !viewer.isOnline -> {
       coordinator.disable(viewerId, null)

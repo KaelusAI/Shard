@@ -21,16 +21,20 @@ import ac.shard.scheduler.SchedulerService
 import com.github.retrooper.packetevents.event.PacketListenerAbstract
 import com.github.retrooper.packetevents.event.PacketListenerPriority
 import com.github.retrooper.packetevents.event.PacketSendEvent
+import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
 import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnPlayer
 import java.util.UUID
-import org.bukkit.Bukkit
+import org.bukkit.Server
 import org.bukkit.entity.Player
 
 internal class ViewTrackingObserver(
   private val scheduler: SchedulerService,
   private val coordinator: ViewSessionCoordinator,
+  private val server: Server,
   private val viewerResolver: (UUID) -> Player?,
 ) : PacketListenerAbstract(PacketListenerPriority.MONITOR) {
   override fun onPacketSend(event: PacketSendEvent) {
@@ -40,16 +44,45 @@ internal class ViewTrackingObserver(
     }
 
     when (event.packetType) {
-      PacketType.Play.Server.SPAWN_PLAYER -> observeSpawnPlayer(event, viewer)
+      PacketType.Play.Server.SPAWN_PLAYER -> {
+        val spawn = WrapperPlayServerSpawnPlayer(event)
+        observeSpawnPlayer(event, viewer, spawn.uuid, spawn.entityId)
+      }
+      PacketType.Play.Server.SPAWN_ENTITY -> {
+        val spawn = WrapperPlayServerSpawnEntity(event)
+        val uuid = spawn.uuid.orElse(null)
+        if (spawn.entityType == EntityTypes.PLAYER && uuid != null) {
+          observeSpawnPlayer(event, viewer, uuid, spawn.entityId)
+        }
+      }
+      PacketType.Play.Server.SET_PASSENGERS -> observePassengers(event, viewer)
+      PacketType.Play.Server.RESPAWN ->
+        event.tasksAfterSend.add(Runnable { coordinator.session(viewer.uniqueId)?.clientReset() })
       PacketType.Play.Server.DESTROY_ENTITIES -> observeDestroyEntities(event, viewer)
     }
   }
 
-  private fun observeSpawnPlayer(event: PacketSendEvent, viewer: Player) {
-    val targetId = WrapperPlayServerSpawnPlayer(event).uuid
+  private fun observePassengers(event: PacketSendEvent, viewer: Player) {
+    val packet = WrapperPlayServerSetPassengers(event)
+    val passengers =
+      coordinator.passengersWithDisplay(viewer.uniqueId, packet.entityId, packet.passengers)
+        ?: return
+    packet.passengers = passengers
+    event.markForReEncode(true)
+  }
+
+  private fun observeSpawnPlayer(
+    event: PacketSendEvent,
+    viewer: Player,
+    targetId: UUID,
+    entityId: Int,
+  ) {
     if (targetId == viewer.uniqueId) {
       return
     }
+    event.tasksAfterSend.add(
+      Runnable { coordinator.session(viewer.uniqueId)?.clientSpawned(entityId) }
+    )
 
     event.tasksAfterSend.add(
       Runnable {
@@ -57,7 +90,7 @@ internal class ViewTrackingObserver(
           viewer,
           Runnable {
             val activeViewer = viewerResolver(viewer.uniqueId) ?: return@Runnable
-            val target = Bukkit.getPlayer(targetId) ?: return@Runnable
+            val target = server.getPlayer(targetId) ?: return@Runnable
             if (isTrackableViewTarget(activeViewer, target)) {
               coordinator.trackTarget(activeViewer.uniqueId, target)
             }
@@ -72,6 +105,7 @@ internal class ViewTrackingObserver(
     if (entityIds.isEmpty()) {
       return
     }
+    coordinator.session(viewer.uniqueId)?.clientDestroyed(entityIds)
 
     event.tasksAfterSend.add(
       Runnable {
