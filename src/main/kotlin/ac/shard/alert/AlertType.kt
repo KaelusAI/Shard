@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package ac.shard.alert
 
@@ -36,4 +36,19 @@ enum class AlertType(
     Message.MITIGATION_ALERTS_ENABLED,
     Message.MITIGATION_ALERTS_DISABLED,
   ),
+  CUSTOM("shard.alerts.custom", Message.ALERTS_ENABLED, Message.ALERTS_DISABLED);
+
+  val api: ac.shard.api.alert.AlertType
+    get() =
+      when (this) {
+        REGULAR -> ac.shard.api.alert.AlertType.FLAG
+        BRAND -> ac.shard.api.alert.AlertType.BRAND
+        SUSPICIOUS -> ac.shard.api.alert.AlertType.SUSPICIOUS
+        MITIGATION -> ac.shard.api.alert.AlertType.MITIGATION
+        CUSTOM -> ac.shard.api.alert.AlertType.CUSTOM
+      }
+
+  companion object {
+    fun of(api: ac.shard.api.alert.AlertType): AlertType = entries.first { it.api == api }
+  }
 }

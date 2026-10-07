@@ -25,19 +25,22 @@ package ac.shard.command.commands.admin
 import ac.shard.alert.AlertManager
 import ac.shard.alert.AlertType
 import ac.shard.command.ShardCommand
+import ac.shard.command.shardCommand
 import ac.shard.sender.Sender
 import ac.shard.utils.Message
-import ac.shard.utils.MessageUtil
+import ac.shard.utils.Messages
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.incendo.cloud.CommandManager
 import org.incendo.cloud.context.CommandContext
-import org.incendo.cloud.kotlin.extension.buildAndRegister
 
-class AlertsCommand(private val alertManager: AlertManager) : ShardCommand {
+class AlertsCommand(
+  private val messages: Messages,
+  private val alertManager: AlertManager,
+) : ShardCommand {
   override fun register(manager: CommandManager<Sender>) {
-    manager.buildAndRegister("shard", aliases = arrayOf("shardac", "sloth", "slothac")) {
-      literal("alerts").permission("shard.alerts").handler(this@AlertsCommand::execute)
+    manager.shardCommand {
+      literal("alerts").permission("shard.alerts").handler { execute(it) }
     }
   }
 
@@ -49,9 +52,9 @@ class AlertsCommand(private val alertManager: AlertManager) : ShardCommand {
     } else {
       alertManager.toggleConsoleAlerts(AlertType.REGULAR)
       if (alertManager.isConsoleAlertsEnabled(AlertType.REGULAR)) {
-        MessageUtil.sendMessage(nativeSender, Message.ALERTS_ENABLED)
+        messages.sendMessage(nativeSender, Message.ALERTS_ENABLED)
       } else {
-        MessageUtil.sendMessage(nativeSender, Message.ALERTS_DISABLED)
+        messages.sendMessage(nativeSender, Message.ALERTS_DISABLED)
       }
     }
   }
